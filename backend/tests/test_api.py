@@ -26,6 +26,11 @@ def client():
     return TestClient(app)
 
 
+def _auth_headers(client: TestClient) -> dict:
+    session = client.post("/api/v1/auth/bootstrap").json()
+    return {"Authorization": f"Bearer {session['token']}"}
+
+
 # ── Frontend ──────────────────────────────────────────────────────
 class TestFrontend:
     def test_serves_html(self, client):
@@ -212,12 +217,13 @@ class TestWatchlist:
     def test_add_remove_watchlist(self, client):
         # Use a county that exists in seed but isn't already watched
         test_fips = "19049"  # Dallas, IA
+        headers = _auth_headers(client)
 
         # Remove first if already watched (from previous test runs)
-        client.delete(f"/api/v1/watchlist/{test_fips}")
+        client.delete(f"/api/v1/watchlist/{test_fips}", headers=headers)
 
         # Add
-        r = client.post("/api/v1/watchlist", json={"geo_key": test_fips})
+        r = client.post("/api/v1/watchlist", json={"geo_key": test_fips}, headers=headers)
         assert r.status_code == 200
         assert r.json()["status"] == "added"
 
@@ -227,20 +233,22 @@ class TestWatchlist:
         assert test_fips in fips_list
 
         # Remove
-        r = client.delete(f"/api/v1/watchlist/{test_fips}")
+        r = client.delete(f"/api/v1/watchlist/{test_fips}", headers=headers)
         assert r.status_code == 200
 
     def test_duplicate_add(self, client):
-        client.post("/api/v1/watchlist", json={"geo_key": "19153"})
-        r = client.post("/api/v1/watchlist", json={"geo_key": "19153"})
+        headers = _auth_headers(client)
+        client.post("/api/v1/watchlist", json={"geo_key": "19153"}, headers=headers)
+        r = client.post("/api/v1/watchlist", json={"geo_key": "19153"}, headers=headers)
         assert r.json()["status"] == "already_watching"
 
 
 # ── Notes ─────────────────────────────────────────────────────────
 class TestNotes:
     def test_add_and_get_notes(self, client):
+        headers = _auth_headers(client)
         # Add
-        r = client.post("/api/v1/notes/19153", json={"content": "Test note from pytest"})
+        r = client.post("/api/v1/notes/19153", json={"content": "Test note from pytest"}, headers=headers)
         assert r.status_code == 200
         note_id = r.json()["id"]
 
@@ -251,11 +259,12 @@ class TestNotes:
         assert any(n["id"] == note_id for n in notes)
 
         # Delete
-        r = client.delete(f"/api/v1/notes/{note_id}")
+        r = client.delete(f"/api/v1/notes/{note_id}", headers=headers)
         assert r.status_code == 200
 
     def test_delete_nonexistent_note(self, client):
-        r = client.delete("/api/v1/notes/99999")
+        headers = _auth_headers(client)
+        r = client.delete("/api/v1/notes/99999", headers=headers)
         assert r.status_code == 404
 
 
@@ -325,6 +334,54 @@ class TestAuth:
         })
         assert r.status_code == 200
         assert r.json()["user_key"] == session["user_key"]
+
+
+class TestWriteEndpointAuth:
+    @pytest.mark.parametrize(
+        "method,path,payload",
+        [
+            ("post", "/api/v1/assumptions", {"name": "pytest-enforced", "params": {"risk_premium": 4.5}}),
+            ("post", "/api/v1/screens", {"name": "pytest-screen", "filters": []}),
+            ("post", "/api/v1/watchlist", {"geo_key": "19153"}),
+            ("delete", "/api/v1/watchlist/19153", None),
+            ("post", "/api/v1/notes/19153", {"content": "blocked note"}),
+            ("delete", "/api/v1/notes/99999", None),
+            ("post", "/api/v1/portfolios", {"name": "pytest-enforced-portfolio"}),
+            ("post", "/api/v1/portfolios/1/holdings", {"geo_key": "19153", "acres": 50}),
+            ("delete", "/api/v1/portfolios/1/holdings/19153", None),
+        ],
+    )
+    def test_write_endpoints_require_auth_when_enforced(self, monkeypatch, method, path, payload):
+        import app.main as main_mod
+
+        monkeypatch.setattr(main_mod, "ALLOW_ANON_SESSIONS", False)
+        c = TestClient(app)
+        req = getattr(c, method)
+        if payload is None:
+            r = req(path)
+        else:
+            r = req(path, json=payload)
+        assert r.status_code == 401
+
+    def test_write_endpoint_allows_existing_token_when_enforced(self, monkeypatch):
+        import app.main as main_mod
+
+        monkeypatch.setattr(main_mod, "ALLOW_ANON_SESSIONS", False)
+        c = TestClient(app)
+        bootstrap = c.post(
+            "/api/v1/auth/bootstrap",
+            headers={"cf-access-authenticated-user-email": "write-auth@altiratech.com"},
+        )
+        assert bootstrap.status_code == 200
+        token = bootstrap.json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        fips = "19153"
+        c.delete(f"/api/v1/watchlist/{fips}", headers=headers)
+        r = c.post("/api/v1/watchlist", json={"geo_key": fips}, headers=headers)
+        assert r.status_code == 200
+        cleanup = c.delete(f"/api/v1/watchlist/{fips}", headers=headers)
+        assert cleanup.status_code == 200
 
 
 # ── Research Workspace ──────────────────────────────────────────────
@@ -460,15 +517,16 @@ class TestPortfolios:
         assert "diversification_rating" in data
 
     def test_create_portfolio(self, client):
+        headers = _auth_headers(client)
         unique_name = f"Test Portfolio Pytest {os.urandom(4).hex()}"
-        r = client.post("/api/v1/portfolios", json={"name": unique_name})
+        r = client.post("/api/v1/portfolios", json={"name": unique_name}, headers=headers)
         assert r.status_code == 200
         pid = r.json()["id"]
 
         # Add holding
         r = client.post(f"/api/v1/portfolios/{pid}/holdings", json={
             "geo_key": "19153", "acres": 150, "purchase_price_per_acre": 7500
-        })
+        }, headers=headers)
         assert r.status_code == 200
 
         # Verify
@@ -476,7 +534,7 @@ class TestPortfolios:
         assert r.json()["total_acres"] == 150
 
         # Remove holding
-        r = client.delete(f"/api/v1/portfolios/{pid}/holdings/19153")
+        r = client.delete(f"/api/v1/portfolios/{pid}/holdings/19153", headers=headers)
         assert r.status_code == 200
 
 

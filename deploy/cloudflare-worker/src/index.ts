@@ -351,6 +351,19 @@ async function requireAuthState(
   throw new Error('AUTH_REQUIRED');
 }
 
+async function requireAuthOrError(
+  c: Context<{ Bindings: Bindings }>,
+  db: D1Database,
+  errorMessage = 'Authentication required',
+): Promise<AuthState | Response> {
+  await ensureResearchSchema(db);
+  try {
+    return await requireAuthState(c, db);
+  } catch {
+    return c.json({ error: errorMessage }, 401);
+  }
+}
+
 function workspaceVisibleToUser(workspace: ResearchWorkspaceRow, userKey: string): boolean {
   return (workspace.owner_key || RESEARCH_LEGACY_USER) === userKey;
 }
@@ -629,6 +642,8 @@ app.get('/api/v1/assumptions', async (c) => {
 
 app.post('/api/v1/assumptions', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const body = await c.req.json<{ name: string; params: Record<string, any> }>();
   const existing = await db
     .prepare('SELECT MAX(version) as max_v FROM assumption_sets WHERE name = ?')
@@ -661,6 +676,8 @@ app.get('/api/v1/screens', async (c) => {
 
 app.post('/api/v1/screens', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const body = await c.req.json<{ name: string; filters: any[]; ranking?: any[]; columns?: string[] }>();
   const existing = await db
     .prepare('SELECT MAX(version) as max_v FROM screen_definitions WHERE name = ?')
@@ -1225,6 +1242,8 @@ app.get('/api/v1/watchlist', async (c) => {
 
 app.post('/api/v1/watchlist', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const body = await c.req.json<{ geo_key: string; notes?: string }>();
   const existing = await db
     .prepare('SELECT id FROM watchlist_items WHERE geo_key = ?')
@@ -1241,6 +1260,8 @@ app.post('/api/v1/watchlist', async (c) => {
 
 app.delete('/api/v1/watchlist/:geoKey', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const item = await db.prepare('SELECT id FROM watchlist_items WHERE geo_key = ?').bind(geoKey).first();
   if (!item) return c.json({ error: 'Not in watchlist' }, 404);
@@ -1264,6 +1285,8 @@ app.get('/api/v1/notes/:geoKey', async (c) => {
 
 app.post('/api/v1/notes/:geoKey', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const body = await c.req.json<{ content: string }>();
   const result = await db
@@ -1275,6 +1298,8 @@ app.post('/api/v1/notes/:geoKey', async (c) => {
 
 app.delete('/api/v1/notes/:noteId', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const noteId = c.req.param('noteId');
   const note = await db.prepare('SELECT id FROM county_notes WHERE id = ?').bind(Number(noteId)).first();
   if (!note) return c.json({ error: 'Note not found' }, 404);
@@ -1362,13 +1387,8 @@ app.post('/api/v1/auth/logout', async (c) => {
 
 app.get('/api/v1/research/workspaces', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  let auth: AuthState;
-  try {
-    auth = await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Missing research user identity' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
   const rows = await db
     .prepare(
       `SELECT id, owner_key, geo_key, thesis, tags_json, status, conviction, created_at, updated_at
@@ -1387,13 +1407,8 @@ app.get('/api/v1/research/workspaces', async (c) => {
 
 app.get('/api/v1/research/workspaces/:geoKey', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  let auth: AuthState;
-  try {
-    auth = await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Missing research user identity' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const workspace = await findResearchWorkspaceForUser(db, auth.userKey, geoKey);
   if (!workspace) return c.json(emptyResearchWorkspace(geoKey));
@@ -1402,13 +1417,8 @@ app.get('/api/v1/research/workspaces/:geoKey', async (c) => {
 
 app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  let auth: AuthState;
-  try {
-    auth = await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Missing research user identity' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const body = await c.req.json<{
     thesis?: string;
@@ -1439,13 +1449,8 @@ app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
 
 app.post('/api/v1/research/workspaces/:geoKey/notes', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  let auth: AuthState;
-  try {
-    auth = await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Missing research user identity' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const body = await c.req.json<{ content?: string }>();
   const content = (body.content ?? '').trim();
@@ -1472,13 +1477,8 @@ app.post('/api/v1/research/workspaces/:geoKey/notes', async (c) => {
 
 app.delete('/api/v1/research/notes/:noteId', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  let auth: AuthState;
-  try {
-    auth = await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Missing research user identity' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
   const noteId = Number(c.req.param('noteId'));
   const note = await db
     .prepare('SELECT id, workspace_id FROM research_notes WHERE id = ?')
@@ -1504,13 +1504,8 @@ app.delete('/api/v1/research/notes/:noteId', async (c) => {
 
 app.post('/api/v1/research/workspaces/:geoKey/scenario-packs', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  let auth: AuthState;
-  try {
-    auth = await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Missing research user identity' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const body = await c.req.json<{
     name?: string;
@@ -1557,13 +1552,8 @@ app.post('/api/v1/research/workspaces/:geoKey/scenario-packs', async (c) => {
 
 app.delete('/api/v1/research/scenario-packs/:packId', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  let auth: AuthState;
-  try {
-    auth = await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Missing research user identity' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
   const packId = Number(c.req.param('packId'));
   const pack = await db
     .prepare('SELECT id, workspace_id FROM research_scenario_packs WHERE id = ?')
@@ -1660,6 +1650,8 @@ app.get('/api/v1/portfolios/:portfolioId', async (c) => {
 
 app.post('/api/v1/portfolios', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const body = await c.req.json<{ name: string; description?: string }>();
   const result = await db
     .prepare('INSERT INTO portfolios (name, description) VALUES (?, ?) RETURNING id')
@@ -1670,6 +1662,8 @@ app.post('/api/v1/portfolios', async (c) => {
 
 app.post('/api/v1/portfolios/:portfolioId/holdings', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const portfolioId = Number(c.req.param('portfolioId'));
   const body = await c.req.json<{
     geo_key: string;
@@ -1692,6 +1686,8 @@ app.post('/api/v1/portfolios/:portfolioId/holdings', async (c) => {
 
 app.delete('/api/v1/portfolios/:portfolioId/holdings/:geoKey', async (c) => {
   const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const portfolioId = Number(c.req.param('portfolioId'));
   const geoKey = c.req.param('geoKey');
   const h = await db
@@ -1804,12 +1800,8 @@ app.get('/api/v1/debug/nass', async (c) => {
 
 app.post('/api/v1/ingest', async (c) => {
   const db = c.env.DB;
-  await ensureResearchSchema(db);
-  try {
-    await requireAuthState(c, db);
-  } catch {
-    return c.json({ error: 'Authentication required' }, 401);
-  }
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const rawStartYear = c.req.query('start_year');
   const rawEndYear = c.req.query('end_year');
   const startYear = parseOptionalYear(rawStartYear);

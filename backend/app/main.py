@@ -347,6 +347,10 @@ def _get_research_user(request: Request, db: Session) -> str:
     return _require_authenticated_user(request, db)
 
 
+def _require_write_auth(request: Request, db: Session) -> str:
+    return _require_authenticated_user(request, db)
+
+
 def _workspace_is_visible_to_user(workspace: ResearchWorkspace, user_key: str) -> bool:
     return (workspace.owner_key or RESEARCH_LEGACY_USER) == user_key
 
@@ -462,7 +466,8 @@ class AssumptionCreate(BaseModel):
     params: dict
 
 @app.post("/api/v1/assumptions")
-def create_assumption(body: AssumptionCreate, db: Session = Depends(get_db)):
+def create_assumption(body: AssumptionCreate, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     existing = db.query(AssumptionSet).filter(AssumptionSet.name == body.name).all()
     new_ver = max((a.version for a in existing), default=0) + 1
     a = AssumptionSet(name=body.name, version=new_ver, params_json=body.params)
@@ -487,7 +492,8 @@ class ScreenCreate(BaseModel):
     columns: list[str] | None = None
 
 @app.post("/api/v1/screens")
-def create_screen(body: ScreenCreate, db: Session = Depends(get_db)):
+def create_screen(body: ScreenCreate, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     existing = db.query(ScreenDefinition).filter(ScreenDefinition.name == body.name).all()
     new_ver = max((s.version for s in existing), default=0) + 1
     s = ScreenDefinition(
@@ -967,7 +973,8 @@ class WatchlistAdd(BaseModel):
     notes: str | None = None
 
 @app.post("/api/v1/watchlist")
-def add_to_watchlist(body: WatchlistAdd, db: Session = Depends(get_db)):
+def add_to_watchlist(body: WatchlistAdd, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     existing = db.query(WatchlistItem).filter(WatchlistItem.geo_key == body.geo_key).first()
     if existing:
         return {"id": existing.id, "status": "already_watching"}
@@ -979,7 +986,8 @@ def add_to_watchlist(body: WatchlistAdd, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/v1/watchlist/{geo_key}")
-def remove_from_watchlist(geo_key: str, db: Session = Depends(get_db)):
+def remove_from_watchlist(geo_key: str, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     item = db.query(WatchlistItem).filter(WatchlistItem.geo_key == geo_key).first()
     if not item:
         raise HTTPException(404, "Not in watchlist")
@@ -1005,7 +1013,8 @@ class NoteCreate(BaseModel):
     content: str
 
 @app.post("/api/v1/notes/{geo_key}")
-def add_note(geo_key: str, body: NoteCreate, db: Session = Depends(get_db)):
+def add_note(geo_key: str, body: NoteCreate, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     note = CountyNote(geo_key=geo_key, content=body.content)
     db.add(note)
     db.commit()
@@ -1014,7 +1023,8 @@ def add_note(geo_key: str, body: NoteCreate, db: Session = Depends(get_db)):
 
 
 @app.delete("/api/v1/notes/{note_id}")
-def delete_note(note_id: int, db: Session = Depends(get_db)):
+def delete_note(note_id: int, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     note = db.query(CountyNote).filter(CountyNote.id == note_id).first()
     if not note:
         raise HTTPException(404, "Note not found")
@@ -1322,7 +1332,8 @@ class PortfolioCreate(BaseModel):
     description: str | None = None
 
 @app.post("/api/v1/portfolios")
-def create_portfolio(body: PortfolioCreate, db: Session = Depends(get_db)):
+def create_portfolio(body: PortfolioCreate, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     p = Portfolio(name=body.name, description=body.description)
     db.add(p)
     db.commit()
@@ -1337,7 +1348,8 @@ class HoldingAdd(BaseModel):
     purchase_year: str | None = None
 
 @app.post("/api/v1/portfolios/{portfolio_id}/holdings")
-def add_holding(portfolio_id: int, body: HoldingAdd, db: Session = Depends(get_db)):
+def add_holding(portfolio_id: int, body: HoldingAdd, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     p = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
     if not p:
         raise HTTPException(404, "Portfolio not found")
@@ -1353,7 +1365,8 @@ def add_holding(portfolio_id: int, body: HoldingAdd, db: Session = Depends(get_d
 
 
 @app.delete("/api/v1/portfolios/{portfolio_id}/holdings/{geo_key}")
-def remove_holding(portfolio_id: int, geo_key: str, db: Session = Depends(get_db)):
+def remove_holding(portfolio_id: int, geo_key: str, request: Request, db: Session = Depends(get_db)):
+    _require_write_auth(request, db)
     h = db.query(PortfolioHolding).filter(
         PortfolioHolding.portfolio_id == portfolio_id,
         PortfolioHolding.geo_key == geo_key,
