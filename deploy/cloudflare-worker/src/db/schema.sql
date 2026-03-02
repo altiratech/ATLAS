@@ -186,6 +186,7 @@ CREATE TABLE IF NOT EXISTS research_workspaces (
   owner_key TEXT NOT NULL DEFAULT 'owner_default',
   geo_key TEXT NOT NULL REFERENCES geo_county(fips),
   thesis TEXT,
+  analysis_json TEXT,
   tags_json TEXT,
   status TEXT NOT NULL DEFAULT 'exploring',
   conviction REAL NOT NULL DEFAULT 50,
@@ -215,6 +216,17 @@ CREATE TABLE IF NOT EXISTS research_scenario_packs (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS ix_research_scenario_packs_workspace ON research_scenario_packs(workspace_id, updated_at DESC);
+
+CREATE TABLE IF NOT EXISTS research_scenario_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+  scenario_name TEXT,
+  as_of_date TEXT NOT NULL,
+  assumptions_json TEXT NOT NULL,
+  comparison_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_research_scenario_runs_workspace ON research_scenario_runs(workspace_id, created_at DESC);
 
 -- ── Auth Sessions ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS auth_sessions (
@@ -303,3 +315,13 @@ CREATE TABLE IF NOT EXISTS data_freshness (
   record_count INTEGER,
   notes TEXT
 );
+
+CREATE TABLE IF NOT EXISTS ag_composite_index (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  as_of_date TEXT NOT NULL UNIQUE,
+  value REAL NOT NULL,
+  component_json TEXT NOT NULL,
+  zscore REAL,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_ag_composite_index_as_of ON ag_composite_index(as_of_date DESC);

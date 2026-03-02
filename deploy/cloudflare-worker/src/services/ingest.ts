@@ -1,22 +1,11 @@
 /**
- * Live Data Ingestion — USDA NASS + FRED
+ * Live Data Ingestion — USDA NASS + FRED + Ag Composite Index
  *
- * Pulls annual data for all tracked counties and national series,
- * then upserts into D1.  Designed to run on a daily cron trigger.
- *
- * USDA NASS QuickStats API:
- *   - cash_rent  (county + state)  — RENT, CASH, CROPLAND
- *   - land_value (county + state)  — AG LAND, INCL BUILDINGS, VALUE
- *   - corn_yield (county + state)  — CORN, GRAIN, YIELD
- *
- * FRED API:
- *   - treasury_10y (national) — DGS10 (annual avg)
- *   - corn_price   (national) — WPU012202 (PPI Corn)
+ * Pulls annual fundamentals for tracked states/counties and daily market index data,
+ * then upserts into D1. Designed for scheduled runs plus manual backfills.
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
-
-// ── Types ───────────────────────────────────────────────────────────
 
 interface SecretStoreSecret {
   get(): Promise<string>;
@@ -47,10 +36,17 @@ interface NassRecord {
   state_fips_code: string;
   year: string;
   Value: string;
-  county_name: string;
 }
 
-// ── NASS Series Config ──────────────────────────────────────────────
+interface SeriesDefinition {
+  seriesKey: string;
+  geoLevel: 'county' | 'state' | 'national';
+  frequency: 'annual' | 'daily';
+  unit: string;
+  sourceName: string;
+  sourceUrl: string;
+  cadence: string;
+}
 
 interface NassSeries {
   seriesKey: string;
@@ -58,20 +54,55 @@ interface NassSeries {
   statCat: string;
   countyExtra: Record<string, string>;
   stateShortDesc: string;
-  countySeriesId: number | null; // null = skip county query
-  stateSeriesId: number;
+  countyEnabled: boolean;
 }
+
+interface FredObservation {
+  date: string;
+  value: string;
+}
+
+interface YahooChartResponse {
+  chart?: {
+    result?: Array<{
+      timestamp?: number[];
+      indicators?: {
+        quote?: Array<{
+          close?: Array<number | null>;
+        }>;
+      };
+    }>;
+    error?: { description?: string } | null;
+  };
+}
+
+const TRACKED_STATES = [
+  'IA', 'IL', 'IN', 'NE', 'KS', 'MN', 'OH', 'WI', 'MO', 'SD',
+  'ND', 'TX', 'CA', 'WA', 'OR', 'ID', 'MT', 'CO', 'MI', 'PA',
+] as const;
+
+const SERIES_DEFINITIONS: SeriesDefinition[] = [
+  { seriesKey: 'cash_rent', geoLevel: 'county', frequency: 'annual', unit: '$/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'cash_rent', geoLevel: 'state', frequency: 'annual', unit: '$/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'land_value', geoLevel: 'state', frequency: 'annual', unit: '$/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'corn_yield', geoLevel: 'county', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'corn_yield', geoLevel: 'state', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'soybean_yield', geoLevel: 'county', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'soybean_yield', geoLevel: 'state', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'wheat_yield', geoLevel: 'county', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'wheat_yield', geoLevel: 'state', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+  { seriesKey: 'treasury_10y', geoLevel: 'national', frequency: 'annual', unit: '%', sourceName: 'FRED', sourceUrl: 'https://fred.stlouisfed.org/', cadence: 'daily' },
+  { seriesKey: 'corn_price', geoLevel: 'national', frequency: 'annual', unit: '$/bu', sourceName: 'USDA-NASS', sourceUrl: 'https://quickstats.nass.usda.gov/', cadence: 'annual' },
+];
 
 const NASS_SERIES: NassSeries[] = [
   {
     seriesKey: 'cash_rent',
     commodity: 'RENT',
     statCat: 'EXPENSE',
-    // County level has IRRIGATED/NON-IRRIGATED variants; use NON-IRRIGATED for Midwest
     countyExtra: { prodn_practice_desc: 'NON-IRRIGATED' },
     stateShortDesc: 'RENT, CASH, CROPLAND - EXPENSE, MEASURED IN $ / ACRE',
-    countySeriesId: 1,
-    stateSeriesId: 2,
+    countyEnabled: true,
   },
   {
     seriesKey: 'land_value',
@@ -79,10 +110,7 @@ const NASS_SERIES: NassSeries[] = [
     statCat: 'ASSET VALUE',
     countyExtra: {},
     stateShortDesc: 'AG LAND, INCL BUILDINGS - ASSET VALUE, MEASURED IN $ / ACRE',
-    // County-level land values are Census-only (every 5 yrs, total $ not $/acre).
-    // Annual $/acre data is state-level only via SURVEY.
-    countySeriesId: null,
-    stateSeriesId: 4,
+    countyEnabled: false,
   },
   {
     seriesKey: 'corn_yield',
@@ -90,51 +118,154 @@ const NASS_SERIES: NassSeries[] = [
     statCat: 'YIELD',
     countyExtra: {},
     stateShortDesc: 'CORN, GRAIN - YIELD, MEASURED IN BU / ACRE',
-    countySeriesId: 5,
-    stateSeriesId: 6,
+    countyEnabled: true,
+  },
+  {
+    seriesKey: 'soybean_yield',
+    commodity: 'SOYBEANS',
+    statCat: 'YIELD',
+    countyExtra: {},
+    stateShortDesc: 'SOYBEANS - YIELD, MEASURED IN BU / ACRE',
+    countyEnabled: true,
+  },
+  {
+    seriesKey: 'wheat_yield',
+    commodity: 'WHEAT',
+    statCat: 'YIELD',
+    countyExtra: {},
+    stateShortDesc: 'WHEAT - YIELD, MEASURED IN BU / ACRE',
+    countyEnabled: true,
   },
 ];
 
-const TRACKED_STATES = ['IA', 'IL', 'IN'];
-
-// ── NASS API ────────────────────────────────────────────────────────
-
 const NASS_BASE = 'https://quickstats.nass.usda.gov/api/api_GET/';
+const FRED_BASE = 'https://api.stlouisfed.org/fred/series/observations';
+const AG_INDEX_TICKERS = ['DBA', 'MOO', 'CROP', 'WEAT'] as const;
 
-async function fetchNass(
-  apiKey: string,
-  params: Record<string, string>,
-): Promise<NassRecord[]> {
-  const qs = new URLSearchParams({ key: apiKey, format: 'JSON', ...params });
-  const url = `${NASS_BASE}?${qs}`;
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    throw new Error(`NASS API ${resp.status}: ${await resp.text()}`);
-  }
-  const body = await resp.json() as { data?: NassRecord[] };
-  return body.data ?? [];
+function seriesCatalogKey(seriesKey: string, geoLevel: string): string {
+  return `${seriesKey}:${geoLevel}`;
 }
 
-/**
- * Chunk a year range into batches to stay under NASS's 50,000 record limit.
- * 20-year chunks are safe even for county-level data across ~100 counties.
- */
 function yearChunks(startYear: number, endYear: number, chunkSize = 20): [number, number][] {
   const chunks: [number, number][] = [];
-  for (let y = startYear; y <= endYear; y += chunkSize) {
-    chunks.push([y, Math.min(y + chunkSize - 1, endYear)]);
+  for (let year = startYear; year <= endYear; year += chunkSize) {
+    chunks.push([year, Math.min(year + chunkSize - 1, endYear)]);
   }
   return chunks;
 }
 
-async function ingestNass(env: ResolvedEnv, startYear: number, endYear: number): Promise<IngestResult> {
+async function ensureDataSource(
+  db: D1Database,
+  sourceName: string,
+  sourceUrl: string,
+  cadence: string,
+): Promise<number> {
+  const existing = await db
+    .prepare('SELECT id FROM data_sources WHERE name = ?')
+    .bind(sourceName)
+    .first<{ id: number }>();
+  if (existing) return existing.id;
+
+  const inserted = await db
+    .prepare('INSERT INTO data_sources (name, url, cadence) VALUES (?, ?, ?) RETURNING id')
+    .bind(sourceName, sourceUrl, cadence)
+    .first<{ id: number }>();
+  if (!inserted) throw new Error(`Failed to create data source ${sourceName}`);
+  return inserted.id;
+}
+
+async function ensureSeriesCatalog(db: D1Database): Promise<Record<string, number>> {
+  const bySource = new Map<string, number>();
+  const catalog: Record<string, number> = {};
+
+  for (const seriesDef of SERIES_DEFINITIONS) {
+    const sourceKey = `${seriesDef.sourceName}|${seriesDef.sourceUrl}|${seriesDef.cadence}`;
+    let sourceId = bySource.get(sourceKey);
+    if (!sourceId) {
+      sourceId = await ensureDataSource(db, seriesDef.sourceName, seriesDef.sourceUrl, seriesDef.cadence);
+      bySource.set(sourceKey, sourceId);
+    }
+
+    const existing = await db
+      .prepare('SELECT id FROM data_series WHERE series_key = ? AND geo_level = ?')
+      .bind(seriesDef.seriesKey, seriesDef.geoLevel)
+      .first<{ id: number }>();
+
+    let seriesId = existing?.id;
+    if (!seriesId) {
+      const inserted = await db
+        .prepare(
+          `INSERT INTO data_series (series_key, geo_level, frequency, unit, source_id)
+           VALUES (?, ?, ?, ?, ?) RETURNING id`,
+        )
+        .bind(seriesDef.seriesKey, seriesDef.geoLevel, seriesDef.frequency, seriesDef.unit, sourceId)
+        .first<{ id: number }>();
+      seriesId = inserted?.id;
+    }
+
+    if (!seriesId) {
+      throw new Error(`Failed to ensure series catalog for ${seriesDef.seriesKey}:${seriesDef.geoLevel}`);
+    }
+
+    catalog[seriesCatalogKey(seriesDef.seriesKey, seriesDef.geoLevel)] = seriesId;
+  }
+
+  return catalog;
+}
+
+async function fetchNass(apiKey: string, params: Record<string, string>): Promise<NassRecord[]> {
+  const query = new URLSearchParams({ key: apiKey, format: 'JSON', ...params });
+  const response = await fetch(`${NASS_BASE}?${query}`);
+  if (!response.ok) {
+    throw new Error(`NASS API ${response.status}: ${await response.text()}`);
+  }
+  const payload = (await response.json()) as { data?: NassRecord[] };
+  return payload.data ?? [];
+}
+
+async function upsertDataPoint(
+  db: D1Database,
+  seriesId: number,
+  geoKey: string,
+  asOfDate: string,
+  value: number,
+): Promise<boolean> {
+  const existing = await db
+    .prepare('SELECT id, value FROM data_points WHERE series_id = ? AND geo_key = ? AND as_of_date = ?')
+    .bind(seriesId, geoKey, asOfDate)
+    .first<{ id: number; value: number }>();
+
+  if (existing) {
+    if (Math.abs(existing.value - value) < 0.001) return false;
+    await db
+      .prepare('UPDATE data_points SET value = ? WHERE id = ?')
+      .bind(value, existing.id)
+      .run();
+    return true;
+  }
+
+  await db
+    .prepare('INSERT INTO data_points (series_id, geo_key, as_of_date, value) VALUES (?, ?, ?, ?)')
+    .bind(seriesId, geoKey, asOfDate, value)
+    .run();
+  return true;
+}
+
+async function ingestNass(
+  env: ResolvedEnv,
+  catalog: Record<string, number>,
+  startYear: number,
+  endYear: number,
+): Promise<IngestResult> {
   const result: IngestResult = { source: 'USDA-NASS', inserted: 0, skipped: 0, errors: [] };
   const chunks = yearChunks(startYear, endYear);
 
   for (const series of NASS_SERIES) {
+    const countySeriesId = catalog[seriesCatalogKey(series.seriesKey, 'county')];
+    const stateSeriesId = catalog[seriesCatalogKey(series.seriesKey, 'state')];
+
     for (const state of TRACKED_STATES) {
-      // County-level data (skip if countySeriesId is null, e.g. land_value)
-      if (series.countySeriesId !== null) {
+      if (series.countyEnabled && countySeriesId) {
         for (const [chunkStart, chunkEnd] of chunks) {
           try {
             const countyData = await fetchNass(env.NASS_API_KEY, {
@@ -148,66 +279,46 @@ async function ingestNass(env: ResolvedEnv, startYear: number, endYear: number):
               ...series.countyExtra,
             });
 
-            for (const rec of countyData) {
-              const val = parseFloat(rec.Value?.replace(/,/g, '') ?? '');
-              if (isNaN(val)) continue;
-              const fips = `${rec.state_fips_code}${rec.county_code}`;
-              const upserted = await upsertDataPoint(
-                env.DB,
-                series.countySeriesId,
-                fips,
-                rec.year,
-                val,
-              );
-              if (upserted) result.inserted++;
-              else result.skipped++;
+            for (const row of countyData) {
+              const value = Number.parseFloat((row.Value ?? '').replace(/,/g, ''));
+              if (Number.isNaN(value)) continue;
+              const fips = `${row.state_fips_code}${row.county_code}`;
+              const changed = await upsertDataPoint(env.DB, countySeriesId, fips, row.year, value);
+              if (changed) result.inserted += 1;
+              else result.skipped += 1;
             }
-          } catch (err: any) {
-            result.errors.push(`${series.seriesKey}/${state}/county/${chunkStart}-${chunkEnd}: ${err.message}`);
+          } catch (error: any) {
+            result.errors.push(`${series.seriesKey}/${state}/county/${chunkStart}-${chunkEnd}: ${error.message}`);
           }
         }
       }
 
-      // State-level data — single request is fine (only 1 row per year per state)
-      try {
-        const stateData = await fetchNass(env.NASS_API_KEY, {
-          source_desc: 'SURVEY',
-          short_desc: series.stateShortDesc,
-          agg_level_desc: 'STATE',
-          state_alpha: state,
-          year__GE: String(startYear),
-          year__LE: String(endYear),
-        });
+      if (stateSeriesId) {
+        try {
+          const stateData = await fetchNass(env.NASS_API_KEY, {
+            source_desc: 'SURVEY',
+            short_desc: series.stateShortDesc,
+            agg_level_desc: 'STATE',
+            state_alpha: state,
+            year__GE: String(startYear),
+            year__LE: String(endYear),
+          });
 
-        for (const rec of stateData) {
-          const val = parseFloat(rec.Value?.replace(/,/g, '') ?? '');
-          if (isNaN(val)) continue;
-          const upserted = await upsertDataPoint(
-            env.DB,
-            series.stateSeriesId,
-            rec.state_alpha,
-            rec.year,
-            val,
-          );
-          if (upserted) result.inserted++;
-          else result.skipped++;
+          for (const row of stateData) {
+            const value = Number.parseFloat((row.Value ?? '').replace(/,/g, ''));
+            if (Number.isNaN(value)) continue;
+            const changed = await upsertDataPoint(env.DB, stateSeriesId, row.state_alpha, row.year, value);
+            if (changed) result.inserted += 1;
+            else result.skipped += 1;
+          }
+        } catch (error: any) {
+          result.errors.push(`${series.seriesKey}/${state}/state: ${error.message}`);
         }
-      } catch (err: any) {
-        result.errors.push(`${series.seriesKey}/${state}/state: ${err.message}`);
       }
     }
   }
 
   return result;
-}
-
-// ── FRED API ────────────────────────────────────────────────────────
-
-const FRED_BASE = 'https://api.stlouisfed.org/fred/series/observations';
-
-interface FredObservation {
-  date: string;
-  value: string;
 }
 
 async function fetchFredAnnualAvg(
@@ -215,72 +326,35 @@ async function fetchFredAnnualAvg(
   seriesId: string,
   startYear: number,
   endYear: number,
-): Promise<{ year: string; value: number }[]> {
-  const qs = new URLSearchParams({
+): Promise<Array<{ year: string; value: number }>> {
+  const query = new URLSearchParams({
     series_id: seriesId,
     api_key: apiKey,
     file_type: 'json',
     observation_start: `${startYear}-01-01`,
     observation_end: `${endYear}-12-31`,
-    frequency: 'a',            // annual average
+    frequency: 'a',
     aggregation_method: 'avg',
   });
-  const resp = await fetch(`${FRED_BASE}?${qs}`);
-  if (!resp.ok) {
-    throw new Error(`FRED API ${resp.status}: ${await resp.text()}`);
+  const response = await fetch(`${FRED_BASE}?${query}`);
+  if (!response.ok) {
+    throw new Error(`FRED API ${response.status}: ${await response.text()}`);
   }
-  const body = await resp.json() as { observations?: FredObservation[] };
-  const results: { year: string; value: number }[] = [];
-  for (const obs of body.observations ?? []) {
-    const val = parseFloat(obs.value);
-    if (isNaN(val) || obs.value === '.') continue;
-    const year = obs.date.slice(0, 4);
-    results.push({ year, value: val });
+  const payload = (await response.json()) as { observations?: FredObservation[] };
+  const rows: Array<{ year: string; value: number }> = [];
+  for (const obs of payload.observations ?? []) {
+    const value = Number.parseFloat(obs.value);
+    if (Number.isNaN(value) || obs.value === '.') continue;
+    rows.push({ year: obs.date.slice(0, 4), value });
   }
-  return results;
+  return rows;
 }
 
-async function ingestFred(env: ResolvedEnv, startYear: number, endYear: number): Promise<IngestResult> {
-  const result: IngestResult = { source: 'FRED', inserted: 0, skipped: 0, errors: [] };
-
-  // 10-Year Treasury (series_id = 7, geo_key = 'US')
-  try {
-    const treasuryData = await fetchFredAnnualAvg(
-      env.FRED_API_KEY,
-      'DGS10',
-      startYear,
-      endYear,
-    );
-    for (const { year, value } of treasuryData) {
-      const upserted = await upsertDataPoint(env.DB, 7, 'US', year, value);
-      if (upserted) result.inserted++;
-      else result.skipped++;
-    }
-  } catch (err: any) {
-    result.errors.push(`treasury_10y: ${err.message}`);
-  }
-
-  // Corn price from NASS (more direct than FRED PPI index)
-  try {
-    const cornPriceData = await fetchNassCornPrice(env.NASS_API_KEY, startYear, endYear);
-    for (const { year, value } of cornPriceData) {
-      const upserted = await upsertDataPoint(env.DB, 8, 'US', year, value);
-      if (upserted) result.inserted++;
-      else result.skipped++;
-    }
-  } catch (err: any) {
-    result.errors.push(`corn_price: ${err.message}`);
-  }
-
-  return result;
-}
-
-// Corn price from NASS (more direct than FRED PPI index)
 async function fetchNassCornPrice(
   apiKey: string,
   startYear: number,
   endYear: number,
-): Promise<{ year: string; value: number }[]> {
+): Promise<Array<{ year: string; value: number }>> {
   const data = await fetchNass(apiKey, {
     source_desc: 'SURVEY',
     commodity_desc: 'CORN',
@@ -289,58 +363,165 @@ async function fetchNassCornPrice(
     year__GE: String(startYear),
     year__LE: String(endYear),
   });
-  const results: { year: string; value: number }[] = [];
-  for (const rec of data) {
-    const val = parseFloat(rec.Value?.replace(/,/g, '') ?? '');
-    if (!isNaN(val)) results.push({ year: rec.year, value: val });
+
+  const rows: Array<{ year: string; value: number }> = [];
+  for (const row of data) {
+    const value = Number.parseFloat((row.Value ?? '').replace(/,/g, ''));
+    if (!Number.isNaN(value)) {
+      rows.push({ year: row.year, value });
+    }
   }
-  return results;
+  return rows;
 }
 
-// ── Upsert Helper ───────────────────────────────────────────────────
+async function ingestFred(
+  env: ResolvedEnv,
+  catalog: Record<string, number>,
+  startYear: number,
+  endYear: number,
+): Promise<IngestResult> {
+  const result: IngestResult = { source: 'FRED', inserted: 0, skipped: 0, errors: [] };
 
-async function upsertDataPoint(
-  db: D1Database,
-  seriesId: number,
-  geoKey: string,
-  asOfDate: string,
-  value: number,
-): Promise<boolean> {
-  // Check if exists
-  const existing = await db
-    .prepare(
-      'SELECT id, value FROM data_points WHERE series_id = ? AND geo_key = ? AND as_of_date = ?',
-    )
-    .bind(seriesId, geoKey, asOfDate)
-    .first<{ id: number; value: number }>();
-
-  if (existing) {
-    // Only update if value changed
-    if (Math.abs(existing.value - value) < 0.001) return false;
-    await db
-      .prepare('UPDATE data_points SET value = ? WHERE id = ?')
-      .bind(value, existing.id)
-      .run();
-    return true;
+  const treasurySeriesId = catalog[seriesCatalogKey('treasury_10y', 'national')];
+  if (treasurySeriesId) {
+    try {
+      const rows = await fetchFredAnnualAvg(env.FRED_API_KEY, 'DGS10', startYear, endYear);
+      for (const row of rows) {
+        const changed = await upsertDataPoint(env.DB, treasurySeriesId, 'US', row.year, row.value);
+        if (changed) result.inserted += 1;
+        else result.skipped += 1;
+      }
+    } catch (error: any) {
+      result.errors.push(`treasury_10y: ${error.message}`);
+    }
   }
 
-  // Insert new
+  const cornPriceSeriesId = catalog[seriesCatalogKey('corn_price', 'national')];
+  if (cornPriceSeriesId) {
+    try {
+      const rows = await fetchNassCornPrice(env.NASS_API_KEY, startYear, endYear);
+      for (const row of rows) {
+        const changed = await upsertDataPoint(env.DB, cornPriceSeriesId, 'US', row.year, row.value);
+        if (changed) result.inserted += 1;
+        else result.skipped += 1;
+      }
+    } catch (error: any) {
+      result.errors.push(`corn_price: ${error.message}`);
+    }
+  }
+
+  return result;
+}
+
+async function ensureAgCompositeIndexTable(db: D1Database): Promise<void> {
   await db
     .prepare(
-      'INSERT INTO data_points (series_id, geo_key, as_of_date, value) VALUES (?, ?, ?, ?)',
+      `CREATE TABLE IF NOT EXISTS ag_composite_index (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         as_of_date TEXT NOT NULL UNIQUE,
+         value REAL NOT NULL,
+         component_json TEXT NOT NULL,
+         zscore REAL,
+         created_at TEXT DEFAULT (datetime('now'))
+       )`,
     )
-    .bind(seriesId, geoKey, asOfDate, value)
     .run();
-  return true;
+  await db.prepare('CREATE INDEX IF NOT EXISTS ix_ag_composite_index_as_of ON ag_composite_index(as_of_date DESC)').run();
 }
 
-// ── Data Freshness Logging ──────────────────────────────────────────
+async function fetchYahooDailyClose(symbol: string, range = '3y'): Promise<Array<{ date: string; close: number }>> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Yahoo Finance ${symbol} ${response.status}: ${await response.text()}`);
+  }
+  const payload = (await response.json()) as YahooChartResponse;
+  const result = payload.chart?.result?.[0];
+  const timestamps = result?.timestamp ?? [];
+  const closes = result?.indicators?.quote?.[0]?.close ?? [];
+  const rows: Array<{ date: string; close: number }> = [];
+  for (let i = 0; i < timestamps.length; i += 1) {
+    const close = closes[i];
+    if (close == null || Number.isNaN(close)) continue;
+    const date = new Date(timestamps[i] * 1000).toISOString().slice(0, 10);
+    rows.push({ date, close });
+  }
+  return rows;
+}
 
-async function logFreshness(
-  db: D1Database,
-  source: string,
-  result: IngestResult,
-): Promise<void> {
+function computeZscore(value: number, series: number[]): number {
+  if (!series.length) return 0;
+  const mean = series.reduce((sum, n) => sum + n, 0) / series.length;
+  const variance = series.reduce((sum, n) => sum + Math.pow(n - mean, 2), 0) / series.length;
+  const stddev = Math.sqrt(variance);
+  if (stddev <= 0) return 0;
+  return (value - mean) / stddev;
+}
+
+async function ingestAgCompositeIndex(db: D1Database): Promise<IngestResult> {
+  const result: IngestResult = { source: 'AG-COMPOSITE', inserted: 0, skipped: 0, errors: [] };
+  await ensureAgCompositeIndexTable(db);
+
+  const histories = await Promise.all(
+    AG_INDEX_TICKERS.map(async (ticker) => {
+      try {
+        const rows = await fetchYahooDailyClose(ticker, '3y');
+        return { ticker, rows };
+      } catch (error: any) {
+        result.errors.push(`${ticker}: ${error.message}`);
+        return { ticker, rows: [] as Array<{ date: string; close: number }> };
+      }
+    }),
+  );
+
+  const byDate = new Map<string, Record<string, number>>();
+  for (const history of histories) {
+    for (const row of history.rows) {
+      const bucket = byDate.get(row.date) ?? {};
+      bucket[history.ticker] = row.close;
+      byDate.set(row.date, bucket);
+    }
+  }
+
+  const dates = [...byDate.keys()].sort();
+  const indexValues: Array<{ date: string; value: number; components: Record<string, number> }> = [];
+
+  for (const date of dates) {
+    const components = byDate.get(date) ?? {};
+    const values = Object.values(components).filter((n) => Number.isFinite(n));
+    if (!values.length) continue;
+    const composite = values.reduce((sum, n) => sum + n, 0) / values.length;
+    indexValues.push({
+      date,
+      value: Math.round(composite * 10000) / 10000,
+      components,
+    });
+  }
+
+  const onlyValues = indexValues.map((row) => row.value);
+  for (const row of indexValues) {
+    const z = computeZscore(row.value, onlyValues);
+    await db
+      .prepare(
+        `INSERT INTO ag_composite_index (as_of_date, value, component_json, zscore)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(as_of_date)
+         DO UPDATE SET value = excluded.value, component_json = excluded.component_json, zscore = excluded.zscore`,
+      )
+      .bind(row.date, row.value, JSON.stringify(row.components), Math.round(z * 10000) / 10000)
+      .run();
+    result.inserted += 1;
+  }
+
+  if (!indexValues.length) {
+    result.skipped += 1;
+    result.errors.push('No ag index rows were computed from ticker histories.');
+  }
+
+  return result;
+}
+
+async function logFreshness(db: D1Database, source: string, ingestResult: IngestResult): Promise<void> {
   await db
     .prepare(
       `INSERT INTO data_freshness (source_name, last_updated, record_count, notes)
@@ -348,18 +529,16 @@ async function logFreshness(
     )
     .bind(
       source,
-      result.inserted,
+      ingestResult.inserted,
       JSON.stringify({
-        inserted: result.inserted,
-        skipped: result.skipped,
-        errors: result.errors,
+        inserted: ingestResult.inserted,
+        skipped: ingestResult.skipped,
+        errors: ingestResult.errors,
         timestamp: new Date().toISOString(),
       }),
     )
     .run();
 }
-
-// ── Main Ingestion Entrypoint ───────────────────────────────────────
 
 export async function runIngestion(
   rawEnv: RawEnv,
@@ -367,35 +546,47 @@ export async function runIngestion(
 ): Promise<{
   nass: IngestResult;
   fred: IngestResult;
+  ag_index: IngestResult;
   duration_ms: number;
   year_range: { start: number; end: number };
+  states: readonly string[];
 }> {
-  const start = Date.now();
-  const currentYear = new Date().getFullYear();
+  const startedAt = Date.now();
+  const currentYear = new Date().getUTCFullYear();
   const startYear = options?.startYear ?? currentYear - 2;
   const endYear = options?.endYear ?? currentYear;
 
-  // Secrets Store bindings require async .get() to resolve the value
   const [fredKey, nassKey] = await Promise.all([
     rawEnv.FRED_API_KEY.get(),
     rawEnv.NASS_API_KEY.get(),
   ]);
+
   const env: ResolvedEnv = {
     DB: rawEnv.DB,
     FRED_API_KEY: fredKey,
     NASS_API_KEY: nassKey,
   };
 
-  const [nass, fred] = await Promise.all([
-    ingestNass(env, startYear, endYear),
-    ingestFred(env, startYear, endYear),
+  const catalog = await ensureSeriesCatalog(env.DB);
+
+  const [nass, fred, agIndex] = await Promise.all([
+    ingestNass(env, catalog, startYear, endYear),
+    ingestFred(env, catalog, startYear, endYear),
+    ingestAgCompositeIndex(env.DB),
   ]);
 
-  // Log freshness
   await Promise.all([
     logFreshness(env.DB, 'USDA-NASS', nass),
     logFreshness(env.DB, 'FRED', fred),
+    logFreshness(env.DB, 'AG-COMPOSITE', agIndex),
   ]);
 
-  return { nass, fred, duration_ms: Date.now() - start, year_range: { start: startYear, end: endYear } };
+  return {
+    nass,
+    fred,
+    ag_index: agIndex,
+    duration_ms: Date.now() - startedAt,
+    year_range: { start: startYear, end: endYear },
+    states: TRACKED_STATES,
+  };
 }

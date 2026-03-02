@@ -96,7 +96,7 @@ Manual install: `pip install -r requirements.txt`
 - In-app **Mission** page explains what the platform is, who it serves, and why each tool exists
 - In-app **About** page clarifies scope and near-term roadmap priorities
 - Canonical web app URL: `https://atlas.altiratech.com`
-- `https://atlas.altiratech.com/altiratech-home` provides a standalone company projects homepage prototype
+- `https://atlas.altiratech.com/altiratech-home` serves a compatibility mirror of the canonical company homepage source at `Code/active/altiratech-site/public/index.html`
 
 ## Architecture
 

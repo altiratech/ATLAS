@@ -227,6 +227,7 @@ class ResearchWorkspace(Base):
     owner_key = Column(String(120), nullable=False, default="owner_default")
     geo_key = Column(String(10), ForeignKey("geo_county.fips"), nullable=False)
     thesis = Column(Text)
+    analysis_json = Column(JSON)
     tags_json = Column(JSON)
     status = Column(String(40), nullable=False, default="exploring")
     conviction = Column(Float, nullable=False, default=50)
@@ -258,6 +259,18 @@ class ResearchScenarioPack(Base):
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     __table_args__ = (Index("ix_research_pack_workspace", "workspace_id"),)
+
+
+class ResearchScenarioRun(Base):
+    __tablename__ = "research_scenario_runs"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    workspace_id = Column(Integer, ForeignKey("research_workspaces.id", ondelete="CASCADE"), nullable=False)
+    scenario_name = Column(String(160))
+    as_of_date = Column(String(20), nullable=False)
+    assumptions_json = Column(JSON, nullable=False)
+    comparison_json = Column(JSON, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    __table_args__ = (Index("ix_research_scenario_runs_workspace", "workspace_id"),)
 
 
 # ── Auth Sessions ─────────────────────────────────────────────────────
@@ -331,6 +344,16 @@ class Transaction(Base):
     acres = Column(Float)
     source = Column(String(120))
     meta_json = Column(JSON)
+
+
+class AgCompositeIndex(Base):
+    __tablename__ = "ag_composite_index"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    as_of_date = Column(String(20), nullable=False, unique=True)
+    value = Column(Float, nullable=False)
+    component_json = Column(JSON, nullable=False)
+    zscore = Column(Float)
+    created_at = Column(DateTime, server_default=func.now())
 
 
 class Auction(Base):

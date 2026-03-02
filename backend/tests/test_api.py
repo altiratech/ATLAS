@@ -113,9 +113,12 @@ class TestCounties:
         r = client.get("/api/v1/geo/19153/timeseries?start_year=2020&end_year=2025")
         assert r.status_code == 200
         data = r.json()
-        assert len(data) == 6  # 2020-2025
-        assert "year" in data[0]
-        assert "cash_rent" in data[0]
+        assert data["geo_key"] == "19153"
+        assert data["start_year"] == "2020"
+        assert data["end_year"] == "2025"
+        assert len(data["series"]) == 6  # 2020-2025
+        assert "year" in data["series"][0]
+        assert "cash_rent" in data["series"][0]
 
     def test_county_access(self, client):
         r = client.get("/api/v1/geo/19153/access")
@@ -131,9 +134,12 @@ class TestDashboard:
         assert r.status_code == 200
         data = r.json()
         assert data["county_count"] == 45
+        assert "as_of_meta" in data
         assert "summary" in data
         assert "implied_cap_rate" in data["summary"]
         assert "median" in data["summary"]["implied_cap_rate"]
+        assert "charts" in data
+        assert "cap_rate_median_by_year" in data["charts"]
         assert "top_movers" in data
         assert len(data["top_movers"]) > 0
         assert "state_summary" in data
@@ -201,6 +207,14 @@ class TestScreener:
         data = r.json()
         assert all(res["state"] == "IA" for res in data["results"])
 
+    def test_zscore_filter(self, client):
+        r = client.get("/api/v1/screener?z_implied_cap_rate_min=-5&z_implied_cap_rate_max=5")
+        assert r.status_code == 200
+        data = r.json()
+        assert "z_filters" in data
+        if data["results"]:
+            assert "zscores" in data["results"][0]
+
 
 # ── Watchlist ─────────────────────────────────────────────────────
 class TestWatchlist:
@@ -208,11 +222,12 @@ class TestWatchlist:
         r = client.get("/api/v1/watchlist")
         assert r.status_code == 200
         data = r.json()
-        assert isinstance(data, list)
-        if len(data) > 0:
-            assert "fips" in data[0]
-            assert "metrics" in data[0]
-            assert "changes" in data[0]
+        assert "items" in data
+        assert isinstance(data["items"], list)
+        if len(data["items"]) > 0:
+            assert "fips" in data["items"][0]
+            assert "metrics" in data["items"][0]
+            assert "changes" in data["items"][0]
 
     def test_add_remove_watchlist(self, client):
         # Use a county that exists in seed but isn't already watched
@@ -229,7 +244,7 @@ class TestWatchlist:
 
         # Verify in list
         r = client.get("/api/v1/watchlist")
-        fips_list = [w["fips"] for w in r.json()]
+        fips_list = [w["fips"] for w in r.json()["items"]]
         assert test_fips in fips_list
 
         # Remove
@@ -494,6 +509,29 @@ class TestResearchWorkspace:
         r = client.delete("/api/v1/research/scenario-packs/999999", headers=self.USER_A)
         assert r.status_code == 404
 
+    def test_research_scenario_runs(self, client):
+        fips = "19013"
+        created = client.post(
+            f"/api/v1/research/workspaces/{fips}/scenario-runs",
+            json={
+                "scenario_name": "pytest run",
+                "as_of_date": "2025",
+                "assumptions": {"risk_premium": 4.5},
+                "comparison": {"comparison_table": [{"scenario": "base"}]},
+            },
+            headers=self.USER_A,
+        )
+        assert created.status_code == 200
+        run_id = created.json()["id"]
+
+        rows = client.get(
+            f"/api/v1/research/workspaces/{fips}/scenario-runs",
+            headers=self.USER_A,
+        )
+        assert rows.status_code == 200
+        payload = rows.json()
+        assert any(r["id"] == run_id for r in payload)
+
 
 # ── Portfolios ────────────────────────────────────────────────────
 class TestPortfolios:
@@ -562,6 +600,20 @@ class TestScenarioBacktest:
         assert "risk_premium" in data["sensitivities"]
         assert len(data["sensitivities"]["risk_premium"]) == 4
 
+    def test_scenario_compare_mode(self, client):
+        r = client.post("/api/v1/run/scenario", json={
+            "geo_key": "19153",
+            "scenario_sets": [
+                {"name": "best", "overrides": {"risk_premium": 4.0, "long_run_growth": 0.03}},
+                {"name": "base", "overrides": {"risk_premium": 4.5, "long_run_growth": 0.025}},
+                {"name": "worst", "overrides": {"risk_premium": 5.5, "long_run_growth": 0.015}},
+            ],
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert len(data["comparison_table"]) == 3
+        assert len(data["driver_decomposition"]) == 3
+
     def test_sensitivity_matrix(self, client):
         r = client.get("/api/v1/geo/19153/sensitivity")
         assert r.status_code == 200
@@ -595,3 +647,32 @@ class TestExport:
         lines = r.text.strip().split("\n")
         assert len(lines) == 46  # header + 45 counties
         assert "FIPS" in lines[0]
+
+
+class TestMetaEndpoints:
+    def test_meta_as_of(self, client):
+        r = client.get("/api/v1/meta/as-of?as_of=latest")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["as_of"]
+        assert "as_of_meta" in data
+
+    def test_data_coverage(self, client):
+        r = client.get("/api/v1/data/coverage?as_of=latest")
+        assert r.status_code == 200
+        data = r.json()
+        assert "county_coverage_by_state" in data
+        assert "series_completeness" in data
+
+    def test_geo_zscore_endpoint(self, client):
+        r = client.get("/api/v1/geo/19153/zscore?as_of=latest&window_years=5")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["geo_key"] == "19153"
+        assert "metrics" in data
+
+    def test_ag_index_endpoint(self, client):
+        r = client.get("/api/v1/ag-index")
+        assert r.status_code == 200
+        data = r.json()
+        assert "latest" in data

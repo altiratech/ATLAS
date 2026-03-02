@@ -131,6 +131,18 @@
       justify-content: space-between;
       gap: .55rem;
     }
+    .project-card-link {
+      text-decoration: none;
+      color: inherit;
+      transition: border-color .08s linear, background-color .08s linear, box-shadow .08s linear;
+    }
+    .project-card-link:hover,
+    .project-card-link:focus-visible {
+      border-color: var(--amber);
+      background: #141c26;
+      box-shadow: inset 0 0 0 1px rgba(255, 177, 0, .25);
+      outline: none;
+    }
     .project h3 {
       font-size: .95rem;
       text-transform: uppercase;
@@ -239,7 +251,7 @@
     <div class="section">
       <h2>Projects</h2>
       <div class="projects">
-        <div class="project">
+        <a class="project project-card-link" href="https://atlas.altiratech.com">
           <div>
             <h3>Altira Atlas</h3>
             <p>Agriculture intelligence platform combining county research, land economics, scenario modeling, and investment diligence workflows.</p>
@@ -251,10 +263,27 @@
               <span class="tag">Modeling</span>
             </div>
             <div style="margin-top:.52rem;">
-              <a class="link" href="https://atlas.altiratech.com">Open Product</a>
+              <span class="link">Open Product</span>
             </div>
           </div>
-        </div>
+        </a>
+
+        <a class="project project-card-link" href="https://escalation.altiratech.com">
+          <div>
+            <h3>ESCALATION</h3>
+            <p>Crisis simulation platform for decision-making under pressure, combining deterministic scenario graphs with narrative intelligence.</p>
+          </div>
+          <div>
+            <div class="tags">
+              <span class="tag active">Active</span>
+              <span class="tag">Simulation</span>
+              <span class="tag">Strategy</span>
+            </div>
+            <div style="margin-top:.52rem;">
+              <span class="link">Open Product</span>
+            </div>
+          </div>
+        </a>
 
         <div class="project">
           <div>

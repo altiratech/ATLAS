@@ -24,13 +24,16 @@ from app.models.schema import (
     AssumptionSet, ScreenDefinition, ModelVersion,
     RunContext, MetricValue, FallbackLog, ScenarioOutput,
     WatchlistItem, CountyNote, Portfolio, PortfolioHolding,
-    ResearchWorkspace, ResearchNote, ResearchScenarioPack, AuthSession,
+    ResearchWorkspace, ResearchNote, ResearchScenarioPack, ResearchScenarioRun,
+    AuthSession, AgCompositeIndex,
 )
 from app.services.metric_engine import (
     ComputeContext, compute_all, compute_sensitivity,
     get_metric_catalog, METRIC_REGISTRY,
 )
 from app.services.portfolio import compute_portfolio_metrics
+from app.services.asof import resolve_as_of
+from app.services.zscore import compute_zscore_stats, zscore_band
 
 app = FastAPI(title="Altira Atlas", version="0.2.0")
 APP_ENV = (os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "development").lower()
@@ -70,6 +73,7 @@ def _migrate_research_workspace_owner_schema():
                     owner_key VARCHAR(120) NOT NULL DEFAULT 'owner_default',
                     geo_key VARCHAR(10) NOT NULL REFERENCES geo_county(fips),
                     thesis TEXT,
+                    analysis_json JSON,
                     tags_json JSON,
                     status VARCHAR(40) NOT NULL DEFAULT 'exploring',
                     conviction FLOAT NOT NULL DEFAULT 50,
@@ -80,13 +84,14 @@ def _migrate_research_workspace_owner_schema():
             """))
             conn.execute(text("""
                 INSERT INTO research_workspaces_new (
-                    id, owner_key, geo_key, thesis, tags_json, status, conviction, created_at, updated_at
+                    id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
                 )
                 SELECT
                     id,
                     'owner_default',
                     geo_key,
                     thesis,
+                    NULL,
                     tags_json,
                     COALESCE(status, 'exploring'),
                     COALESCE(conviction, 50),
@@ -107,6 +112,26 @@ def _migrate_research_workspace_owner_schema():
 def ensure_schema_tables():
     Base.metadata.create_all(bind=engine)
     _migrate_research_workspace_owner_schema()
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as conn:
+            cols = conn.execute(text("PRAGMA table_info(research_workspaces)")).fetchall()
+            col_names = {row[1] for row in cols}
+            if "analysis_json" not in col_names and cols:
+                conn.execute(text("ALTER TABLE research_workspaces ADD COLUMN analysis_json JSON"))
+                conn.commit()
+            conn.execute(text(
+                """
+                CREATE TABLE IF NOT EXISTS data_freshness (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  source_name TEXT NOT NULL,
+                  series_key TEXT,
+                  last_updated TEXT NOT NULL,
+                  record_count INTEGER,
+                  notes TEXT
+                )
+                """
+            ))
+            conn.commit()
     Base.metadata.create_all(bind=engine)
 
 
@@ -234,6 +259,77 @@ def _compute_county(db: Session, geo_key: str, as_of: str, assumptions: dict) ->
         "access_details": access.distances_json if access else {},
         "access_density": access.density_json if access else {},
     }
+
+
+CORE_MODEL_SERIES = [
+    "usda.cash_rent.county",
+    "usda.land_value.county",
+    "usda.corn_yield.county",
+    "rates.treasury.10y",
+    "grain.corn.price",
+]
+
+ZSCORE_DEFAULT_METRICS = [
+    "implied_cap_rate",
+    "fair_value",
+    "cash_rent",
+    "benchmark_value",
+]
+
+
+def _resolve_as_of_with_meta(
+    db: Session,
+    requested_as_of: str | None = None,
+    state: str | None = None,
+    required_series: list[str] | None = None,
+) -> tuple[str, dict]:
+    resolved = resolve_as_of(
+        db,
+        requested_as_of=requested_as_of,
+        state=state,
+        required_series=required_series or CORE_MODEL_SERIES,
+    )
+    return resolved["as_of"], resolved["meta"]
+
+
+def _compute_metric_zscores(
+    db: Session,
+    geo_key: str,
+    as_of: str,
+    assumptions: dict,
+    metric_keys: list[str] | None = None,
+    window_years: int = 10,
+) -> dict:
+    metric_keys = metric_keys or list(ZSCORE_DEFAULT_METRICS)
+    try:
+        end_year = int(as_of)
+    except (TypeError, ValueError):
+        end_year = datetime.utcnow().year
+    start_year = max(1950, end_year - max(1, int(window_years)) + 1)
+
+    years = [str(y) for y in range(start_year, end_year + 1)]
+    values_by_metric: dict[str, list[float]] = {metric: [] for metric in metric_keys}
+    current_metrics: dict[str, float | None] = {}
+
+    for year in years:
+        county = _compute_county(db, geo_key, year, assumptions)
+        for metric in metric_keys:
+            value = county["metrics"].get(metric)
+            if isinstance(value, (int, float)):
+                values_by_metric[metric].append(float(value))
+        if year == str(end_year):
+            current_metrics = county["metrics"]
+
+    payload = {}
+    for metric in metric_keys:
+        stats = compute_zscore_stats(
+            current_metrics.get(metric),
+            values_by_metric.get(metric, []),
+            years,
+        )
+        stats["band"] = zscore_band(stats.get("zscore"))
+        payload[metric] = stats
+    return payload
 
 
 RESEARCH_LEGACY_USER = "owner_default"
@@ -367,6 +463,14 @@ def _workspace_defaults(geo_key: str) -> dict:
     return {
         "geo_key": geo_key,
         "thesis": "",
+        "analysis": {
+            "thesis": "",
+            "bull_case": "",
+            "bear_case": "",
+            "key_risks": [],
+            "catalysts": [],
+            "decision_state": "exploring",
+        },
         "tags": [],
         "status": "exploring",
         "conviction": 50.0,
@@ -386,8 +490,18 @@ def _serialize_workspace(db: Session, workspace: ResearchWorkspace) -> dict:
     ).order_by(ResearchScenarioPack.updated_at.desc(), ResearchScenarioPack.id.desc()).all()
 
     payload = _workspace_defaults(workspace.geo_key)
+    analysis = workspace.analysis_json if isinstance(workspace.analysis_json, dict) else {}
+    analysis_payload = {
+        "thesis": analysis.get("thesis", ""),
+        "bull_case": analysis.get("bull_case", ""),
+        "bear_case": analysis.get("bear_case", ""),
+        "key_risks": analysis.get("key_risks", []) if isinstance(analysis.get("key_risks"), list) else [],
+        "catalysts": analysis.get("catalysts", []) if isinstance(analysis.get("catalysts"), list) else [],
+        "decision_state": analysis.get("decision_state", "exploring"),
+    }
     payload.update({
         "thesis": workspace.thesis or "",
+        "analysis": analysis_payload,
         "tags": workspace.tags_json if isinstance(workspace.tags_json, list) else [],
         "status": workspace.status or "exploring",
         "conviction": _clamp_conviction(workspace.conviction),
@@ -435,6 +549,7 @@ def _get_or_create_workspace(db: Session, user_key: str, geo_key: str) -> Resear
         owner_key=user_key,
         geo_key=geo_key,
         thesis="",
+        analysis_json={},
         tags_json=[],
         status="exploring",
         conviction=50.0,
@@ -452,6 +567,26 @@ def _get_or_create_workspace(db: Session, user_key: str, geo_key: str) -> Resear
 @app.get("/api/v1/metrics")
 def list_metrics():
     return get_metric_catalog()
+
+
+@app.get("/api/v1/meta/as-of")
+def meta_as_of(
+    as_of: str = "latest",
+    state: Optional[str] = None,
+    required_series: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    required = [item.strip() for item in required_series.split(",")] if required_series else CORE_MODEL_SERIES
+    resolved = resolve_as_of(
+        db,
+        requested_as_of=as_of,
+        state=state,
+        required_series=required,
+    )
+    return {
+        "as_of": resolved["as_of"],
+        "as_of_meta": resolved["meta"],
+    }
 
 
 @app.get("/api/v1/assumptions")
@@ -513,6 +648,186 @@ def list_sources(db: Session = Depends(get_db)):
              "cadence": r.cadence, "notes": r.notes} for r in rows]
 
 
+@app.get("/api/v1/data-freshness")
+def data_freshness(db: Session = Depends(get_db)):
+    rows = db.execute(text("SELECT * FROM data_freshness ORDER BY last_updated DESC")).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@app.get("/api/v1/data/coverage")
+def data_coverage(
+    as_of: str = "latest",
+    state: str = "ALL",
+    required_series: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    req_series = [item.strip() for item in required_series.split(",")] if required_series else CORE_MODEL_SERIES
+    use_state = None if state.upper() == "ALL" else state.upper()
+    resolved = resolve_as_of(
+        db,
+        requested_as_of=as_of,
+        state=use_state,
+        required_series=req_series,
+    )
+    resolved_as_of = resolved["as_of"]
+    as_of_meta = resolved["meta"]
+
+    counties = db.execute(
+        text("SELECT fips, state FROM geo_county WHERE (:state IS NULL OR state = :state) ORDER BY fips"),
+        {"state": use_state},
+    ).fetchall()
+    county_rows = [{"fips": row[0], "state": row[1]} for row in counties]
+
+    if req_series:
+        in_clause = ", ".join(f":s{idx}" for idx in range(len(req_series)))
+        params = {"as_of": resolved_as_of}
+        for idx, series in enumerate(req_series):
+            params[f"s{idx}"] = series
+        point_rows = db.execute(
+            text(
+                f"""
+                SELECT ds.series_key, dp.geo_key
+                FROM data_points dp
+                JOIN data_series ds ON ds.id = dp.series_id
+                WHERE dp.as_of_date = :as_of
+                  AND ds.series_key IN ({in_clause})
+                """
+            ),
+            params,
+        ).fetchall()
+    else:
+        point_rows = []
+
+    series_geo: dict[str, set[str]] = {series: set() for series in req_series}
+    for series_key, geo_key in point_rows:
+        if series_key in series_geo and isinstance(geo_key, str):
+            series_geo[series_key].add(geo_key)
+
+    state_coverage: dict[str, dict] = {}
+    series_covered_count: dict[str, int] = {series: 0 for series in req_series}
+    for county in county_rows:
+        st = county["state"]
+        bucket = state_coverage.setdefault(st, {"counties_total": 0, "counties_complete": 0, "coverage_pct": 0})
+        bucket["counties_total"] += 1
+        complete = True
+        for series in req_series:
+            covered = county["fips"] in series_geo[series] or st in series_geo[series] or "US" in series_geo[series]
+            if covered:
+                series_covered_count[series] += 1
+            else:
+                complete = False
+        if complete:
+            bucket["counties_complete"] += 1
+
+    for bucket in state_coverage.values():
+        total = bucket["counties_total"]
+        bucket["coverage_pct"] = round(bucket["counties_complete"] / total, 4) if total else 0
+
+    total_counties = len(county_rows)
+    series_completeness = []
+    for series in req_series:
+        covered = series_covered_count[series]
+        pct = round(covered / total_counties, 4) if total_counties else 0
+        series_completeness.append({
+            "series_key": series,
+            "covered_counties": covered,
+            "total_counties": total_counties,
+            "coverage_pct": pct,
+            "missing_counties": max(0, total_counties - covered),
+        })
+
+    freshness_rows = db.execute(
+        text(
+            """
+            SELECT source_name, MAX(last_updated) AS last_updated, MAX(record_count) AS record_count
+            FROM data_freshness
+            GROUP BY source_name
+            ORDER BY last_updated DESC
+            """
+        )
+    ).mappings().all()
+
+    warnings = []
+    if as_of_meta.get("coverage_pct", 0) < 0.7:
+        warnings.append("LOW_COVERAGE")
+    if len(freshness_rows) == 0:
+        warnings.append("STALE_SOURCE")
+
+    counties_complete = sum(bucket["counties_complete"] for bucket in state_coverage.values())
+    return {
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "county_coverage_by_state": state_coverage,
+        "series_completeness": series_completeness,
+        "missingness_summary": {
+            "counties_total": total_counties,
+            "counties_complete": counties_complete,
+            "counties_partial": max(0, total_counties - counties_complete),
+        },
+        "freshness": [dict(row) for row in freshness_rows],
+        "warnings": warnings,
+    }
+
+
+@app.get("/api/v1/ag-index")
+def ag_index(db: Session = Depends(get_db)):
+    rows = db.query(AgCompositeIndex).order_by(AgCompositeIndex.as_of_date.desc()).limit(900).all()
+    if not rows:
+        return {"latest": None, "history": [], "message": "Ag composite index has not been ingested yet."}
+
+    desc = rows
+    asc = list(reversed(desc))
+    history = [
+        {
+            "as_of_date": row.as_of_date,
+            "value": round(row.value, 4) if row.value is not None else None,
+            "zscore": round(row.zscore, 4) if row.zscore is not None else None,
+            "band": zscore_band(row.zscore),
+        }
+        for row in asc
+    ]
+
+    latest = desc[0]
+    prev_1d = desc[1] if len(desc) > 1 else None
+    prev_1w = desc[5] if len(desc) > 5 else None
+    change_1d = None
+    change_1w = None
+    if prev_1d and prev_1d.value:
+        change_1d = round(((latest.value - prev_1d.value) / prev_1d.value) * 100, 2)
+    if prev_1w and prev_1w.value:
+        change_1w = round(((latest.value - prev_1w.value) / prev_1w.value) * 100, 2)
+
+    components = latest.component_json if isinstance(latest.component_json, dict) else {}
+    component_values = [
+        {"ticker": ticker, "value": float(value)}
+        for ticker, value in components.items()
+        if isinstance(value, (int, float))
+    ]
+    component_sum = sum(item["value"] for item in component_values)
+    component_payload = [
+        {
+            "ticker": item["ticker"],
+            "value": round(item["value"], 4),
+            "weight": round(1 / len(component_values), 4) if component_values else 0,
+            "contribution_pct": round((item["value"] / component_sum) * 100, 2) if component_sum else 0,
+        }
+        for item in component_values
+    ]
+
+    return {
+        "latest": {
+            "as_of_date": latest.as_of_date,
+            "value": round(latest.value, 4) if latest.value is not None else None,
+            "zscore": round(latest.zscore, 4) if latest.zscore is not None else None,
+            "band": zscore_band(latest.zscore),
+            "change_1d_pct": change_1d,
+            "change_1w_pct": change_1w,
+            "components": component_payload,
+        },
+        "history": history[-756:],
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Geo Endpoints
 # ═══════════════════════════════════════════════════════════════════════
@@ -529,33 +844,101 @@ def list_counties(state: Optional[str] = None, db: Session = Depends(get_db)):
 
 @app.get("/api/v1/geo/{geo_key}/summary")
 def county_summary(
-    geo_key: str, as_of: str = "2025",
+    geo_key: str, as_of: str = "latest",
     assumption_set_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     assumptions = _get_assumptions(db, assumption_set_id)
-    return _compute_county(db, geo_key, as_of, assumptions)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
+    data = _compute_county(db, geo_key, resolved_as_of, assumptions)
+    zscores = _compute_metric_zscores(db, geo_key, resolved_as_of, assumptions)
+    return {**data, "as_of_meta": as_of_meta, "zscores": zscores}
+
+
+@app.get("/api/v1/geo/{geo_key}/zscore")
+def county_zscore(
+    geo_key: str,
+    as_of: str = "latest",
+    window_years: int = 10,
+    metrics: Optional[str] = None,
+    assumption_set_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+):
+    assumptions = _get_assumptions(db, assumption_set_id)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
+    metric_keys = [m.strip() for m in metrics.split(",")] if metrics else list(ZSCORE_DEFAULT_METRICS)
+    payload = _compute_metric_zscores(
+        db,
+        geo_key,
+        resolved_as_of,
+        assumptions,
+        metric_keys=metric_keys,
+        window_years=window_years,
+    )
+    return {
+        "geo_key": geo_key,
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "window_years": window_years,
+        "metrics": payload,
+    }
 
 
 @app.get("/api/v1/geo/{geo_key}/timeseries")
 def county_timeseries(
     geo_key: str,
     metrics: str = "cash_rent,benchmark_value,implied_cap_rate,fair_value",
-    start_year: str = "2015", end_year: str = "2025",
+    start_year: Optional[str] = None, end_year: Optional[str] = None,
+    as_of: str = "latest",
     assumption_set_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     assumptions = _get_assumptions(db, assumption_set_id)
     metric_keys = [m.strip() for m in metrics.split(",")]
-    years = [str(y) for y in range(int(start_year), int(end_year) + 1)]
-    result = []
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
+    try:
+        resolved_year_int = int(resolved_as_of)
+    except (TypeError, ValueError):
+        resolved_year_int = datetime.utcnow().year
+    end_year_int = int(end_year) if end_year else resolved_year_int
+    start_year_int = int(start_year) if start_year else max(1950, end_year_int - 10)
+    lo = min(start_year_int, end_year_int)
+    hi = max(start_year_int, end_year_int)
+    years = [str(y) for y in range(lo, hi + 1)]
+    rows = []
     for year in years:
         data = _compute_county(db, geo_key, year, assumptions)
         row = {"year": year}
         for mk in metric_keys:
             row[mk] = data["metrics"].get(mk)
-        result.append(row)
-    return result
+        rows.append(row)
+
+    bands = {}
+    for mk in metric_keys:
+        values = [row.get(mk) for row in rows if isinstance(row.get(mk), (int, float))]
+        if not values:
+            continue
+        mean = sum(values) / len(values)
+        variance = sum((v - mean) ** 2 for v in values) / len(values)
+        stddev = variance ** 0.5
+        bands[mk] = {
+            "mean": round(mean, 4),
+            "stddev": round(stddev, 4),
+            "plus_1sigma": round(mean + stddev, 4),
+            "minus_1sigma": round(mean - stddev, 4),
+            "plus_2sigma": round(mean + (2 * stddev), 4),
+            "minus_2sigma": round(mean - (2 * stddev), 4),
+        }
+
+    return {
+        "geo_key": geo_key,
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "start_year": str(lo),
+        "end_year": str(hi),
+        "series": rows,
+        "bands": bands,
+    }
 
 
 @app.get("/api/v1/geo/{geo_key}/access")
@@ -622,17 +1005,18 @@ def search(q: str, db: Session = Depends(get_db)):
 @app.get("/api/v1/compare")
 def compare_counties(
     fips: str,  # comma-separated list of FIPS codes
-    as_of: str = "2025",
+    as_of: str = "latest",
     assumption_set_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     assumptions = _get_assumptions(db, assumption_set_id)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
     fips_list = [f.strip() for f in fips.split(",")][:6]
     results = []
     for f in fips_list:
-        data = _compute_county(db, f, as_of, assumptions)
+        data = _compute_county(db, f, resolved_as_of, assumptions)
         results.append(data)
-    return {"as_of": as_of, "counties": results}
+    return {"as_of": resolved_as_of, "as_of_meta": as_of_meta, "counties": results}
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -641,17 +1025,25 @@ def compare_counties(
 
 @app.get("/api/v1/screener")
 def run_screener(
-    screen_id: Optional[int] = None, as_of: str = "2025",
+    screen_id: Optional[int] = None, as_of: str = "latest",
     assumption_set_id: Optional[int] = None,
     min_cap: Optional[float] = None,
     max_rent_mult: Optional[float] = None,
     min_access: Optional[float] = None,
+    z_implied_cap_rate_min: Optional[float] = None,
+    z_implied_cap_rate_max: Optional[float] = None,
+    z_fair_value_min: Optional[float] = None,
+    z_fair_value_max: Optional[float] = None,
+    z_cash_rent_min: Optional[float] = None,
+    z_cash_rent_max: Optional[float] = None,
+    window_years: int = 10,
     state: Optional[str] = None,
     sort_by: Optional[str] = None,
     sort_dir: Optional[str] = "desc",
     db: Session = Depends(get_db),
 ):
     assumptions = _get_assumptions(db, assumption_set_id)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of, state=state)
 
     filters = []
     if screen_id:
@@ -666,6 +1058,17 @@ def run_screener(
         if min_access is not None:
             filters.append({"metric": "access_score", "op": ">", "value": min_access})
 
+    z_filters = {
+        "implied_cap_rate": {"min": z_implied_cap_rate_min, "max": z_implied_cap_rate_max},
+        "fair_value": {"min": z_fair_value_min, "max": z_fair_value_max},
+        "cash_rent": {"min": z_cash_rent_min, "max": z_cash_rent_max},
+    }
+    z_filters = {
+        metric: bounds
+        for metric, bounds in z_filters.items()
+        if bounds["min"] is not None or bounds["max"] is not None
+    }
+
     q = db.query(GeoCounty)
     if state:
         q = q.filter(GeoCounty.state == state.upper())
@@ -673,8 +1076,16 @@ def run_screener(
 
     results = []
     for c in counties:
-        data = _compute_county(db, c.fips, as_of, assumptions)
+        data = _compute_county(db, c.fips, resolved_as_of, assumptions)
         m = data["metrics"]
+        zscores = _compute_metric_zscores(
+            db,
+            c.fips,
+            resolved_as_of,
+            assumptions,
+            metric_keys=["implied_cap_rate", "fair_value", "cash_rent"],
+            window_years=window_years,
+        )
 
         passes = True
         for f in filters:
@@ -694,9 +1105,23 @@ def run_screener(
             if not passes:
                 break
 
+        if passes and z_filters:
+            for metric, bounds in z_filters.items():
+                z_value = zscores.get(metric, {}).get("zscore")
+                if z_value is None:
+                    passes = False
+                    break
+                if bounds["min"] is not None and z_value < bounds["min"]:
+                    passes = False
+                    break
+                if bounds["max"] is not None and z_value > bounds["max"]:
+                    passes = False
+                    break
+
         if passes:
             results.append({
                 "fips": c.fips, "county": c.name, "state": c.state,
+                "zscores": zscores,
                 "metrics": {k: round(v, 2) if v else None for k, v in m.items()},
             })
 
@@ -704,7 +1129,14 @@ def run_screener(
     sort_key = sort_by or "implied_cap_rate"
     reverse = sort_dir != "asc"
     results.sort(key=lambda x: x["metrics"].get(sort_key, 0) or 0, reverse=reverse)
-    return {"count": len(results), "as_of": as_of, "filters": filters, "results": results}
+    return {
+        "count": len(results),
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "filters": filters,
+        "z_filters": z_filters,
+        "results": results,
+    }
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -713,24 +1145,26 @@ def run_screener(
 
 class ScenarioRequest(BaseModel):
     geo_key: str
-    as_of: str = "2025"
+    as_of: str = "latest"
     assumption_set_id: int | None = None
     overrides: dict | None = None
     vary_params: list[dict] | None = None
+    scenario_sets: list[dict] | None = None
 
 @app.post("/api/v1/run/scenario")
 def run_scenario(body: ScenarioRequest, db: Session = Depends(get_db)):
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, body.as_of)
     assumptions = _get_assumptions(db, body.assumption_set_id)
     if body.overrides:
         assumptions = {**assumptions, **body.overrides}
 
-    base = _compute_county(db, body.geo_key, body.as_of, assumptions)
+    base = _compute_county(db, body.geo_key, resolved_as_of, assumptions)
     sensitivities = {}
     if body.vary_params:
-        series = _load_series_for_county(db, body.geo_key, body.as_of)
+        series = _load_series_for_county(db, body.geo_key, resolved_as_of)
         for vp in body.vary_params:
             ctx = ComputeContext(
-                geo_key=body.geo_key, as_of_year=body.as_of,
+                geo_key=body.geo_key, as_of_year=resolved_as_of,
                 series=series, metrics={}, assumptions=assumptions,
             )
             results = compute_sensitivity(
@@ -738,17 +1172,90 @@ def run_scenario(body: ScenarioRequest, db: Session = Depends(get_db)):
                 target_metric=vp.get("target_metric", "fair_value"),
             )
             sensitivities[vp["param"]] = results
-    return {"base": base, "sensitivities": sensitivities}
+
+    scenarios = []
+    comparison_table = []
+    assumption_deltas = {}
+    driver_decomposition = []
+    if body.scenario_sets:
+        for idx, scenario_set in enumerate(body.scenario_sets):
+            name = (scenario_set.get("name") if isinstance(scenario_set, dict) else None) or f"scenario_{idx + 1}"
+            overrides = scenario_set.get("overrides", {}) if isinstance(scenario_set, dict) else {}
+            scenario_assumptions = {**assumptions, **overrides}
+            scenario = _compute_county(db, body.geo_key, resolved_as_of, scenario_assumptions)
+            scenarios.append({
+                "name": name,
+                "assumptions": scenario_assumptions,
+                "result": scenario,
+            })
+
+            fair_value = scenario["metrics"].get("fair_value")
+            base_fair_value = base["metrics"].get("fair_value")
+            delta = None
+            if isinstance(fair_value, (int, float)) and isinstance(base_fair_value, (int, float)):
+                delta = fair_value - base_fair_value
+            comparison_table.append({
+                "scenario": name,
+                "fair_value": fair_value,
+                "implied_cap_rate": scenario["metrics"].get("implied_cap_rate"),
+                "noi_per_acre": scenario["metrics"].get("noi_per_acre"),
+                "delta_fair_value_vs_base": delta,
+            })
+
+            deltas = {}
+            for key, override_val in overrides.items():
+                try:
+                    deltas[key] = float(override_val) - float(assumptions.get(key, 0))
+                except (TypeError, ValueError):
+                    continue
+            assumption_deltas[name] = deltas
+
+            driver_rows = []
+            for key, override_val in overrides.items():
+                one_at_a_time = _compute_county(
+                    db,
+                    body.geo_key,
+                    resolved_as_of,
+                    {**assumptions, **{key: override_val}},
+                )
+                one_value = one_at_a_time["metrics"].get("fair_value")
+                base_value = base["metrics"].get("fair_value")
+                if isinstance(one_value, (int, float)) and isinstance(base_value, (int, float)):
+                    one_delta = one_value - base_value
+                else:
+                    one_delta = 0.0
+                driver_rows.append({"driver": key, "delta": round(one_delta, 4)})
+            net_delta = 0.0
+            if isinstance(fair_value, (int, float)) and isinstance(base_fair_value, (int, float)):
+                net_delta = fair_value - base_fair_value
+            explained = sum(item["delta"] for item in driver_rows)
+            driver_decomposition.append({
+                "scenario": name,
+                "drivers": sorted(driver_rows, key=lambda item: abs(item["delta"]), reverse=True),
+                "residual": round(net_delta - explained, 4),
+            })
+
+    return {
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "base": base,
+        "sensitivities": sensitivities,
+        "scenarios": scenarios,
+        "comparison_table": comparison_table,
+        "assumption_deltas": assumption_deltas,
+        "driver_decomposition": driver_decomposition,
+    }
 
 
 @app.get("/api/v1/geo/{geo_key}/sensitivity")
 def sensitivity_matrix(
-    geo_key: str, as_of: str = "2025",
+    geo_key: str, as_of: str = "latest",
     assumption_set_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     assumptions = _get_assumptions(db, assumption_set_id)
-    series = _load_series_for_county(db, geo_key, as_of)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
+    series = _load_series_for_county(db, geo_key, resolved_as_of)
     rent_shocks = [s / 100 for s in range(-20, 25, 5)]
 
     matrix = []
@@ -756,7 +1263,7 @@ def sensitivity_matrix(
         row = {"risk_premium": rv}
         for gv in [0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04]:
             ctx = ComputeContext(
-                geo_key=geo_key, as_of_year=as_of,
+                geo_key=geo_key, as_of_year=resolved_as_of,
                 series=dict(series), metrics={},
                 assumptions={**assumptions, "risk_premium": rv, "long_run_growth": gv},
             )
@@ -767,7 +1274,7 @@ def sensitivity_matrix(
     rent_sens = []
     for rs in rent_shocks:
         ctx = ComputeContext(
-            geo_key=geo_key, as_of_year=as_of,
+            geo_key=geo_key, as_of_year=resolved_as_of,
             series=dict(series), metrics={},
             assumptions={**assumptions, "near_term_rent_shock": rs},
         )
@@ -778,7 +1285,13 @@ def sensitivity_matrix(
             "noi": round(ctx.metrics.get("noi_per_acre", 0), 2) if ctx.metrics.get("noi_per_acre") else None,
         })
 
-    return {"geo_key": geo_key, "rate_growth_matrix": matrix, "rent_shock_sensitivity": rent_sens}
+    return {
+        "geo_key": geo_key,
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "rate_growth_matrix": matrix,
+        "rent_shock_sensitivity": rent_sens,
+    }
 
 
 class BacktestRequest(BaseModel):
@@ -796,7 +1309,12 @@ def run_backtest(body: BacktestRequest, db: Session = Depends(get_db)):
     assumptions = _get_assumptions(db, body.assumption_set_id)
     counties = db.query(GeoCounty).all()
     start = int(body.start_year)
-    end = start + body.eval_years
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, "latest")
+    try:
+        max_year = int(resolved_as_of)
+    except (TypeError, ValueError):
+        max_year = datetime.utcnow().year
+    end = min(start + body.eval_years, max_year)
 
     flagged = []
     for c in counties:
@@ -821,7 +1339,7 @@ def run_backtest(body: BacktestRequest, db: Session = Depends(get_db)):
             })
 
     for item in flagged:
-        end_data = _compute_county(db, item["fips"], str(min(end, 2025)), assumptions)
+        end_data = _compute_county(db, item["fips"], str(end), assumptions)
         em = end_data["metrics"]
         sv = item["start_metrics"].get("benchmark_value", 0) or 0
         ev = em.get("benchmark_value", 0) or 0
@@ -837,6 +1355,8 @@ def run_backtest(body: BacktestRequest, db: Session = Depends(get_db)):
     flagged.sort(key=lambda x: x.get("total_return_est", 0), reverse=True)
     return {
         "screen": {"id": screen.id, "name": screen.name, "filters": screen.filters_json},
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
         "start_year": body.start_year, "eval_years": body.eval_years,
         "counties_screened": len(counties), "counties_flagged": len(flagged),
         "results": flagged,
@@ -848,13 +1368,14 @@ def run_backtest(body: BacktestRequest, db: Session = Depends(get_db)):
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.get("/api/v1/dashboard")
-def dashboard(as_of: str = "2025", assumption_set_id: Optional[int] = None, db: Session = Depends(get_db)):
+def dashboard(as_of: str = "latest", assumption_set_id: Optional[int] = None, db: Session = Depends(get_db)):
     assumptions = _get_assumptions(db, assumption_set_id)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
     counties = db.query(GeoCounty).all()
 
     all_data = []
     for c in counties:
-        data = _compute_county(db, c.fips, as_of, assumptions)
+        data = _compute_county(db, c.fips, resolved_as_of, assumptions)
         all_data.append(data)
 
     caps = [d["metrics"].get("implied_cap_rate") for d in all_data if d["metrics"].get("implied_cap_rate")]
@@ -903,12 +1424,60 @@ def dashboard(as_of: str = "2025", assumption_set_id: Optional[int] = None, db: 
             "avg_value": round(sum(v_list) / len(v_list), 0) if v_list else 0,
         }
 
+    try:
+        end_year = int(resolved_as_of)
+    except (TypeError, ValueError):
+        end_year = datetime.utcnow().year
+    start_year = max(2000, end_year - 9)
+    chart_rows = []
+    for year in range(start_year, end_year + 1):
+        year_data = [_compute_county(db, c.fips, str(year), assumptions) for c in counties]
+        year_caps = [d["metrics"].get("implied_cap_rate") for d in year_data if d["metrics"].get("implied_cap_rate")]
+        year_fvs = [d["metrics"].get("fair_value") for d in year_data if d["metrics"].get("fair_value")]
+        year_rents = [d["metrics"].get("cash_rent") for d in year_data if d["metrics"].get("cash_rent")]
+        year_stats_cap = stats(year_caps) if year_caps else {}
+        year_stats_fv = stats(year_fvs) if year_fvs else {}
+        year_stats_rent = stats(year_rents) if year_rents else {}
+        treasury = None
+        if year_data:
+            req_return = year_data[0]["metrics"].get("required_return")
+            if isinstance(req_return, (int, float)):
+                treasury = round(req_return - assumptions.get("risk_premium", 2.0), 4)
+        chart_rows.append({
+            "year": str(year),
+            "cap_rate_median": year_stats_cap.get("median"),
+            "fair_value_median": year_stats_fv.get("median"),
+            "cash_rent_median": year_stats_rent.get("median"),
+            "treasury_10y": treasury,
+        })
+
+    chart_years = [row["year"] for row in chart_rows]
+    cap_series = [row["cap_rate_median"] for row in chart_rows if isinstance(row["cap_rate_median"], (int, float))]
+    fair_series = [row["fair_value_median"] for row in chart_rows if isinstance(row["fair_value_median"], (int, float))]
+    rent_series = [row["cash_rent_median"] for row in chart_rows if isinstance(row["cash_rent_median"], (int, float))]
+    cap_summary_stats = compute_zscore_stats((stats(caps).get("median") if caps else None), cap_series, chart_years)
+    fair_summary_stats = compute_zscore_stats((stats(fvs).get("median") if fvs else None), fair_series, chart_years)
+    rent_summary_stats = compute_zscore_stats((stats(rents).get("median") if rents else None), rent_series, chart_years)
+
     return {
-        "as_of": as_of, "county_count": len(counties),
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "county_count": len(counties),
         "summary": {
             "implied_cap_rate": stats(caps), "fair_value": stats(fvs),
             "cash_rent": stats(rents), "benchmark_value": stats(vals),
             "access_score": stats(access_scores),
+        },
+        "summary_zscores": {
+            "implied_cap_rate": {**cap_summary_stats, "band": zscore_band(cap_summary_stats.get("zscore"))},
+            "fair_value": {**fair_summary_stats, "band": zscore_band(fair_summary_stats.get("zscore"))},
+            "cash_rent": {**rent_summary_stats, "band": zscore_band(rent_summary_stats.get("zscore"))},
+        },
+        "charts": {
+            "cap_rate_median_by_year": [{"year": row["year"], "value": row["cap_rate_median"]} for row in chart_rows],
+            "fair_value_median_by_year": [{"year": row["year"], "value": row["fair_value_median"]} for row in chart_rows],
+            "cash_rent_median_by_year": [{"year": row["year"], "value": row["cash_rent_median"]} for row in chart_rows],
+            "treasury_10y_by_year": [{"year": row["year"], "value": row["treasury_10y"]} for row in chart_rows],
         },
         "treasury_10y": all_data[0]["metrics"].get("required_return", 0) - assumptions.get("risk_premium", 2.0) if all_data else 0,
         "top_movers": movers[:15],
@@ -934,14 +1503,19 @@ def list_facilities(type: Optional[str] = None, db: Session = Depends(get_db)):
 # ═══════════════════════════════════════════════════════════════════════
 
 @app.get("/api/v1/watchlist")
-def get_watchlist(as_of: str = "2025", db: Session = Depends(get_db)):
+def get_watchlist(as_of: str = "latest", db: Session = Depends(get_db)):
     items = db.query(WatchlistItem).all()
     assumptions = _get_assumptions(db)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
+    try:
+        previous_year = str(int(resolved_as_of) - 1)
+    except (TypeError, ValueError):
+        previous_year = resolved_as_of
     result = []
     for item in items:
-        data = _compute_county(db, item.geo_key, as_of, assumptions)
+        data = _compute_county(db, item.geo_key, resolved_as_of, assumptions)
         # Previous year for change tracking
-        prev = _compute_county(db, item.geo_key, str(int(as_of) - 1), assumptions)
+        prev = _compute_county(db, item.geo_key, previous_year, assumptions)
         m = data["metrics"]
         pm = prev["metrics"]
 
@@ -965,7 +1539,11 @@ def get_watchlist(as_of: str = "2025", db: Session = Depends(get_db)):
                 "fair_value": delta("fair_value"),
             },
         })
-    return result
+    return {
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
+        "items": result,
+    }
 
 
 class WatchlistAdd(BaseModel):
@@ -1122,6 +1700,7 @@ def auth_logout(request: Request, db: Session = Depends(get_db)):
 
 class ResearchWorkspaceUpsert(BaseModel):
     thesis: str | None = None
+    analysis: dict | None = None
     tags: list[str] | None = None
     status: str | None = None
     conviction: float | None = None
@@ -1168,6 +1747,16 @@ def upsert_research_workspace(
     user_key = _get_research_user(request, db)
     workspace = _get_or_create_workspace(db, user_key, geo_key)
     workspace.thesis = (body.thesis or "").strip()
+    existing_analysis = workspace.analysis_json if isinstance(workspace.analysis_json, dict) else {}
+    merged_analysis = {
+        "thesis": body.analysis.get("thesis", existing_analysis.get("thesis", "")) if body.analysis else existing_analysis.get("thesis", ""),
+        "bull_case": body.analysis.get("bull_case", existing_analysis.get("bull_case", "")) if body.analysis else existing_analysis.get("bull_case", ""),
+        "bear_case": body.analysis.get("bear_case", existing_analysis.get("bear_case", "")) if body.analysis else existing_analysis.get("bear_case", ""),
+        "key_risks": body.analysis.get("key_risks", existing_analysis.get("key_risks", [])) if body.analysis else existing_analysis.get("key_risks", []),
+        "catalysts": body.analysis.get("catalysts", existing_analysis.get("catalysts", [])) if body.analysis else existing_analysis.get("catalysts", []),
+        "decision_state": body.analysis.get("decision_state", existing_analysis.get("decision_state", "exploring")) if body.analysis else existing_analysis.get("decision_state", "exploring"),
+    }
+    workspace.analysis_json = merged_analysis
     workspace.tags_json = [
         t.strip() for t in (body.tags or [])
         if isinstance(t, str) and t.strip()
@@ -1277,6 +1866,79 @@ def delete_research_scenario_pack(pack_id: int, request: Request, db: Session = 
     return {"status": "deleted"}
 
 
+class ResearchScenarioRunCreate(BaseModel):
+    scenario_name: str | None = None
+    as_of_date: str
+    assumptions: dict
+    comparison: dict
+
+
+@app.get("/api/v1/research/workspaces/{geo_key}/scenario-runs")
+def list_research_scenario_runs(
+    geo_key: str,
+    request: Request,
+    limit: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    user_key = _get_research_user(request, db)
+    workspace = _find_workspace_for_user(db, user_key, geo_key)
+    if not workspace:
+        return []
+
+    rows = db.query(ResearchScenarioRun).filter(
+        ResearchScenarioRun.workspace_id == workspace.id
+    ).order_by(
+        ResearchScenarioRun.created_at.desc(),
+        ResearchScenarioRun.id.desc(),
+    ).limit(limit).all()
+
+    return [
+        {
+            "id": row.id,
+            "scenario_name": row.scenario_name or "",
+            "as_of_date": row.as_of_date,
+            "assumptions": row.assumptions_json or {},
+            "comparison": row.comparison_json or {},
+            "created_at": str(row.created_at) if row.created_at else None,
+        }
+        for row in rows
+    ]
+
+
+@app.post("/api/v1/research/workspaces/{geo_key}/scenario-runs")
+def create_research_scenario_run(
+    geo_key: str,
+    body: ResearchScenarioRunCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_key = _get_research_user(request, db)
+    workspace = _get_or_create_workspace(db, user_key, geo_key)
+    as_of = body.as_of_date.strip()
+    if not as_of:
+        raise HTTPException(400, "as_of_date is required")
+    run = ResearchScenarioRun(
+        workspace_id=workspace.id,
+        scenario_name=(body.scenario_name or "").strip() or None,
+        as_of_date=as_of,
+        assumptions_json=body.assumptions or {},
+        comparison_json=body.comparison or {},
+    )
+    workspace.updated_at = datetime.utcnow()
+    db.add(run)
+    db.add(workspace)
+    db.commit()
+    db.refresh(run)
+    return {
+        "id": run.id,
+        "scenario_name": run.scenario_name or "",
+        "as_of_date": run.as_of_date,
+        "assumptions": run.assumptions_json or {},
+        "comparison": run.comparison_json or {},
+        "created_at": str(run.created_at) if run.created_at else None,
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Portfolios
 # ═══════════════════════════════════════════════════════════════════════
@@ -1297,19 +1959,20 @@ def list_portfolios(db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/portfolios/{portfolio_id}")
-def get_portfolio(portfolio_id: int, as_of: str = "2025", db: Session = Depends(get_db)):
+def get_portfolio(portfolio_id: int, as_of: str = "latest", db: Session = Depends(get_db)):
     p = db.query(Portfolio).filter(Portfolio.id == portfolio_id).first()
     if not p:
         raise HTTPException(404, "Portfolio not found")
 
     holdings = db.query(PortfolioHolding).filter(PortfolioHolding.portfolio_id == p.id).all()
     assumptions = _get_assumptions(db)
+    resolved_as_of, as_of_meta = _resolve_as_of_with_meta(db, as_of)
 
     # Compute all county data
     county_data = {}
     holding_dicts = []
     for h in holdings:
-        data = _compute_county(db, h.geo_key, as_of, assumptions)
+        data = _compute_county(db, h.geo_key, resolved_as_of, assumptions)
         county_data[h.geo_key] = data
         holding_dicts.append({
             "geo_key": h.geo_key,
@@ -1322,7 +1985,8 @@ def get_portfolio(portfolio_id: int, as_of: str = "2025", db: Session = Depends(
 
     return {
         "id": p.id, "name": p.name, "description": p.description,
-        "as_of": as_of,
+        "as_of": resolved_as_of,
+        "as_of_meta": as_of_meta,
         **analytics,
     }
 
@@ -1384,12 +2048,13 @@ def remove_holding(portfolio_id: int, geo_key: str, request: Request, db: Sessio
 
 @app.get("/api/v1/export/screener")
 def export_screener(
-    as_of: str = "2025",
+    as_of: str = "latest",
     assumption_set_id: Optional[int] = None,
     db: Session = Depends(get_db),
 ):
     """Export all counties as CSV."""
     assumptions = _get_assumptions(db, assumption_set_id)
+    resolved_as_of, _ = _resolve_as_of_with_meta(db, as_of)
     counties = db.query(GeoCounty).order_by(GeoCounty.state, GeoCounty.name).all()
 
     output = io.StringIO()
@@ -1400,7 +2065,7 @@ def export_screener(
     writer.writerow(headers)
 
     for c in counties:
-        data = _compute_county(db, c.fips, as_of, assumptions)
+        data = _compute_county(db, c.fips, resolved_as_of, assumptions)
         m = data["metrics"]
         writer.writerow([
             c.fips, c.name, c.state,
@@ -1420,5 +2085,5 @@ def export_screener(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=farmland_screener_{as_of}.csv"},
+        headers={"Content-Disposition": f"attachment; filename=farmland_screener_{resolved_as_of}.csv"},
     )

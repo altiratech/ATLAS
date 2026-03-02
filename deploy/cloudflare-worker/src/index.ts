@@ -21,9 +21,10 @@ import {
   getAccessScore,
   getAllCounties,
   getCounty,
-  getTimeseries,
 } from './db/queries';
 import { runIngestion } from './services/ingest';
+import { resolveAsOf } from './services/asof';
+import { computeZScoreStats, zscoreBand } from './services/zscore';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -150,11 +151,138 @@ function parseOptionalYear(value: string | undefined): number | undefined {
   return Number.isNaN(parsed) ? undefined : parsed;
 }
 
+type CacheEntry = {
+  expiresAt: number;
+  payload: unknown;
+};
+
+const RESPONSE_CACHE = new Map<string, CacheEntry>();
+
+function cacheGet<T>(key: string): T | null {
+  const entry = RESPONSE_CACHE.get(key);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    RESPONSE_CACHE.delete(key);
+    return null;
+  }
+  return entry.payload as T;
+}
+
+function cacheSet(key: string, payload: unknown, ttlMs: number) {
+  RESPONSE_CACHE.set(key, { payload, expiresAt: Date.now() + ttlMs });
+}
+
+const CORE_MODEL_SERIES = [
+  'cash_rent',
+  'land_value',
+  'corn_yield',
+  'treasury_10y',
+  'corn_price',
+] as const;
+
+const ZSCORE_DEFAULT_METRICS = [
+  'implied_cap_rate',
+  'fair_value',
+  'cash_rent',
+  'benchmark_value',
+] as const;
+
+type MetricZScoreMap = Record<
+  string,
+  {
+    value: number | null;
+    mean: number | null;
+    stddev: number | null;
+    zscore: number | null;
+    percentile: number | null;
+    window_n: number;
+    window_start: string | null;
+    window_end: string | null;
+    band: 'cheap' | 'normal' | 'expensive' | 'na';
+  }
+>;
+
+async function resolveRequestAsOf(
+  db: D1Database,
+  requestedAsOf?: string | null,
+  state?: string | null,
+  requiredSeries: string[] = [...CORE_MODEL_SERIES],
+) {
+  return resolveAsOf(db, {
+    requestedAsOf,
+    state,
+    requiredSeries,
+  });
+}
+
+async function computeMetricZscoresForCounty(
+  db: D1Database,
+  geoKey: string,
+  asOf: string,
+  assumptions: Assumptions,
+  metricKeys: string[] = [...ZSCORE_DEFAULT_METRICS],
+  windowYears = 10,
+): Promise<MetricZScoreMap> {
+  const endYear = Number.parseInt(asOf, 10);
+  if (Number.isNaN(endYear)) {
+    return Object.fromEntries(
+      metricKeys.map((metric) => [
+        metric,
+        {
+          value: null,
+          mean: null,
+          stddev: null,
+          zscore: null,
+          percentile: null,
+          window_n: 0,
+          window_start: null,
+          window_end: null,
+          band: 'na',
+        },
+      ]),
+    );
+  }
+
+  const startYear = Math.max(1950, endYear - Math.max(1, windowYears) + 1);
+  const yearLabels: string[] = [];
+  const valuesByMetric: Record<string, number[]> = Object.fromEntries(
+    metricKeys.map((metric) => [metric, []]),
+  );
+  let currentMetrics: Record<string, number | null> = {};
+
+  for (let year = startYear; year <= endYear; year += 1) {
+    const yearStr = String(year);
+    const computed = await computeCounty(db, geoKey, yearStr, assumptions);
+    yearLabels.push(yearStr);
+    for (const metric of metricKeys) {
+      const metricValue = computed.metrics[metric];
+      if (typeof metricValue === 'number' && Number.isFinite(metricValue)) {
+        valuesByMetric[metric].push(metricValue);
+      }
+    }
+    if (year === endYear) {
+      currentMetrics = computed.metrics;
+    }
+  }
+
+  const zscores: MetricZScoreMap = {};
+  for (const metric of metricKeys) {
+    const currentValue = (currentMetrics[metric] ?? null) as number | null;
+    const stats = computeZScoreStats(currentValue, valuesByMetric[metric] ?? [], yearLabels);
+    zscores[metric] = {
+      ...stats,
+      band: zscoreBand(stats.zscore),
+    };
+  }
+  return zscores;
+}
+
 interface ResearchWorkspaceRow {
   id: number;
   owner_key: string;
   geo_key: string;
   thesis: string | null;
+  analysis_json: string | null;
   tags_json: string | null;
   status: string | null;
   conviction: number | null;
@@ -396,10 +524,62 @@ function parseTags(tagsJson: string | null): string[] {
   }
 }
 
+function defaultAnalysisRecord() {
+  return {
+    thesis: '',
+    bull_case: '',
+    bear_case: '',
+    key_risks: [] as string[],
+    catalysts: [] as string[],
+    decision_state: 'exploring',
+  };
+}
+
+function parseAnalysis(analysisJson: string | null) {
+  if (!analysisJson) return defaultAnalysisRecord();
+  try {
+    const parsed = JSON.parse(analysisJson);
+    return {
+      thesis: typeof parsed?.thesis === 'string' ? parsed.thesis : '',
+      bull_case: typeof parsed?.bull_case === 'string' ? parsed.bull_case : '',
+      bear_case: typeof parsed?.bear_case === 'string' ? parsed.bear_case : '',
+      key_risks: Array.isArray(parsed?.key_risks)
+        ? parsed.key_risks.filter((item: unknown): item is string => typeof item === 'string')
+        : [],
+      catalysts: Array.isArray(parsed?.catalysts)
+        ? parsed.catalysts.filter((item: unknown): item is string => typeof item === 'string')
+        : [],
+      decision_state: typeof parsed?.decision_state === 'string' ? parsed.decision_state : 'exploring',
+    };
+  } catch {
+    return defaultAnalysisRecord();
+  }
+}
+
+function normalizeAnalysisInput(value: unknown, fallback = defaultAnalysisRecord()) {
+  if (!value || typeof value !== 'object') return fallback;
+  const incoming = value as Record<string, unknown>;
+  return {
+    thesis: typeof incoming.thesis === 'string' ? incoming.thesis : fallback.thesis,
+    bull_case: typeof incoming.bull_case === 'string' ? incoming.bull_case : fallback.bull_case,
+    bear_case: typeof incoming.bear_case === 'string' ? incoming.bear_case : fallback.bear_case,
+    key_risks: Array.isArray(incoming.key_risks)
+      ? incoming.key_risks.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : fallback.key_risks,
+    catalysts: Array.isArray(incoming.catalysts)
+      ? incoming.catalysts.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : fallback.catalysts,
+    decision_state: typeof incoming.decision_state === 'string'
+      ? incoming.decision_state
+      : fallback.decision_state,
+  };
+}
+
 function emptyResearchWorkspace(geoKey: string) {
   return {
     geo_key: geoKey,
     thesis: '',
+    analysis: defaultAnalysisRecord(),
     tags: [],
     status: 'exploring',
     conviction: 50,
@@ -413,7 +593,7 @@ function emptyResearchWorkspace(geoKey: string) {
 async function getResearchWorkspaceRow(db: D1Database, userKey: string, geoKey: string) {
   return db
     .prepare(
-      'SELECT id, owner_key, geo_key, thesis, tags_json, status, conviction, created_at, updated_at FROM research_workspaces WHERE owner_key = ? AND geo_key = ?',
+      'SELECT id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at FROM research_workspaces WHERE owner_key = ? AND geo_key = ?',
     )
     .bind(userKey, geoKey)
     .first<ResearchWorkspaceRow>();
@@ -429,7 +609,7 @@ async function ensureResearchWorkspace(db: D1Database, userKey: string, geoKey: 
 
   await db
     .prepare(
-      "INSERT INTO research_workspaces (owner_key, geo_key, thesis, tags_json, status, conviction, created_at, updated_at) VALUES (?, ?, '', '[]', 'exploring', 50, datetime('now'), datetime('now'))",
+      "INSERT INTO research_workspaces (owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at) VALUES (?, ?, '', '{}', '[]', 'exploring', 50, datetime('now'), datetime('now'))",
     )
     .bind(userKey, geoKey)
     .run();
@@ -470,6 +650,7 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
   return {
     geo_key: workspace.geo_key,
     thesis: workspace.thesis ?? '',
+    analysis: parseAnalysis(workspace.analysis_json),
     tags: parseTags(workspace.tags_json),
     status: workspace.status ?? 'exploring',
     conviction: clampConviction(workspace.conviction),
@@ -500,6 +681,7 @@ async function ensureResearchSchema(db: D1Database) {
          owner_key TEXT NOT NULL DEFAULT 'owner_default',
          geo_key TEXT NOT NULL REFERENCES geo_county(fips),
          thesis TEXT,
+         analysis_json TEXT,
          tags_json TEXT,
          status TEXT NOT NULL DEFAULT 'exploring',
          conviction REAL NOT NULL DEFAULT 50,
@@ -522,6 +704,7 @@ async function ensureResearchSchema(db: D1Database) {
              owner_key TEXT NOT NULL DEFAULT 'owner_default',
              geo_key TEXT NOT NULL REFERENCES geo_county(fips),
              thesis TEXT,
+             analysis_json TEXT,
              tags_json TEXT,
              status TEXT NOT NULL DEFAULT 'exploring',
              conviction REAL NOT NULL DEFAULT 50,
@@ -533,14 +716,15 @@ async function ensureResearchSchema(db: D1Database) {
         .run();
       await db
         .prepare(
-          `INSERT INTO research_workspaces_new (
-             id, owner_key, geo_key, thesis, tags_json, status, conviction, created_at, updated_at
+           `INSERT INTO research_workspaces_new (
+             id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
            )
            SELECT
              id,
              'owner_default',
              geo_key,
              thesis,
+             NULL,
              tags_json,
              COALESCE(status, 'exploring'),
              COALESCE(conviction, 50),
@@ -554,6 +738,11 @@ async function ensureResearchSchema(db: D1Database) {
     } finally {
       await db.prepare('PRAGMA foreign_keys=ON').run();
     }
+  }
+
+  const hasAnalysisJson = workspaceCols.results.some((col) => col.name === 'analysis_json');
+  if (!hasAnalysisJson) {
+    await db.prepare('ALTER TABLE research_workspaces ADD COLUMN analysis_json TEXT').run();
   }
 
   await db
@@ -591,6 +780,23 @@ async function ensureResearchSchema(db: D1Database) {
 
   await db
     .prepare(
+      `CREATE TABLE IF NOT EXISTS research_scenario_runs (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+         scenario_name TEXT,
+         as_of_date TEXT NOT NULL,
+         assumptions_json TEXT NOT NULL,
+         comparison_json TEXT NOT NULL,
+         created_at TEXT DEFAULT (datetime('now'))
+       )`,
+    )
+    .run();
+  await db
+    .prepare('CREATE INDEX IF NOT EXISTS ix_research_scenario_runs_workspace ON research_scenario_runs(workspace_id, created_at DESC)')
+    .run();
+
+  await db
+    .prepare(
       `CREATE TABLE IF NOT EXISTS auth_sessions (
          id INTEGER PRIMARY KEY AUTOINCREMENT,
          user_key TEXT NOT NULL,
@@ -609,6 +815,22 @@ async function ensureResearchSchema(db: D1Database) {
   await db.prepare('CREATE INDEX IF NOT EXISTS ix_auth_sessions_expires ON auth_sessions(expires_at)').run();
 }
 
+async function ensureAgCompositeIndexSchema(db: D1Database) {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS ag_composite_index (
+         id INTEGER PRIMARY KEY AUTOINCREMENT,
+         as_of_date TEXT NOT NULL UNIQUE,
+         value REAL NOT NULL,
+         component_json TEXT NOT NULL,
+         zscore REAL,
+         created_at TEXT DEFAULT (datetime('now'))
+       )`,
+    )
+    .run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS ix_ag_composite_index_as_of ON ag_composite_index(as_of_date DESC)').run();
+}
+
 // ═════════════════════════════════════════════════════════════════════
 // Frontend Serving
 // ═════════════════════════════════════════════════════════════════════
@@ -622,6 +844,21 @@ async function ensureResearchSchema(db: D1Database) {
 
 app.get('/api/v1/metrics', (c) => {
   return c.json(getMetricCatalog());
+});
+
+app.get('/api/v1/meta/as-of', async (c) => {
+  const db = c.env.DB;
+  const state = c.req.query('state');
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const requiredSeriesParam = c.req.query('required_series');
+  const requiredSeries = requiredSeriesParam
+    ? requiredSeriesParam.split(',').map((item) => item.trim()).filter(Boolean)
+    : [...CORE_MODEL_SERIES];
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, state, requiredSeries);
+  return c.json({
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+  });
 });
 
 app.get('/api/v1/assumptions', async (c) => {
@@ -723,33 +960,110 @@ app.get('/api/v1/counties', async (c) => {
 app.get('/api/v1/geo/:geoKey/summary', async (c) => {
   const db = c.env.DB;
   const geoKey = c.req.param('geoKey');
-  const asOf = c.req.query('as_of') ?? '2025';
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
-  const result = await computeCounty(db, geoKey, asOf, assumptions);
-  return c.json(result);
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
+  const result = await computeCounty(db, geoKey, resolved.asOf, assumptions);
+  const zscores = await computeMetricZscoresForCounty(
+    db,
+    geoKey,
+    resolved.asOf,
+    assumptions,
+    [...ZSCORE_DEFAULT_METRICS],
+  );
+  return c.json({
+    ...result,
+    zscores,
+    as_of_meta: resolved.meta,
+  });
+});
+
+app.get('/api/v1/geo/:geoKey/zscore', async (c) => {
+  const db = c.env.DB;
+  const geoKey = c.req.param('geoKey');
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const windowYears = parseOptionalYear(c.req.query('window_years')) ?? 10;
+  const metricsParam = c.req.query('metrics');
+  const metricKeys = metricsParam
+    ? metricsParam.split(',').map((item) => item.trim()).filter(Boolean)
+    : [...ZSCORE_DEFAULT_METRICS];
+  const assumptionSetId = c.req.query('assumption_set_id');
+  const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
+  const metrics = await computeMetricZscoresForCounty(
+    db,
+    geoKey,
+    resolved.asOf,
+    assumptions,
+    metricKeys,
+    windowYears,
+  );
+  return c.json({
+    geo_key: geoKey,
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+    window_years: windowYears,
+    metrics,
+  });
 });
 
 app.get('/api/v1/geo/:geoKey/timeseries', async (c) => {
   const db = c.env.DB;
   const geoKey = c.req.param('geoKey');
   const metricsParam = c.req.query('metrics') ?? 'cash_rent,benchmark_value,implied_cap_rate,fair_value';
-  const startYear = parseInt(c.req.query('start_year') ?? '2015');
-  const endYear = parseInt(c.req.query('end_year') ?? '2025');
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
+  const resolvedYear = Number.parseInt(resolved.asOf, 10);
+  const defaultEndYear = Number.isNaN(resolvedYear) ? new Date().getUTCFullYear() : resolvedYear;
+  const startYearRaw = parseOptionalYear(c.req.query('start_year'));
+  const endYearRaw = parseOptionalYear(c.req.query('end_year'));
+  const endYear = endYearRaw ?? defaultEndYear;
+  const startYear = startYearRaw ?? Math.max(1950, endYear - 10);
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
   const metricKeys = metricsParam.split(',').map((m) => m.trim());
 
-  const result: Record<string, any>[] = [];
-  for (let y = startYear; y <= endYear; y++) {
+  const boundedStart = Math.min(startYear, endYear);
+  const boundedEnd = Math.max(startYear, endYear);
+  const rows: Record<string, any>[] = [];
+  for (let y = boundedStart; y <= boundedEnd; y++) {
     const data = await computeCounty(db, geoKey, String(y), assumptions);
     const row: Record<string, any> = { year: String(y) };
     for (const mk of metricKeys) {
       row[mk] = data.metrics[mk] ?? null;
     }
-    result.push(row);
+    rows.push(row);
   }
-  return c.json(result);
+
+  const bands: Record<string, any> = {};
+  for (const mk of metricKeys) {
+    const values = rows
+      .map((row) => row[mk])
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    if (!values.length) continue;
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const variance = values.reduce((sum, value) => sum + Math.pow(value - mean, 2), 0) / values.length;
+    const stddev = Math.sqrt(variance);
+    bands[mk] = {
+      mean: Math.round(mean * 10000) / 10000,
+      stddev: Math.round(stddev * 10000) / 10000,
+      plus_1sigma: Math.round((mean + stddev) * 10000) / 10000,
+      minus_1sigma: Math.round((mean - stddev) * 10000) / 10000,
+      plus_2sigma: Math.round((mean + stddev * 2) * 10000) / 10000,
+      minus_2sigma: Math.round((mean - stddev * 2) * 10000) / 10000,
+    };
+  }
+
+  return c.json({
+    geo_key: geoKey,
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+    start_year: String(boundedStart),
+    end_year: String(boundedEnd),
+    series: rows,
+    bands,
+  });
 });
 
 app.get('/api/v1/geo/:geoKey/access', async (c) => {
@@ -843,9 +1157,10 @@ app.get('/api/v1/search', async (c) => {
 app.get('/api/v1/compare', async (c) => {
   const db = c.env.DB;
   const fipsParam = c.req.query('fips') ?? '';
-  const asOf = c.req.query('as_of') ?? '2025';
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const fipsList = fipsParam
     .split(',')
     .map((f) => f.trim())
@@ -854,9 +1169,9 @@ app.get('/api/v1/compare', async (c) => {
 
   const results = [];
   for (const f of fipsList) {
-    results.push(await computeCounty(db, f, asOf, assumptions));
+    results.push(await computeCounty(db, f, resolved.asOf, assumptions));
   }
-  return c.json({ as_of: asOf, counties: results });
+  return c.json({ as_of: resolved.asOf, as_of_meta: resolved.meta, counties: results });
 });
 
 // ═════════════════════════════════════════════════════════════════════
@@ -865,7 +1180,11 @@ app.get('/api/v1/compare', async (c) => {
 
 app.get('/api/v1/screener', async (c) => {
   const db = c.env.DB;
-  const asOf = c.req.query('as_of') ?? '2025';
+  const cacheKey = `screener:${c.req.url}`;
+  const cached = cacheGet<any>(cacheKey);
+  if (cached) return c.json(cached);
+
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const screenId = c.req.query('screen_id');
   const assumptionSetId = c.req.query('assumption_set_id');
   const minCap = c.req.query('min_cap');
@@ -874,8 +1193,11 @@ app.get('/api/v1/screener', async (c) => {
   const state = c.req.query('state');
   const sortBy = c.req.query('sort_by') ?? 'implied_cap_rate';
   const sortDir = c.req.query('sort_dir') ?? 'desc';
+  const windowYears = parseOptionalYear(c.req.query('window_years')) ?? 10;
 
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, state ?? null, [...CORE_MODEL_SERIES]);
+  const zMetrics = ['implied_cap_rate', 'fair_value', 'cash_rent'];
 
   let filters: { metric: string; op: string; value: number }[] = [];
   if (screenId) {
@@ -890,12 +1212,34 @@ app.get('/api/v1/screener', async (c) => {
     if (minAccess) filters.push({ metric: 'access_score', op: '>', value: Number(minAccess) });
   }
 
+  const zFilters: Record<string, { min?: number; max?: number }> = {};
+  for (const metric of zMetrics) {
+    const minRaw = c.req.query(`z_${metric}_min`);
+    const maxRaw = c.req.query(`z_${metric}_max`);
+    const zMin = minRaw != null && minRaw !== '' ? Number(minRaw) : undefined;
+    const zMax = maxRaw != null && maxRaw !== '' ? Number(maxRaw) : undefined;
+    if ((zMin != null && !Number.isNaN(zMin)) || (zMax != null && !Number.isNaN(zMax))) {
+      zFilters[metric] = {
+        ...(zMin != null && !Number.isNaN(zMin) ? { min: zMin } : {}),
+        ...(zMax != null && !Number.isNaN(zMax) ? { max: zMax } : {}),
+      };
+    }
+  }
+
   const countiesResult = await getAllCounties(db, state?.toUpperCase());
   const results: any[] = [];
 
   for (const co of countiesResult.results as any[]) {
-    const data = await computeCounty(db, co.fips, asOf, assumptions);
+    const data = await computeCounty(db, co.fips, resolved.asOf, assumptions);
     const m = data.metrics;
+    const zscores = await computeMetricZscoresForCounty(
+      db,
+      co.fips,
+      resolved.asOf,
+      assumptions,
+      zMetrics,
+      windowYears,
+    );
 
     let passes = true;
     for (const f of filters) {
@@ -912,10 +1256,29 @@ app.get('/api/v1/screener', async (c) => {
     }
 
     if (passes) {
+      for (const [metric, bounds] of Object.entries(zFilters)) {
+        const zValue = zscores[metric]?.zscore;
+        if (zValue == null) {
+          passes = false;
+          break;
+        }
+        if (bounds.min != null && zValue < bounds.min) {
+          passes = false;
+          break;
+        }
+        if (bounds.max != null && zValue > bounds.max) {
+          passes = false;
+          break;
+        }
+      }
+    }
+
+    if (passes) {
       results.push({
         fips: co.fips,
         county: co.name,
         state: co.state,
+        zscores,
         metrics: Object.fromEntries(
           Object.entries(m).map(([k, v]) => [k, v != null ? Math.round((v as number) * 100) / 100 : null]),
         ),
@@ -930,7 +1293,16 @@ app.get('/api/v1/screener', async (c) => {
     return reverse ? bv - av : av - bv;
   });
 
-  return c.json({ count: results.length, as_of: asOf, filters, results });
+  const payload = {
+    count: results.length,
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+    filters,
+    z_filters: zFilters,
+    results,
+  };
+  cacheSet(cacheKey, payload, 30_000);
+  return c.json(payload);
 });
 
 // ═════════════════════════════════════════════════════════════════════
@@ -945,41 +1317,116 @@ app.post('/api/v1/run/scenario', async (c) => {
     assumption_set_id?: number;
     overrides?: Record<string, any>;
     vary_params?: { param: string; values: number[]; target_metric?: string }[];
+    scenario_sets?: { name?: string; overrides?: Record<string, any> }[];
   }>();
 
-  const asOf = body.as_of ?? '2025';
+  const resolved = await resolveRequestAsOf(db, body.as_of ?? 'latest', null, [...CORE_MODEL_SERIES]);
   let assumptions = (await getAssumptions(db, body.assumption_set_id)) ?? {};
   if (body.overrides) assumptions = { ...assumptions, ...body.overrides };
 
-  const base = await computeCounty(db, body.geo_key, asOf, assumptions);
+  const base = await computeCounty(db, body.geo_key, resolved.asOf, assumptions);
   const sensitivities: Record<string, any> = {};
 
   if (body.vary_params) {
-    const series = await loadSeriesForCounty(db, body.geo_key, asOf);
+    const series = await loadSeriesForCounty(db, body.geo_key, resolved.asOf);
     for (const vp of body.vary_params) {
-      const ctx = createContext(body.geo_key, asOf, series, assumptions);
+      const ctx = createContext(body.geo_key, resolved.asOf, series, assumptions);
       const results = computeSensitivity(ctx, vp.param, vp.values, vp.target_metric ?? 'fair_value');
       sensitivities[vp.param] = results;
     }
   }
 
-  return c.json({ base, sensitivities });
+  let comparisonTable: any[] = [];
+  let assumptionDeltas: Record<string, Record<string, number>> = {};
+  let driverDecomposition: any[] = [];
+  let scenarioResults: any[] = [];
+
+  if (Array.isArray(body.scenario_sets) && body.scenario_sets.length > 0) {
+    for (const [index, scenarioSet] of body.scenario_sets.entries()) {
+      const name = (scenarioSet.name ?? `scenario_${index + 1}`).trim() || `scenario_${index + 1}`;
+      const setOverrides = scenarioSet.overrides ?? {};
+      const scenarioAssumptions = { ...assumptions, ...setOverrides };
+      const scenario = await computeCounty(db, body.geo_key, resolved.asOf, scenarioAssumptions);
+      scenarioResults.push({
+        name,
+        assumptions: scenarioAssumptions,
+        result: scenario,
+      });
+
+      const fairValue = scenario.metrics.fair_value ?? null;
+      const baseFairValue = base.metrics.fair_value ?? null;
+      const deltaVsBase = (fairValue != null && baseFairValue != null) ? fairValue - baseFairValue : null;
+
+      comparisonTable.push({
+        scenario: name,
+        fair_value: fairValue,
+        implied_cap_rate: scenario.metrics.implied_cap_rate ?? null,
+        noi_per_acre: scenario.metrics.noi_per_acre ?? null,
+        delta_fair_value_vs_base: deltaVsBase,
+      });
+
+      const deltas: Record<string, number> = {};
+      for (const [key, value] of Object.entries(setOverrides)) {
+        const numericOverride = Number(value);
+        const numericBase = Number(assumptions[key]);
+        if (!Number.isNaN(numericOverride) && !Number.isNaN(numericBase)) {
+          deltas[key] = numericOverride - numericBase;
+        }
+      }
+      assumptionDeltas[name] = deltas;
+
+      const driverRows: { driver: string; delta: number }[] = [];
+      for (const [driver, overrideValue] of Object.entries(setOverrides)) {
+        const oneAtATimeAssumptions = { ...assumptions, [driver]: overrideValue };
+        const oneAtATime = await computeCounty(db, body.geo_key, resolved.asOf, oneAtATimeAssumptions);
+        const oneDelta =
+          (oneAtATime.metrics.fair_value != null && base.metrics.fair_value != null)
+            ? oneAtATime.metrics.fair_value - base.metrics.fair_value
+            : 0;
+        driverRows.push({ driver, delta: Math.round(oneDelta * 10000) / 10000 });
+      }
+      const netDelta =
+        (fairValue != null && baseFairValue != null)
+          ? fairValue - baseFairValue
+          : 0;
+      const explainedDelta = driverRows.reduce((sum, row) => sum + row.delta, 0);
+      const residual = Math.round((netDelta - explainedDelta) * 10000) / 10000;
+
+      driverDecomposition.push({
+        scenario: name,
+        drivers: driverRows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta)),
+        residual,
+      });
+    }
+  }
+
+  return c.json({
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+    base,
+    sensitivities,
+    scenarios: scenarioResults,
+    comparison_table: comparisonTable,
+    assumption_deltas: assumptionDeltas,
+    driver_decomposition: driverDecomposition,
+  });
 });
 
 app.get('/api/v1/geo/:geoKey/sensitivity', async (c) => {
   const db = c.env.DB;
   const geoKey = c.req.param('geoKey');
-  const asOf = c.req.query('as_of') ?? '2025';
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
-  const series = await loadSeriesForCounty(db, geoKey, asOf);
+  const series = await loadSeriesForCounty(db, geoKey, resolved.asOf);
 
   // Rate/growth matrix
   const matrix: Record<string, any>[] = [];
   for (const rv of [2.0, 3.0, 4.0, 4.5, 5.0, 5.5, 6.0, 7.0]) {
     const row: Record<string, any> = { risk_premium: rv };
     for (const gv of [0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04]) {
-      const ctx = createContext(geoKey, asOf, { ...series }, { ...assumptions, risk_premium: rv, long_run_growth: gv });
+      const ctx = createContext(geoKey, resolved.asOf, { ...series }, { ...assumptions, risk_premium: rv, long_run_growth: gv });
       computeAll(ctx);
       const fv = ctx.metrics.fair_value;
       row[`g_${gv}`] = fv != null ? Math.round(fv) : null;
@@ -993,7 +1440,7 @@ app.get('/api/v1/geo/:geoKey/sensitivity', async (c) => {
 
   const rentSens: Record<string, any>[] = [];
   for (const rs of rentShocks) {
-    const ctx = createContext(geoKey, asOf, { ...series }, { ...assumptions, near_term_rent_shock: rs });
+    const ctx = createContext(geoKey, resolved.asOf, { ...series }, { ...assumptions, near_term_rent_shock: rs });
     computeAll(ctx);
     rentSens.push({
       rent_shock: rs,
@@ -1002,7 +1449,13 @@ app.get('/api/v1/geo/:geoKey/sensitivity', async (c) => {
     });
   }
 
-  return c.json({ geo_key: geoKey, rate_growth_matrix: matrix, rent_shock_sensitivity: rentSens });
+  return c.json({
+    geo_key: geoKey,
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+    rate_growth_matrix: matrix,
+    rent_shock_sensitivity: rentSens,
+  });
 });
 
 app.post('/api/v1/run/backtest', async (c) => {
@@ -1023,7 +1476,9 @@ app.post('/api/v1/run/backtest', async (c) => {
   const assumptions = (await getAssumptions(db, body.assumption_set_id)) ?? {};
   const startYear = body.start_year ?? '2018';
   const evalYears = body.eval_years ?? 3;
-  const endYear = Math.min(parseInt(startYear) + evalYears, 2025);
+  const resolved = await resolveRequestAsOf(db, 'latest', null, [...CORE_MODEL_SERIES]);
+  const maxModelYear = Number.parseInt(resolved.asOf, 10) || new Date().getUTCFullYear();
+  const endYear = Math.min(parseInt(startYear) + evalYears, maxModelYear);
   const screenFilters = JSON.parse(screen.filters_json || '[]');
 
   const countiesResult = await getAllCounties(db);
@@ -1080,6 +1535,8 @@ app.post('/api/v1/run/backtest', async (c) => {
   flagged.sort((a, b) => (b.total_return_est ?? 0) - (a.total_return_est ?? 0));
   return c.json({
     screen: { id: screen.id, name: screen.name, filters: screenFilters },
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
     start_year: startYear,
     eval_years: evalYears,
     counties_screened: countiesResult.results.length,
@@ -1094,15 +1551,19 @@ app.post('/api/v1/run/backtest', async (c) => {
 
 app.get('/api/v1/dashboard', async (c) => {
   const db = c.env.DB;
-  const asOf = c.req.query('as_of') ?? '2025';
+  const cacheKey = `dashboard:${c.req.url}`;
+  const cached = cacheGet<any>(cacheKey);
+  if (cached) return c.json(cached);
+
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
 
   const countiesResult = await getAllCounties(db);
-  const allData: any[] = [];
-  for (const co of countiesResult.results as any[]) {
-    allData.push(await computeCounty(db, co.fips, asOf, assumptions));
-  }
+  const allData = await Promise.all(
+    (countiesResult.results as any[]).map((co) => computeCounty(db, co.fips, resolved.asOf, assumptions)),
+  );
 
   const caps = allData.map((d) => d.metrics.implied_cap_rate).filter((v): v is number => v != null);
   const fvs = allData.map((d) => d.metrics.fair_value).filter((v): v is number => v != null);
@@ -1135,7 +1596,8 @@ app.get('/api/v1/dashboard', async (c) => {
   // State summary
   const stateData: Record<string, any[]> = {};
   for (const d of allData) {
-    const st = d.state;
+    const st = String(d.state ?? '');
+    if (!st) continue;
     if (!stateData[st]) stateData[st] = [];
     stateData[st].push(d.metrics);
   }
@@ -1155,8 +1617,48 @@ app.get('/api/v1/dashboard', async (c) => {
       ? (allData[0].metrics.required_return ?? 0) - (assumptions.risk_premium ?? 2.0)
       : 0;
 
-  return c.json({
-    as_of: asOf,
+  const resolvedYear = Number.parseInt(resolved.asOf, 10);
+  const chartEndYear = Number.isNaN(resolvedYear) ? new Date().getUTCFullYear() : resolvedYear;
+  const chartStartYear = Math.max(2000, chartEndYear - 9);
+  const chartRows: Array<{
+    year: string;
+    cap_rate_median: number | null;
+    fair_value_median: number | null;
+    cash_rent_median: number | null;
+    treasury_10y: number | null;
+  }> = [];
+
+  for (let year = chartStartYear; year <= chartEndYear; year += 1) {
+    const yearRows = await Promise.all(
+      (countiesResult.results as any[]).map((co) => computeCounty(db, co.fips, String(year), assumptions)),
+    );
+    const yearCaps = yearRows.map((row) => row.metrics.implied_cap_rate).filter((value): value is number => value != null);
+    const yearFair = yearRows.map((row) => row.metrics.fair_value).filter((value): value is number => value != null);
+    const yearRent = yearRows.map((row) => row.metrics.cash_rent).filter((value): value is number => value != null);
+    const yearTreasury =
+      yearRows.length > 0
+        ? ((yearRows[0].metrics.required_return ?? 0) - (assumptions.risk_premium ?? 2.0))
+        : null;
+    chartRows.push({
+      year: String(year),
+      cap_rate_median: (stats(yearCaps).median as number | undefined) ?? null,
+      fair_value_median: (stats(yearFair).median as number | undefined) ?? null,
+      cash_rent_median: (stats(yearRent).median as number | undefined) ?? null,
+      treasury_10y: yearTreasury != null ? Math.round(yearTreasury * 10000) / 10000 : null,
+    });
+  }
+
+  const chartYears = chartRows.map((row) => row.year);
+  const capSeries = chartRows.map((row) => row.cap_rate_median).filter((value): value is number => value != null);
+  const fairSeries = chartRows.map((row) => row.fair_value_median).filter((value): value is number => value != null);
+  const rentSeries = chartRows.map((row) => row.cash_rent_median).filter((value): value is number => value != null);
+  const capSummaryStats = computeZScoreStats((stats(caps).median as number | null) ?? null, capSeries, chartYears);
+  const fairSummaryStats = computeZScoreStats((stats(fvs).median as number | null) ?? null, fairSeries, chartYears);
+  const rentSummaryStats = computeZScoreStats((stats(rents).median as number | null) ?? null, rentSeries, chartYears);
+
+  const payload = {
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
     county_count: countiesResult.results.length,
     summary: {
       implied_cap_rate: stats(caps),
@@ -1165,10 +1667,117 @@ app.get('/api/v1/dashboard', async (c) => {
       benchmark_value: stats(vals),
       access_score: stats(accessScores),
     },
+    summary_zscores: {
+      implied_cap_rate: {
+        ...capSummaryStats,
+        band: zscoreBand(capSummaryStats.zscore),
+      },
+      fair_value: {
+        ...fairSummaryStats,
+        band: zscoreBand(fairSummaryStats.zscore),
+      },
+      cash_rent: {
+        ...rentSummaryStats,
+        band: zscoreBand(rentSummaryStats.zscore),
+      },
+    },
+    charts: {
+      cap_rate_median_by_year: chartRows.map((row) => ({ year: row.year, value: row.cap_rate_median })),
+      fair_value_median_by_year: chartRows.map((row) => ({ year: row.year, value: row.fair_value_median })),
+      cash_rent_median_by_year: chartRows.map((row) => ({ year: row.year, value: row.cash_rent_median })),
+      treasury_10y_by_year: chartRows.map((row) => ({ year: row.year, value: row.treasury_10y })),
+    },
     treasury_10y: treasury10y,
     top_movers: movers.slice(0, 15),
     state_summary: stateSummary,
-  });
+  };
+  cacheSet(cacheKey, payload, 60_000);
+  return c.json(payload);
+});
+
+app.get('/api/v1/ag-index', async (c) => {
+  const db = c.env.DB;
+  const cacheKey = `ag-index:${c.req.url}`;
+  const cached = cacheGet<any>(cacheKey);
+  if (cached) return c.json(cached);
+
+  await ensureAgCompositeIndexSchema(db);
+  const rows = await db
+    .prepare(
+      `SELECT as_of_date, value, component_json, zscore
+       FROM ag_composite_index
+       ORDER BY as_of_date DESC
+       LIMIT 900`,
+    )
+    .all<{
+      as_of_date: string;
+      value: number;
+      component_json: string;
+      zscore: number | null;
+    }>();
+
+  if (!rows.results.length) {
+    const emptyPayload = {
+      latest: null,
+      history: [],
+      message: 'Ag composite index has not been ingested yet.',
+    };
+    cacheSet(cacheKey, emptyPayload, 120_000);
+    return c.json(emptyPayload);
+  }
+
+  const desc = rows.results;
+  const asc = [...desc].reverse();
+  const history = asc.map((row) => ({
+    as_of_date: row.as_of_date,
+    value: Math.round(row.value * 10000) / 10000,
+    zscore: row.zscore == null ? null : Math.round(row.zscore * 10000) / 10000,
+    band: zscoreBand(row.zscore),
+  }));
+
+  const latest = desc[0];
+  const prev1d = desc[1];
+  const prev1w = desc[5];
+  const change1dPct = prev1d && prev1d.value
+    ? Math.round((((latest.value - prev1d.value) / prev1d.value) * 100) * 100) / 100
+    : null;
+  const change1wPct = prev1w && prev1w.value
+    ? Math.round((((latest.value - prev1w.value) / prev1w.value) * 100) * 100) / 100
+    : null;
+
+  let components: Record<string, number> = {};
+  try {
+    components = JSON.parse(latest.component_json || '{}');
+  } catch {
+    components = {};
+  }
+  const componentValues = Object.entries(components)
+    .map(([ticker, value]) => ({ ticker, value: Number(value) }))
+    .filter((entry) => Number.isFinite(entry.value));
+  const componentSum = componentValues.reduce((sum, entry) => sum + entry.value, 0);
+  const componentContrib = componentValues.map((entry) => ({
+    ticker: entry.ticker,
+    value: Math.round(entry.value * 10000) / 10000,
+    weight: componentValues.length ? Math.round((1 / componentValues.length) * 10000) / 10000 : 0,
+    contribution_pct: componentSum
+      ? Math.round(((entry.value / componentSum) * 100) * 100) / 100
+      : 0,
+  }));
+
+  const payload = {
+    latest: {
+      as_of_date: latest.as_of_date,
+      value: Math.round(latest.value * 10000) / 10000,
+      zscore: latest.zscore == null ? null : Math.round(latest.zscore * 10000) / 10000,
+      band: zscoreBand(latest.zscore),
+      change_1d_pct: change1dPct,
+      change_1w_pct: change1wPct,
+      components: componentContrib,
+    },
+    history: history.slice(-756),
+  };
+  cacheSet(cacheKey, payload, 120_000);
+  return c.json(payload);
 });
 
 // ═════════════════════════════════════════════════════════════════════
@@ -1193,8 +1802,11 @@ app.get('/api/v1/facilities', async (c) => {
 
 app.get('/api/v1/watchlist', async (c) => {
   const db = c.env.DB;
-  const asOf = c.req.query('as_of') ?? '2025';
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const assumptions = (await getAssumptions(db)) ?? {};
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
+  const asOfYear = Number.parseInt(resolved.asOf, 10);
+  const prevYear = Number.isNaN(asOfYear) ? null : String(asOfYear - 1);
 
   const items = await db.prepare('SELECT id, geo_key, notes, added_at FROM watchlist_items').all<{
     id: number;
@@ -1205,8 +1817,8 @@ app.get('/api/v1/watchlist', async (c) => {
 
   const result: any[] = [];
   for (const item of items.results) {
-    const data = await computeCounty(db, item.geo_key, asOf, assumptions);
-    const prev = await computeCounty(db, item.geo_key, String(parseInt(asOf) - 1), assumptions);
+    const data = await computeCounty(db, item.geo_key, resolved.asOf, assumptions);
+    const prev = prevYear ? await computeCounty(db, item.geo_key, prevYear, assumptions) : data;
     const m = data.metrics;
     const pm = prev.metrics;
 
@@ -1237,7 +1849,11 @@ app.get('/api/v1/watchlist', async (c) => {
       },
     });
   }
-  return c.json(result);
+  return c.json({
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+    items: result,
+  });
 });
 
 app.post('/api/v1/watchlist', async (c) => {
@@ -1391,7 +2007,7 @@ app.get('/api/v1/research/workspaces', async (c) => {
   if (auth instanceof Response) return auth;
   const rows = await db
     .prepare(
-      `SELECT id, owner_key, geo_key, thesis, tags_json, status, conviction, created_at, updated_at
+      `SELECT id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
        FROM research_workspaces
        ORDER BY updated_at DESC, id DESC`,
     )
@@ -1422,6 +2038,7 @@ app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
   const geoKey = c.req.param('geoKey');
   const body = await c.req.json<{
     thesis?: string;
+    analysis?: unknown;
     tags?: unknown;
     status?: string;
     conviction?: number;
@@ -1429,6 +2046,7 @@ app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
 
   const workspace = await ensureResearchWorkspace(db, auth.userKey, geoKey);
   const thesis = (body.thesis ?? '').trim();
+  const analysis = normalizeAnalysisInput(body.analysis, parseAnalysis(workspace.analysis_json));
   const tags = normalizeTags(body.tags);
   const status = (body.status ?? 'exploring').trim() || 'exploring';
   const conviction = clampConviction(body.conviction);
@@ -1436,10 +2054,10 @@ app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
   await db
     .prepare(
       `UPDATE research_workspaces
-       SET thesis = ?, tags_json = ?, status = ?, conviction = ?, updated_at = datetime('now')
+       SET thesis = ?, analysis_json = ?, tags_json = ?, status = ?, conviction = ?, updated_at = datetime('now')
        WHERE id = ?`,
     )
-    .bind(thesis, JSON.stringify(tags), status, conviction, workspace.id)
+    .bind(thesis, JSON.stringify(analysis), JSON.stringify(tags), status, conviction, workspace.id)
     .run();
 
   const updated = await findResearchWorkspaceForUser(db, auth.userKey, geoKey);
@@ -1577,6 +2195,106 @@ app.delete('/api/v1/research/scenario-packs/:packId', async (c) => {
   return c.json({ status: 'deleted' });
 });
 
+app.get('/api/v1/research/workspaces/:geoKey/scenario-runs', async (c) => {
+  const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
+  const geoKey = c.req.param('geoKey');
+  const limitRaw = c.req.query('limit');
+  const limit = limitRaw ? Math.min(100, Math.max(1, Number(limitRaw))) : 25;
+
+  const workspace = await findResearchWorkspaceForUser(db, auth.userKey, geoKey);
+  if (!workspace) return c.json([]);
+
+  const rows = await db
+    .prepare(
+      `SELECT id, scenario_name, as_of_date, assumptions_json, comparison_json, created_at
+       FROM research_scenario_runs
+       WHERE workspace_id = ?
+       ORDER BY created_at DESC, id DESC
+       LIMIT ?`,
+    )
+    .bind(workspace.id, limit)
+    .all<{
+      id: number;
+      scenario_name: string | null;
+      as_of_date: string;
+      assumptions_json: string;
+      comparison_json: string;
+      created_at: string | null;
+    }>();
+
+  return c.json(
+    rows.results.map((row) => ({
+      id: row.id,
+      scenario_name: row.scenario_name ?? '',
+      as_of_date: row.as_of_date,
+      assumptions: JSON.parse(row.assumptions_json || '{}'),
+      comparison: JSON.parse(row.comparison_json || '{}'),
+      created_at: row.created_at,
+    })),
+  );
+});
+
+app.post('/api/v1/research/workspaces/:geoKey/scenario-runs', async (c) => {
+  const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
+  const geoKey = c.req.param('geoKey');
+  const body = await c.req.json<{
+    scenario_name?: string;
+    as_of_date?: string;
+    assumptions?: Record<string, unknown>;
+    comparison?: Record<string, unknown>;
+  }>();
+
+  const workspace = await ensureResearchWorkspace(db, auth.userKey, geoKey);
+  const assumptions = body.assumptions ?? {};
+  const comparison = body.comparison ?? {};
+  const asOfDate = (body.as_of_date ?? '').trim();
+  if (!asOfDate || !/^\\d{4}(-\\d{2}-\\d{2})?$/.test(asOfDate)) {
+    return c.json({ error: 'as_of_date is required (YYYY or YYYY-MM-DD)' }, 400);
+  }
+
+  const inserted = await db
+    .prepare(
+      `INSERT INTO research_scenario_runs (
+         workspace_id, scenario_name, as_of_date, assumptions_json, comparison_json, created_at
+       ) VALUES (?, ?, ?, ?, ?, datetime('now'))
+       RETURNING id, scenario_name, as_of_date, assumptions_json, comparison_json, created_at`,
+    )
+    .bind(
+      workspace.id,
+      (body.scenario_name ?? '').trim() || null,
+      asOfDate,
+      JSON.stringify(assumptions),
+      JSON.stringify(comparison),
+    )
+    .first<{
+      id: number;
+      scenario_name: string | null;
+      as_of_date: string;
+      assumptions_json: string;
+      comparison_json: string;
+      created_at: string | null;
+    }>();
+
+  await db
+    .prepare("UPDATE research_workspaces SET updated_at = datetime('now') WHERE id = ?")
+    .bind(workspace.id)
+    .run();
+
+  if (!inserted) return c.json({ error: 'Failed to save scenario run' }, 500);
+  return c.json({
+    id: inserted.id,
+    scenario_name: inserted.scenario_name ?? '',
+    as_of_date: inserted.as_of_date,
+    assumptions: JSON.parse(inserted.assumptions_json || '{}'),
+    comparison: JSON.parse(inserted.comparison_json || '{}'),
+    created_at: inserted.created_at,
+  });
+});
+
 // ═════════════════════════════════════════════════════════════════════
 // Portfolios
 // ═════════════════════════════════════════════════════════════════════
@@ -1611,7 +2329,8 @@ app.get('/api/v1/portfolios', async (c) => {
 app.get('/api/v1/portfolios/:portfolioId', async (c) => {
   const db = c.env.DB;
   const portfolioId = Number(c.req.param('portfolioId'));
-  const asOf = c.req.query('as_of') ?? '2025';
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const assumptions = (await getAssumptions(db)) ?? {};
 
   const p = await db
@@ -1628,7 +2347,7 @@ app.get('/api/v1/portfolios/:portfolioId', async (c) => {
   const countyData: Record<string, any> = {};
   const holdingDicts: any[] = [];
   for (const h of holdings.results) {
-    countyData[h.geo_key] = await computeCounty(db, h.geo_key, asOf, assumptions);
+    countyData[h.geo_key] = await computeCounty(db, h.geo_key, resolved.asOf, assumptions);
     holdingDicts.push({
       geo_key: h.geo_key,
       acres: h.acres,
@@ -1643,7 +2362,8 @@ app.get('/api/v1/portfolios/:portfolioId', async (c) => {
     id: p.id,
     name: p.name,
     description: p.description,
-    as_of: asOf,
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
     ...analytics,
   });
 });
@@ -1705,7 +2425,8 @@ app.delete('/api/v1/portfolios/:portfolioId/holdings/:geoKey', async (c) => {
 
 app.get('/api/v1/export/screener', async (c) => {
   const db = c.env.DB;
-  const asOf = c.req.query('as_of') ?? '2025';
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
 
@@ -1731,7 +2452,7 @@ app.get('/api/v1/export/screener', async (c) => {
 
   let csv = headers.join(',') + '\n';
   for (const co of countiesResult.results) {
-    const data = await computeCounty(db, co.fips, asOf, assumptions);
+    const data = await computeCounty(db, co.fips, resolved.asOf, assumptions);
     const m = data.metrics;
     csv +=
       [
@@ -1754,7 +2475,7 @@ app.get('/api/v1/export/screener', async (c) => {
   return new Response(csv, {
     headers: {
       'Content-Type': 'text/csv',
-      'Content-Disposition': `attachment; filename=farmland_screener_${asOf}.csv`,
+      'Content-Disposition': `attachment; filename=farmland_screener_${resolved.asOf}.csv`,
     },
   });
 });
@@ -1841,6 +2562,122 @@ app.get('/api/v1/data-freshness', async (c) => {
     .prepare('SELECT * FROM data_freshness ORDER BY last_updated DESC')
     .all();
   return c.json(rows.results);
+});
+
+app.get('/api/v1/data/coverage', async (c) => {
+  const db = c.env.DB;
+  const state = c.req.query('state');
+  const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const requiredSeriesParam = c.req.query('required_series');
+  const requiredSeries = requiredSeriesParam
+    ? requiredSeriesParam.split(',').map((item) => item.trim()).filter(Boolean)
+    : [...CORE_MODEL_SERIES];
+
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, state ?? null, requiredSeries);
+  const counties = await getAllCounties(db, state && state !== 'ALL' ? state.toUpperCase() : undefined);
+
+  const placeholders = requiredSeries.map(() => '?').join(',');
+  const rows = requiredSeries.length
+    ? await db
+        .prepare(
+          `SELECT ds.series_key AS series_key, dp.geo_key AS geo_key
+           FROM data_points dp
+           JOIN data_series ds ON ds.id = dp.series_id
+           WHERE dp.as_of_date = ?
+             AND ds.series_key IN (${placeholders})`,
+        )
+        .bind(resolved.asOf, ...requiredSeries)
+        .all<{ series_key: string; geo_key: string }>()
+    : { results: [] as Array<{ series_key: string; geo_key: string }> };
+
+  const seriesGeo = new Map<string, Set<string>>();
+  for (const key of requiredSeries) {
+    seriesGeo.set(key, new Set<string>());
+  }
+  for (const row of rows.results) {
+    const set = seriesGeo.get(row.series_key);
+    if (set) set.add(row.geo_key);
+  }
+
+  const stateCoverage: Record<
+    string,
+    { counties_total: number; counties_complete: number; coverage_pct: number }
+  > = {};
+  const seriesCoveredByCounty: Record<string, number> = Object.fromEntries(
+    requiredSeries.map((seriesKey) => [seriesKey, 0]),
+  );
+
+  const countiesList = counties.results as Array<{ fips: string; state: string }>;
+  for (const county of countiesList) {
+    const stateKey = county.state;
+    if (!stateCoverage[stateKey]) {
+      stateCoverage[stateKey] = { counties_total: 0, counties_complete: 0, coverage_pct: 0 };
+    }
+    stateCoverage[stateKey].counties_total += 1;
+
+    let countyComplete = true;
+    for (const seriesKey of requiredSeries) {
+      const set = seriesGeo.get(seriesKey);
+      const covered = !!set && (set.has(county.fips) || set.has(county.state) || set.has('US'));
+      if (covered) {
+        seriesCoveredByCounty[seriesKey] += 1;
+      } else {
+        countyComplete = false;
+      }
+    }
+    if (countyComplete) {
+      stateCoverage[stateKey].counties_complete += 1;
+    }
+  }
+
+  for (const bucket of Object.values(stateCoverage)) {
+    bucket.coverage_pct = bucket.counties_total
+      ? Math.round((bucket.counties_complete / bucket.counties_total) * 10000) / 10000
+      : 0;
+  }
+
+  const totalCounties = countiesList.length;
+  const seriesCompleteness = requiredSeries.map((seriesKey) => {
+    const covered = totalCounties ? seriesCoveredByCounty[seriesKey] : 0;
+    const coveragePct = totalCounties ? covered / totalCounties : 0;
+    return {
+      series_key: seriesKey,
+      covered_counties: covered,
+      total_counties: totalCounties,
+      coverage_pct: Math.round(coveragePct * 10000) / 10000,
+      missing_counties: Math.max(0, totalCounties - covered),
+    };
+  });
+
+  const freshness = await db
+    .prepare(
+      `SELECT source_name, MAX(last_updated) AS last_updated, MAX(record_count) AS record_count
+       FROM data_freshness
+       GROUP BY source_name
+       ORDER BY last_updated DESC`,
+    )
+    .all<{ source_name: string; last_updated: string; record_count: number }>();
+
+  const warnings: string[] = [];
+  if (resolved.meta.coverage_pct < 0.7) warnings.push('LOW_COVERAGE');
+  if (freshness.results.length === 0) warnings.push('STALE_SOURCE');
+
+  return c.json({
+    as_of: resolved.asOf,
+    as_of_meta: resolved.meta,
+    county_coverage_by_state: stateCoverage,
+    series_completeness: seriesCompleteness,
+    missingness_summary: {
+      counties_total: totalCounties,
+      counties_complete: Object.values(stateCoverage).reduce((sum, row) => sum + row.counties_complete, 0),
+      counties_partial: Math.max(
+        0,
+        totalCounties - Object.values(stateCoverage).reduce((sum, row) => sum + row.counties_complete, 0),
+      ),
+    },
+    freshness: freshness.results,
+    warnings,
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════
