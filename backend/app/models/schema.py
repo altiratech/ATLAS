@@ -220,6 +220,65 @@ class CountyNote(Base):
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
+# ── Research Workspace ───────────────────────────────────────────────
+class ResearchWorkspace(Base):
+    __tablename__ = "research_workspaces"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    owner_key = Column(String(120), nullable=False, default="owner_default")
+    geo_key = Column(String(10), ForeignKey("geo_county.fips"), nullable=False)
+    thesis = Column(Text)
+    tags_json = Column(JSON)
+    status = Column(String(40), nullable=False, default="exploring")
+    conviction = Column(Float, nullable=False, default=50)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    __table_args__ = (
+        UniqueConstraint("owner_key", "geo_key", name="uq_research_workspace_owner_geo"),
+        Index("ix_research_workspace_owner", "owner_key"),
+    )
+
+
+class ResearchNote(Base):
+    __tablename__ = "research_notes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    workspace_id = Column(Integer, ForeignKey("research_workspaces.id", ondelete="CASCADE"), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    __table_args__ = (Index("ix_research_note_workspace", "workspace_id"),)
+
+
+class ResearchScenarioPack(Base):
+    __tablename__ = "research_scenario_packs"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    workspace_id = Column(Integer, ForeignKey("research_workspaces.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(160), nullable=False)
+    risk_premium = Column(Float, nullable=False)
+    growth_rate = Column(Float, nullable=False)
+    rent_shock = Column(Float, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    __table_args__ = (Index("ix_research_pack_workspace", "workspace_id"),)
+
+
+# ── Auth Sessions ─────────────────────────────────────────────────────
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_key = Column(String(120), nullable=False)
+    token_hash = Column(String(64), nullable=False, unique=True)
+    identity_source = Column(String(40), nullable=False, default="session")
+    created_at = Column(DateTime, server_default=func.now())
+    last_seen_at = Column(DateTime, server_default=func.now())
+    expires_at = Column(DateTime, nullable=False)
+    revoked_at = Column(DateTime)
+    user_agent = Column(String(255))
+    ip_hash = Column(String(64))
+    __table_args__ = (
+        Index("ix_auth_session_user", "user_key"),
+        Index("ix_auth_session_expires", "expires_at"),
+    )
+
+
 # ── Portfolios ───────────────────────────────────────────────────────
 class Portfolio(Base):
     __tablename__ = "portfolios"

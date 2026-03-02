@@ -1,0 +1,40 @@
+name = "farmland-terminal"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Custom domains — canonical + legacy
+routes = [
+  { pattern = "atlas.altiratech.com", custom_domain = true },
+  { pattern = "farmland.altiratech.com", custom_domain = true }
+]
+
+# Static assets (frontend SPA)
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+
+[vars]
+ENVIRONMENT = "production"
+CANONICAL_HOST = "atlas.altiratech.com"
+LEGACY_HOST = "farmland.altiratech.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "farmland-terminal-db"
+database_id = "3090091d-6beb-47dc-b5e5-f8f8c2fb7df0"
+
+# Secrets Store — API keys for live data ingestion
+[[secrets_store_secrets]]
+binding = "FRED_API_KEY"
+store_id = "087a3b561d9c4886af8a94dd92fd006f"
+secret_name = "St_Louis_Fed_FRED_API"
+
+[[secrets_store_secrets]]
+binding = "NASS_API_KEY"
+store_id = "087a3b561d9c4886af8a94dd92fd006f"
+secret_name = "USDA_NASS_API"
+
+# Cron trigger — daily at 6am UTC for data ingestion
+[triggers]
+crons = ["0 6 * * *"]

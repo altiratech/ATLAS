@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Altira Tech</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --bg0: #050608;
+      --bg1: #0b0f14;
+      --bg2: #121821;
+      --line: #273240;
+      --line-strong: #4a5c70;
+      --text1: #f3f6fa;
+      --text2: #9ba8b8;
+      --text3: #6f7c8a;
+      --amber: #ffb100;
+      --cyan: #59cbff;
+      --green: #7ed321;
+    }
+    html, body {
+      width: 100%;
+      min-height: 100%;
+      background: var(--bg0);
+      color: var(--text1);
+      font-family: "IBM Plex Sans Condensed", sans-serif;
+      line-height: 1.25;
+    }
+    body {
+      background-image:
+        linear-gradient(180deg, rgba(89,203,255,.07), transparent 28%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 14px),
+        linear-gradient(180deg, var(--bg1), var(--bg0));
+      padding: 1rem;
+    }
+    .shell {
+      max-width: 1180px;
+      margin: 0 auto;
+      border: 1px solid var(--line-strong);
+      background: rgba(10,14,19,.95);
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      padding: .7rem .9rem;
+      gap: .8rem;
+      flex-wrap: wrap;
+    }
+    .brand {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .88rem;
+      letter-spacing: .15em;
+      text-transform: uppercase;
+      color: var(--amber);
+      white-space: nowrap;
+    }
+    .meta {
+      display: flex;
+      gap: .65rem;
+      flex-wrap: wrap;
+    }
+    .chip {
+      border: 1px solid var(--line);
+      background: var(--bg2);
+      color: var(--text2);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .62rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: .22rem .42rem;
+    }
+    .hero {
+      border-bottom: 1px solid var(--line);
+      padding: 1rem .95rem;
+      background:
+        linear-gradient(115deg, rgba(255,177,0,.1), transparent 42%),
+        linear-gradient(180deg, #121a25, #0c1118);
+    }
+    .kicker {
+      font-family: "IBM Plex Mono", monospace;
+      font-size: .62rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      margin-bottom: .45rem;
+    }
+    .hero h1 {
+      font-size: 1.52rem;
+      line-height: 1.15;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: .38rem;
+    }
+    .hero p {
+      font-size: .84rem;
+      color: var(--text2);
+      max-width: 920px;
+      line-height: 1.45;
+    }
+    .section {
+      padding: .95rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .section:last-child { border-bottom: none; }
+    .section h2 {
+      font-size: .72rem;
+      text-transform: uppercase;
+      letter-spacing: .16em;
+      margin-bottom: .62rem;
+      color: var(--amber);
+      font-family: "IBM Plex Mono", monospace;
+    }
+    .projects {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: .6rem;
+    }
+    .project {
+      border: 1px solid var(--line);
+      background: var(--bg2);
+      padding: .72rem;
+      min-height: 184px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: .55rem;
+    }
+    .project h3 {
+      font-size: .95rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: .25rem;
+    }
+    .project p {
+      font-size: .77rem;
+      color: var(--text2);
+      line-height: 1.4;
+    }
+    .tags {
+      display: flex;
+      gap: .35rem;
+      flex-wrap: wrap;
+    }
+    .tag {
+      border: 1px solid var(--line-strong);
+      color: var(--text2);
+      font-size: .58rem;
+      font-family: "IBM Plex Mono", monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: .14rem .34rem;
+      white-space: nowrap;
+    }
+    .tag.active {
+      border-color: var(--green);
+      color: var(--green);
+    }
+    .tag.building {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .link {
+      display: inline-block;
+      border: 1px solid var(--line-strong);
+      text-decoration: none;
+      color: var(--text1);
+      background: #0e151d;
+      padding: .32rem .5rem;
+      font-size: .64rem;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      font-family: "IBM Plex Mono", monospace;
+      transition: all .08s linear;
+    }
+    .link:hover {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: .52rem;
+    }
+    .why {
+      border: 1px solid var(--line);
+      background: var(--bg2);
+      padding: .62rem;
+    }
+    .why h3 {
+      font-size: .68rem;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+      color: var(--cyan);
+      margin-bottom: .28rem;
+      font-family: "IBM Plex Mono", monospace;
+    }
+    .why p {
+      font-size: .76rem;
+      color: var(--text2);
+      line-height: 1.45;
+    }
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      gap: .6rem;
+      flex-wrap: wrap;
+      font-size: .67rem;
+      color: var(--text3);
+      padding: .82rem .95rem;
+      border-top: 1px solid var(--line);
+      font-family: "IBM Plex Mono", monospace;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="topbar">
+      <div class="brand">Altira Tech</div>
+      <div class="meta">
+        <div class="chip">Project Index</div>
+        <div class="chip">Research-First Product Studio</div>
+      </div>
+    </div>
+
+    <div class="hero">
+      <div class="kicker">Company Home</div>
+      <h1>Build Applied Intelligence Products for Real-World Decisions</h1>
+      <p>Altira Tech builds data systems that turn fragmented information into usable decisions. The current priority is agriculture research and modeling, with additional products in regulated intelligence and workflow automation.</p>
+    </div>
+
+    <div class="section">
+      <h2>Projects</h2>
+      <div class="projects">
+        <div class="project">
+          <div>
+            <h3>Altira Atlas</h3>
+            <p>Agriculture intelligence platform combining county research, land economics, scenario modeling, and investment diligence workflows.</p>
+          </div>
+          <div>
+            <div class="tags">
+              <span class="tag active">Active</span>
+              <span class="tag">Research</span>
+              <span class="tag">Modeling</span>
+            </div>
+            <div style="margin-top:.52rem;">
+              <a class="link" href="https://atlas.altiratech.com">Open Product</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="project">
+          <div>
+            <h3>Compliance Intel Platform</h3>
+            <p>Rebuild-in-progress platform for compliance research, monitoring, and structured brief generation for high-signal risk workflows.</p>
+          </div>
+          <div>
+            <div class="tags">
+              <span class="tag building">Building</span>
+              <span class="tag">Compliance</span>
+              <span class="tag">Research</span>
+            </div>
+            <div style="margin-top:.52rem;">
+              <a class="link" href="#" onclick="return false;">Private Build</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="project">
+          <div>
+            <h3>Future Labs</h3>
+            <p>Upcoming products focused on domain-specific intelligence workflows, decision support, and applied automation for teams.</p>
+          </div>
+          <div>
+            <div class="tags">
+              <span class="tag">Planned</span>
+              <span class="tag">Experiments</span>
+              <span class="tag">Automation</span>
+            </div>
+            <div style="margin-top:.52rem;">
+              <a class="link" href="#" onclick="return false;">Roadmap Pending</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Why This Exists</h2>
+      <div class="why-grid">
+        <div class="why">
+          <h3>Clarity</h3>
+          <p>Most teams spend too much time gathering scattered data and too little time making decisions. Altira products collapse that process into one operating flow.</p>
+        </div>
+        <div class="why">
+          <h3>Speed</h3>
+          <p>Workflow design emphasizes fast iteration, assumption testing, and rapid comparison so users can make decisions with confidence.</p>
+        </div>
+        <div class="why">
+          <h3>Rigor</h3>
+          <p>Every tool is built around traceable inputs and defensible outputs, so users can explain decisions to partners, committees, and clients.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <span>Altira Tech</span>
+      <span>Applied Intelligence Products</span>
+      <span>2026</span>
+    </div>
+  </div>
+</body>
+</html>

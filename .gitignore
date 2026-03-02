@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local runtime state
+backend/farmland.db
+backend/app/farmland.db
+
+# Node/Cloudflare deploy profile artifacts
+deploy/cloudflare-worker/node_modules/
+deploy/cloudflare-worker/.wrangler/

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ═══════════════════════════════════════════════════════════════════
-# Farmland Terminal — Single-command launcher
+# Altira Atlas — Single-command launcher
 # Usage:  ./run.sh           (native desktop window via pywebview)
 #         ./run.sh --browser  (open in default browser)
 #         ./run.sh --server   (API server only, no UI)
@@ -9,8 +9,8 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 echo "═══════════════════════════════════════════"
-echo "  FARMLAND TERMINAL v0.2.0"
-echo "  Bloomberg for Farmland"
+echo "  ALTIRA ATLAS v0.2.0"
+echo "  Land Intelligence + Scenario Modeling"
 echo "═══════════════════════════════════════════"
 
 # ── Python check ──────────────────────────────────────────────────
@@ -37,14 +37,12 @@ export PYTHONPATH="$PWD/backend"
 MODE="${1:-}"
 
 if [[ "$MODE" == "--server" ]]; then
-  echo "[2/3] Seeding database..."
+  echo "[2/3] Initializing database schema..."
   $PY -c "
 from app.core.database import engine, Base
 from app.models import schema
 Base.metadata.create_all(bind=engine)
-from app.seed import seed_if_empty
-seed_if_empty()
-print('      Database ready.')
+print('      Schema ready (no synthetic seed data).')
 "
   echo "[3/3] Starting API server on http://127.0.0.1:3000 ..."
   echo "      Frontend: http://127.0.0.1:3000"
@@ -59,9 +57,7 @@ import sys, os, threading, time, webbrowser
 from app.core.database import engine, Base
 from app.models import schema
 Base.metadata.create_all(bind=engine)
-from app.seed import seed_if_empty
-seed_if_empty()
-print('      Database ready.')
+print('      Schema ready (no synthetic seed data).')
 
 def run_server():
     import uvicorn
@@ -71,7 +67,7 @@ t = threading.Thread(target=run_server, daemon=True)
 t.start()
 time.sleep(2)
 webbrowser.open('http://127.0.0.1:3000')
-print('[3/3] Farmland Terminal running at http://127.0.0.1:3000')
+print('[3/3] Altira Atlas running at http://127.0.0.1:3000')
 print('      Press Ctrl+C to stop.')
 import signal
 try:
@@ -84,4 +80,3 @@ else
   echo "[2/3] Launching native desktop application..."
   $PY launcher.py
 fi
-

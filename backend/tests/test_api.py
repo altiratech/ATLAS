@@ -31,7 +31,17 @@ class TestFrontend:
     def test_serves_html(self, client):
         r = client.get("/")
         assert r.status_code == 200
-        assert "Farmland Terminal" in r.text
+        assert "Altira Atlas" in r.text
+
+    def test_serves_altiratech_home(self, client):
+        r = client.get("/altiratech-home.html")
+        assert r.status_code == 200
+        assert "Altira Tech" in r.text
+
+    def test_serves_altiratech_home_clean(self, client):
+        r = client.get("/altiratech-home")
+        assert r.status_code == 200
+        assert "Altira Tech" in r.text
 
 
 # ── Metadata ──────────────────────────────────────────────────────
@@ -249,6 +259,145 @@ class TestNotes:
         assert r.status_code == 404
 
 
+# ── Auth ──────────────────────────────────────────────────────────
+class TestAuth:
+    def test_bootstrap_creates_session(self, client):
+        r = client.post("/api/v1/auth/bootstrap")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["token"]
+        assert data["user_key"]
+        assert "expires_at" in data
+
+    def test_auth_me_with_token(self, client):
+        session = client.post("/api/v1/auth/bootstrap").json()
+        token = session["token"]
+        r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["user_key"] == session["user_key"]
+        assert data["token"] == token
+
+    def test_logout_revokes_session(self, client):
+        session = client.post("/api/v1/auth/bootstrap").json()
+        token = session["token"]
+        r = client.post("/api/v1/auth/logout", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+        r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 401
+
+
+# ── Research Workspace ──────────────────────────────────────────────
+class TestResearchWorkspace:
+    USER_A = {"X-Atlas-User": "pytest-user-a@altira"}
+    USER_B = {"X-Atlas-User": "pytest-user-b@altira"}
+
+    def test_workspace_default(self, client):
+        r = client.get("/api/v1/research/workspaces/19153", headers=self.USER_A)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["geo_key"] == "19153"
+        assert isinstance(data["notes"], list)
+        assert isinstance(data["scenario_packs"], list)
+
+    def test_requires_user_identity(self, client):
+        r = client.get("/api/v1/research/workspaces/19153")
+        assert r.status_code == 401
+
+    def test_workspace_upsert_and_children(self, client):
+        fips = "19049"
+
+        r = client.put(
+            f"/api/v1/research/workspaces/{fips}",
+            json={
+                "thesis": "Test thesis for research persistence",
+                "tags": ["cap-rate", "logistics"],
+                "status": "diligence",
+                "conviction": 72,
+            },
+            headers=self.USER_A,
+        )
+        assert r.status_code == 200
+        workspace = r.json()
+        assert workspace["geo_key"] == fips
+        assert workspace["status"] == "diligence"
+        assert round(workspace["conviction"]) == 72
+        assert "cap-rate" in workspace["tags"]
+
+        note = client.post(
+            f"/api/v1/research/workspaces/{fips}/notes",
+            json={"content": "Research note from pytest"},
+            headers=self.USER_A,
+        )
+        assert note.status_code == 200
+        note_id = note.json()["id"]
+
+        pack = client.post(
+            f"/api/v1/research/workspaces/{fips}/scenario-packs",
+            json={
+                "name": "pytest-pack",
+                "risk_premium": 5.0,
+                "growth_rate": 2.5,
+                "rent_shock": -4,
+            },
+            headers=self.USER_A,
+        )
+        assert pack.status_code == 200
+        pack_id = pack.json()["id"]
+
+        r = client.get(f"/api/v1/research/workspaces/{fips}", headers=self.USER_A)
+        assert r.status_code == 200
+        ws = r.json()
+        assert any(n["id"] == note_id for n in ws["notes"])
+        assert any(p["id"] == pack_id for p in ws["scenario_packs"])
+
+        r = client.delete(f"/api/v1/research/notes/{note_id}", headers=self.USER_A)
+        assert r.status_code == 200
+        r = client.delete(f"/api/v1/research/scenario-packs/{pack_id}", headers=self.USER_A)
+        assert r.status_code == 200
+
+    def test_workspace_isolation_by_user(self, client):
+        fips = "19013"
+        client.put(
+            f"/api/v1/research/workspaces/{fips}",
+            json={
+                "thesis": "User A thesis",
+                "tags": ["pytest"],
+                "status": "watch",
+                "conviction": 55,
+            },
+            headers=self.USER_A,
+        )
+        client.put(
+            f"/api/v1/research/workspaces/{fips}",
+            json={
+                "thesis": "User B thesis",
+                "tags": ["pytest-b"],
+                "status": "diligence",
+                "conviction": 66,
+            },
+            headers=self.USER_B,
+        )
+
+        r = client.get("/api/v1/research/workspaces", headers=self.USER_A)
+        assert r.status_code == 200
+        data = r.json()
+        assert isinstance(data, list)
+        assert any(item["geo_key"] == fips for item in data)
+        row = next(item for item in data if item["geo_key"] == fips)
+        assert row["thesis"] == "User A thesis"
+
+        r = client.get(f"/api/v1/research/workspaces/{fips}", headers=self.USER_B)
+        assert r.status_code == 200
+        assert r.json()["thesis"] == "User B thesis"
+
+    def test_delete_nonexistent_research_items(self, client):
+        r = client.delete("/api/v1/research/notes/999999", headers=self.USER_A)
+        assert r.status_code == 404
+        r = client.delete("/api/v1/research/scenario-packs/999999", headers=self.USER_A)
+        assert r.status_code == 404
+
+
 # ── Portfolios ────────────────────────────────────────────────────
 class TestPortfolios:
     def test_list_portfolios(self, client):
@@ -271,7 +420,8 @@ class TestPortfolios:
         assert "diversification_rating" in data
 
     def test_create_portfolio(self, client):
-        r = client.post("/api/v1/portfolios", json={"name": "Test Portfolio Pytest"})
+        unique_name = f"Test Portfolio Pytest {os.urandom(4).hex()}"
+        r = client.post("/api/v1/portfolios", json={"name": unique_name})
         assert r.status_code == 200
         pid = r.json()["id"]
 

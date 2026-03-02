@@ -1,11 +1,15 @@
 """
-Farmland Terminal — FastAPI backend.
+Altira Atlas — FastAPI backend.
 Serves API under /api/v1 and the frontend SPA from /.
 """
 import os
 import csv
 import io
-from fastapi import FastAPI, Depends, HTTPException, Query, Response
+import hashlib
+import secrets
+from datetime import datetime
+from datetime import timedelta
+from fastapi import FastAPI, Depends, HTTPException, Query, Response, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -20,6 +24,7 @@ from app.models.schema import (
     AssumptionSet, ScreenDefinition, ModelVersion,
     RunContext, MetricValue, FallbackLog, ScenarioOutput,
     WatchlistItem, CountyNote, Portfolio, PortfolioHolding,
+    ResearchWorkspace, ResearchNote, ResearchScenarioPack, AuthSession,
 )
 from app.services.metric_engine import (
     ComputeContext, compute_all, compute_sensitivity,
@@ -27,7 +32,10 @@ from app.services.metric_engine import (
 )
 from app.services.portfolio import compute_portfolio_metrics
 
-app = FastAPI(title="Farmland Terminal", version="0.2.0")
+app = FastAPI(title="Altira Atlas", version="0.2.0")
+APP_ENV = (os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "development").lower()
+ALLOW_DEV_IDENTITY_HEADER = APP_ENV != "production"
+ALLOW_ANON_SESSIONS = os.getenv("ALLOW_ANON_SESSIONS", "1") == "1"
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,6 +46,74 @@ app.add_middleware(
 )
 
 
+def _migrate_research_workspace_owner_schema():
+    if engine.dialect.name != "sqlite":
+        return
+
+    with engine.connect() as conn:
+        exists = conn.execute(text(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='research_workspaces'"
+        )).first()
+        if not exists:
+            return
+
+        cols = conn.execute(text("PRAGMA table_info(research_workspaces)")).fetchall()
+        col_names = {row[1] for row in cols}
+        if "owner_key" in col_names:
+            return
+
+        conn.execute(text("PRAGMA foreign_keys=OFF"))
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS research_workspaces_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    owner_key VARCHAR(120) NOT NULL DEFAULT 'owner_default',
+                    geo_key VARCHAR(10) NOT NULL REFERENCES geo_county(fips),
+                    thesis TEXT,
+                    tags_json JSON,
+                    status VARCHAR(40) NOT NULL DEFAULT 'exploring',
+                    conviction FLOAT NOT NULL DEFAULT 50,
+                    created_at DATETIME,
+                    updated_at DATETIME,
+                    CONSTRAINT uq_research_workspace_owner_geo UNIQUE (owner_key, geo_key)
+                )
+            """))
+            conn.execute(text("""
+                INSERT INTO research_workspaces_new (
+                    id, owner_key, geo_key, thesis, tags_json, status, conviction, created_at, updated_at
+                )
+                SELECT
+                    id,
+                    'owner_default',
+                    geo_key,
+                    thesis,
+                    tags_json,
+                    COALESCE(status, 'exploring'),
+                    COALESCE(conviction, 50),
+                    created_at,
+                    updated_at
+                FROM research_workspaces
+            """))
+            conn.execute(text("DROP TABLE research_workspaces"))
+            conn.execute(text("ALTER TABLE research_workspaces_new RENAME TO research_workspaces"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_research_workspace_owner ON research_workspaces(owner_key)"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_research_workspace_geo ON research_workspaces(geo_key)"))
+        finally:
+            conn.execute(text("PRAGMA foreign_keys=ON"))
+        conn.commit()
+
+
+@app.on_event("startup")
+def ensure_schema_tables():
+    Base.metadata.create_all(bind=engine)
+    _migrate_research_workspace_owner_schema()
+    Base.metadata.create_all(bind=engine)
+
+
+# Ensure schema/migrations are applied even when app startup hooks are bypassed (e.g., some test clients/import paths).
+ensure_schema_tables()
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # Frontend Serving
 # ═══════════════════════════════════════════════════════════════════════
@@ -45,6 +121,10 @@ app.add_middleware(
 _FRONTEND_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
     "frontend", "index.html",
+)
+_ALTIRATECH_HOME_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "deploy", "cloudflare-worker", "public", "altiratech-home.html",
 )
 
 @app.get("/", response_class=HTMLResponse)
@@ -54,6 +134,18 @@ async def serve_frontend():
             return f.read()
     except FileNotFoundError:
         return HTMLResponse("<h1>Frontend not found</h1><p>Expected at: " + _FRONTEND_PATH + "</p>", 404)
+
+@app.get("/altiratech-home.html", response_class=HTMLResponse)
+async def serve_altiratech_home():
+    try:
+        with open(_ALTIRATECH_HOME_PATH, "r") as f:
+            return f.read()
+    except FileNotFoundError:
+        return HTMLResponse("<h1>File not found</h1><p>Expected at: " + _ALTIRATECH_HOME_PATH + "</p>", 404)
+
+@app.get("/altiratech-home", response_class=HTMLResponse)
+async def serve_altiratech_home_clean():
+    return await serve_altiratech_home()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -142,6 +234,211 @@ def _compute_county(db: Session, geo_key: str, as_of: str, assumptions: dict) ->
         "access_details": access.distances_json if access else {},
         "access_density": access.density_json if access else {},
     }
+
+
+RESEARCH_LEGACY_USER = "owner_default"
+SESSION_TTL_DAYS = 30
+
+
+def _sanitize_research_user(raw: str) -> str:
+    cleaned = "".join(ch for ch in raw.strip().lower() if ch.isalnum() or ch in {"@", ".", "_", "-", "+"})
+    return cleaned[:120]
+
+
+def _extract_header_identity(request: Request) -> dict | None:
+    email = request.headers.get("cf-access-authenticated-user-email")
+    user_id = request.headers.get("cf-access-authenticated-user-id")
+    dev_header = request.headers.get("x-atlas-user") if ALLOW_DEV_IDENTITY_HEADER else None
+
+    candidate = email or user_id or dev_header
+    if not candidate:
+        return None
+    user_key = _sanitize_research_user(candidate)
+    if not user_key:
+        return None
+
+    if email or user_id:
+        source = "cloudflare_access"
+    else:
+        source = "dev_header"
+    return {"user_key": user_key, "source": source}
+
+
+def _extract_bearer_token(request: Request) -> str | None:
+    auth_header = request.headers.get("authorization") or ""
+    if not auth_header.lower().startswith("bearer "):
+        return None
+    token = auth_header[7:].strip()
+    return token or None
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _get_valid_session(db: Session, token: str | None) -> AuthSession | None:
+    if not token:
+        return None
+    token_hash = _hash_token(token)
+    session = db.query(AuthSession).filter(
+        AuthSession.token_hash == token_hash,
+        AuthSession.revoked_at.is_(None),
+    ).first()
+    if not session:
+        return None
+    if session.expires_at and session.expires_at < datetime.utcnow():
+        session.revoked_at = datetime.utcnow()
+        db.add(session)
+        db.commit()
+        return None
+    session.last_seen_at = datetime.utcnow()
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session
+
+
+def _create_session(db: Session, request: Request, user_key: str, source: str) -> tuple[str, AuthSession]:
+    token = secrets.token_urlsafe(32)
+    token_hash = _hash_token(token)
+    now = datetime.utcnow()
+    ip = request.client.host if request.client else ""
+    ip_hash = hashlib.sha256(ip.encode("utf-8")).hexdigest() if ip else None
+    session = AuthSession(
+        user_key=user_key,
+        token_hash=token_hash,
+        identity_source=source,
+        created_at=now,
+        last_seen_at=now,
+        expires_at=now + timedelta(days=SESSION_TTL_DAYS),
+        user_agent=(request.headers.get("user-agent") or "")[:255],
+        ip_hash=ip_hash,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return token, session
+
+
+def _auth_payload(user_key: str, source: str, token: str, session: AuthSession | None = None) -> dict:
+    return {
+        "user_key": user_key,
+        "source": source,
+        "token": token,
+        "expires_at": str(session.expires_at) if session and session.expires_at else None,
+        "is_anonymous": user_key.startswith("anon_"),
+    }
+
+
+def _require_authenticated_user(request: Request, db: Session) -> str:
+    bearer = _extract_bearer_token(request)
+    session = _get_valid_session(db, bearer)
+    if session:
+        return session.user_key
+
+    header_identity = _extract_header_identity(request)
+    if header_identity:
+        return header_identity["user_key"]
+
+    raise HTTPException(401, "Missing research user identity")
+
+
+def _get_research_user(request: Request, db: Session) -> str:
+    return _require_authenticated_user(request, db)
+
+
+def _workspace_is_visible_to_user(workspace: ResearchWorkspace, user_key: str) -> bool:
+    return (workspace.owner_key or RESEARCH_LEGACY_USER) == user_key
+
+
+def _clamp_conviction(value: float | int | None) -> float:
+    try:
+        parsed = float(value) if value is not None else 50.0
+    except (TypeError, ValueError):
+        parsed = 50.0
+    return max(0.0, min(100.0, parsed))
+
+
+def _workspace_defaults(geo_key: str) -> dict:
+    return {
+        "geo_key": geo_key,
+        "thesis": "",
+        "tags": [],
+        "status": "exploring",
+        "conviction": 50.0,
+        "notes": [],
+        "scenario_packs": [],
+        "created_at": None,
+        "updated_at": None,
+    }
+
+
+def _serialize_workspace(db: Session, workspace: ResearchWorkspace) -> dict:
+    notes = db.query(ResearchNote).filter(
+        ResearchNote.workspace_id == workspace.id
+    ).order_by(ResearchNote.created_at.desc()).all()
+    packs = db.query(ResearchScenarioPack).filter(
+        ResearchScenarioPack.workspace_id == workspace.id
+    ).order_by(ResearchScenarioPack.updated_at.desc(), ResearchScenarioPack.id.desc()).all()
+
+    payload = _workspace_defaults(workspace.geo_key)
+    payload.update({
+        "thesis": workspace.thesis or "",
+        "tags": workspace.tags_json if isinstance(workspace.tags_json, list) else [],
+        "status": workspace.status or "exploring",
+        "conviction": _clamp_conviction(workspace.conviction),
+        "notes": [
+            {
+                "id": n.id,
+                "content": n.content,
+                "created_at": str(n.created_at) if n.created_at else None,
+            }
+            for n in notes
+        ],
+        "scenario_packs": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "risk_premium": p.risk_premium,
+                "growth_rate": p.growth_rate,
+                "rent_shock": p.rent_shock,
+                "created_at": str(p.created_at) if p.created_at else None,
+                "updated_at": str(p.updated_at) if p.updated_at else None,
+            }
+            for p in packs
+        ],
+        "created_at": str(workspace.created_at) if workspace.created_at else None,
+        "updated_at": str(workspace.updated_at) if workspace.updated_at else None,
+    })
+    return payload
+
+
+def _find_workspace_for_user(db: Session, user_key: str, geo_key: str) -> ResearchWorkspace | None:
+    workspace = db.query(ResearchWorkspace).filter(
+        ResearchWorkspace.owner_key == user_key,
+        ResearchWorkspace.geo_key == geo_key,
+    ).first()
+    if workspace:
+        return workspace
+    return None
+
+
+def _get_or_create_workspace(db: Session, user_key: str, geo_key: str) -> ResearchWorkspace:
+    workspace = _find_workspace_for_user(db, user_key, geo_key)
+    if workspace:
+        return workspace
+    workspace = ResearchWorkspace(
+        owner_key=user_key,
+        geo_key=geo_key,
+        thesis="",
+        tags_json=[],
+        status="exploring",
+        conviction=50.0,
+    )
+    db.add(workspace)
+    db.commit()
+    db.refresh(workspace)
+    return workspace
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -722,6 +1019,250 @@ def delete_note(note_id: int, db: Session = Depends(get_db)):
     if not note:
         raise HTTPException(404, "Note not found")
     db.delete(note)
+    db.commit()
+    return {"status": "deleted"}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Auth
+# ═══════════════════════════════════════════════════════════════════════
+
+@app.post("/api/v1/auth/bootstrap")
+def auth_bootstrap(request: Request, db: Session = Depends(get_db)):
+    bearer = _extract_bearer_token(request)
+    session = _get_valid_session(db, bearer)
+    if session:
+        return _auth_payload(
+            user_key=session.user_key,
+            source=session.identity_source or "session",
+            token=bearer or "",
+            session=session,
+        )
+
+    header_identity = _extract_header_identity(request)
+    if header_identity:
+        token, new_session = _create_session(
+            db,
+            request,
+            header_identity["user_key"],
+            header_identity["source"],
+        )
+        return _auth_payload(
+            user_key=header_identity["user_key"],
+            source=header_identity["source"],
+            token=token,
+            session=new_session,
+        )
+
+    if ALLOW_ANON_SESSIONS:
+        anon_user = f"anon_{secrets.token_hex(8)}"
+        token, new_session = _create_session(db, request, anon_user, "anonymous")
+        return _auth_payload(
+            user_key=anon_user,
+            source="anonymous",
+            token=token,
+            session=new_session,
+        )
+
+    raise HTTPException(401, "Authentication required")
+
+
+@app.get("/api/v1/auth/me")
+def auth_me(request: Request, db: Session = Depends(get_db)):
+    bearer = _extract_bearer_token(request)
+    session = _get_valid_session(db, bearer)
+    if session:
+        return _auth_payload(
+            user_key=session.user_key,
+            source=session.identity_source or "session",
+            token=bearer or "",
+            session=session,
+        )
+
+    header_identity = _extract_header_identity(request)
+    if header_identity:
+        return {
+            "user_key": header_identity["user_key"],
+            "source": header_identity["source"],
+            "token": None,
+            "expires_at": None,
+            "is_anonymous": False,
+        }
+
+    raise HTTPException(401, "Authentication required")
+
+
+@app.post("/api/v1/auth/logout")
+def auth_logout(request: Request, db: Session = Depends(get_db)):
+    bearer = _extract_bearer_token(request)
+    if not bearer:
+        raise HTTPException(401, "Authentication required")
+    session = _get_valid_session(db, bearer)
+    if not session:
+        raise HTTPException(401, "Authentication required")
+    session.revoked_at = datetime.utcnow()
+    db.add(session)
+    db.commit()
+    return {"status": "logged_out"}
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Research Workspace
+# ═══════════════════════════════════════════════════════════════════════
+
+class ResearchWorkspaceUpsert(BaseModel):
+    thesis: str | None = None
+    tags: list[str] | None = None
+    status: str | None = None
+    conviction: float | None = None
+
+
+class ResearchWorkspaceNoteCreate(BaseModel):
+    content: str
+
+
+class ResearchScenarioPackCreate(BaseModel):
+    name: str
+    risk_premium: float
+    growth_rate: float
+    rent_shock: float
+
+
+@app.get("/api/v1/research/workspaces")
+def list_research_workspaces(request: Request, db: Session = Depends(get_db)):
+    user_key = _get_research_user(request, db)
+    rows = db.query(ResearchWorkspace).order_by(
+        ResearchWorkspace.updated_at.desc(),
+        ResearchWorkspace.id.desc(),
+    ).all()
+    return [
+        _serialize_workspace(db, r)
+        for r in rows
+        if _workspace_is_visible_to_user(r, user_key)
+    ]
+
+
+@app.get("/api/v1/research/workspaces/{geo_key}")
+def get_research_workspace(geo_key: str, request: Request, db: Session = Depends(get_db)):
+    user_key = _get_research_user(request, db)
+    workspace = _find_workspace_for_user(db, user_key, geo_key)
+    if not workspace:
+        return _workspace_defaults(geo_key)
+    return _serialize_workspace(db, workspace)
+
+
+@app.put("/api/v1/research/workspaces/{geo_key}")
+def upsert_research_workspace(
+    geo_key: str, body: ResearchWorkspaceUpsert, request: Request, db: Session = Depends(get_db)
+):
+    user_key = _get_research_user(request, db)
+    workspace = _get_or_create_workspace(db, user_key, geo_key)
+    workspace.thesis = (body.thesis or "").strip()
+    workspace.tags_json = [
+        t.strip() for t in (body.tags or [])
+        if isinstance(t, str) and t.strip()
+    ]
+    workspace.status = (body.status or "exploring").strip() or "exploring"
+    workspace.conviction = _clamp_conviction(body.conviction)
+    workspace.updated_at = datetime.utcnow()
+    db.add(workspace)
+    db.commit()
+    db.refresh(workspace)
+    return _serialize_workspace(db, workspace)
+
+
+@app.post("/api/v1/research/workspaces/{geo_key}/notes")
+def add_research_workspace_note(
+    geo_key: str, body: ResearchWorkspaceNoteCreate, request: Request, db: Session = Depends(get_db)
+):
+    user_key = _get_research_user(request, db)
+    content = body.content.strip()
+    if not content:
+        raise HTTPException(400, "Note content is required")
+
+    workspace = _get_or_create_workspace(db, user_key, geo_key)
+    note = ResearchNote(workspace_id=workspace.id, content=content)
+    workspace.updated_at = datetime.utcnow()
+    db.add(note)
+    db.add(workspace)
+    db.commit()
+    db.refresh(note)
+    return {
+        "id": note.id,
+        "workspace_id": workspace.id,
+        "content": note.content,
+        "created_at": str(note.created_at) if note.created_at else None,
+    }
+
+
+@app.delete("/api/v1/research/notes/{note_id}")
+def delete_research_workspace_note(note_id: int, request: Request, db: Session = Depends(get_db)):
+    user_key = _get_research_user(request, db)
+    note = db.query(ResearchNote).filter(ResearchNote.id == note_id).first()
+    if not note:
+        raise HTTPException(404, "Research note not found")
+    workspace = db.query(ResearchWorkspace).filter(
+        ResearchWorkspace.id == note.workspace_id
+    ).first()
+    if not workspace or not _workspace_is_visible_to_user(workspace, user_key):
+        raise HTTPException(404, "Research note not found")
+    if workspace:
+        workspace.updated_at = datetime.utcnow()
+        db.add(workspace)
+    db.delete(note)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/v1/research/workspaces/{geo_key}/scenario-packs")
+def create_research_scenario_pack(
+    geo_key: str, body: ResearchScenarioPackCreate, request: Request, db: Session = Depends(get_db)
+):
+    user_key = _get_research_user(request, db)
+    workspace = _get_or_create_workspace(db, user_key, geo_key)
+    name = body.name.strip() or f"Pack {datetime.utcnow().date().isoformat()}"
+    pack = ResearchScenarioPack(
+        workspace_id=workspace.id,
+        name=name,
+        risk_premium=float(body.risk_premium),
+        growth_rate=float(body.growth_rate),
+        rent_shock=float(body.rent_shock),
+    )
+    workspace.updated_at = datetime.utcnow()
+    db.add(pack)
+    db.add(workspace)
+    db.commit()
+    db.refresh(pack)
+    return {
+        "id": pack.id,
+        "workspace_id": workspace.id,
+        "name": pack.name,
+        "risk_premium": pack.risk_premium,
+        "growth_rate": pack.growth_rate,
+        "rent_shock": pack.rent_shock,
+        "created_at": str(pack.created_at) if pack.created_at else None,
+        "updated_at": str(pack.updated_at) if pack.updated_at else None,
+    }
+
+
+@app.delete("/api/v1/research/scenario-packs/{pack_id}")
+def delete_research_scenario_pack(pack_id: int, request: Request, db: Session = Depends(get_db)):
+    user_key = _get_research_user(request, db)
+    pack = db.query(ResearchScenarioPack).filter(
+        ResearchScenarioPack.id == pack_id
+    ).first()
+    if not pack:
+        raise HTTPException(404, "Scenario pack not found")
+
+    workspace = db.query(ResearchWorkspace).filter(
+        ResearchWorkspace.id == pack.workspace_id
+    ).first()
+    if not workspace or not _workspace_is_visible_to_user(workspace, user_key):
+        raise HTTPException(404, "Scenario pack not found")
+    if workspace:
+        workspace.updated_at = datetime.utcnow()
+        db.add(workspace)
+    db.delete(pack)
     db.commit()
     return {"status": "deleted"}
 

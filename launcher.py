@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Farmland Terminal — Native Desktop Launcher
+Altira Atlas — Native Desktop Launcher
 Uses pywebview to create a native window backed by the FastAPI server.
 Single-command launch: python launcher.py
 """
@@ -25,14 +25,11 @@ def start_server():
     """Run the FastAPI server in a background thread."""
     import uvicorn
 
-    # Ensure database is seeded
+    # Ensure database schema exists (no synthetic seed load)
     from app.core.database import engine, Base
     from app.models import schema  # noqa: F401 — registers all models
 
     Base.metadata.create_all(bind=engine)
-
-    from app.seed import seed_if_empty
-    seed_if_empty()
 
     uvicorn.run(
         "app.main:app",
@@ -57,15 +54,15 @@ def wait_for_server(timeout=15):
 
 def main():
     print("═══════════════════════════════════════════")
-    print("  FARMLAND TERMINAL v0.2.0")
-    print("  Bloomberg for Farmland")
+    print("  ALTIRA ATLAS v0.2.0")
+    print("  Land Intelligence + Scenario Modeling")
     print("═══════════════════════════════════════════")
 
     # ── Start server in background thread ──────────────────────────
     server_thread = threading.Thread(target=start_server, daemon=True)
     server_thread.start()
 
-    print(f"Starting Farmland Terminal server on {URL} ...")
+    print(f"Starting Altira Atlas server on {URL} ...")
     if not wait_for_server():
         print("ERROR: Server failed to start within 15 seconds.")
         sys.exit(1)
@@ -76,7 +73,7 @@ def main():
         import webview
 
         window = webview.create_window(
-            "Farmland Terminal",
+            "Altira Atlas",
             URL,
             width=1400,
             height=900,
@@ -89,7 +86,7 @@ def main():
         import webbrowser
 
         webbrowser.open(URL)
-        print(f"Farmland Terminal running at {URL}")
+        print(f"Altira Atlas running at {URL}")
         print("Press Ctrl+C to stop.")
         try:
             signal.pause() if hasattr(signal, "pause") else server_thread.join()
@@ -100,7 +97,7 @@ def main():
         import webbrowser
 
         webbrowser.open(URL)
-        print(f"Farmland Terminal running at {URL}")
+        print(f"Altira Atlas running at {URL}")
         print("Press Ctrl+C to stop.")
         try:
             signal.pause() if hasattr(signal, "pause") else server_thread.join()

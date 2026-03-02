@@ -1,12 +1,12 @@
-# Farmland Terminal
+# Altira Atlas
 
-**Bloomberg for Farmland** — A native desktop application for analyzing, screening, and comparing farmland investment opportunities across the US Corn Belt.
+**Agriculture intelligence platform** for land research, scenario modeling, and investment diligence across farmland markets.
 
 ## Quick Start
 
 ```bash
 # Clone / download the project, then:
-cd farmland-terminal
+cd Code/active/farmland-terminal
 
 # Option 1: Native desktop window (requires pywebview)
 ./run.sh
@@ -18,7 +18,7 @@ cd farmland-terminal
 ./run.sh --server
 ```
 
-The app auto-installs dependencies, seeds the database on first run, and launches at `http://127.0.0.1:3000`.
+The app auto-installs dependencies, initializes schema-only local storage, and launches at `http://127.0.0.1:3000`.
 
 ## Requirements
 
@@ -92,6 +92,12 @@ Manual install: `pip install -r requirements.txt`
 - Search metrics by name
 - Quick navigation to any county
 
+### Product Orientation
+- In-app **Mission** page explains what the platform is, who it serves, and why each tool exists
+- In-app **About** page clarifies scope and near-term roadmap priorities
+- Canonical web app URL: `https://atlas.altiratech.com`
+- `https://atlas.altiratech.com/altiratech-home` provides a standalone company projects homepage prototype
+
 ## Architecture
 
 ```
@@ -102,7 +108,7 @@ farmland-terminal/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py          # FastAPI app — all endpoints + frontend serving
-│   │   ├── seed.py          # Database seeder (45 counties, 33 facilities, 11yr data)
+│   │   ├── seed.py          # Legacy seed script (disabled for runtime; test/reference only)
 │   │   ├── core/
 │   │   │   └── database.py  # SQLAlchemy engine + session
 │   │   ├── models/
@@ -118,6 +124,8 @@ farmland-terminal/
 │       └── test_portfolio.py     # 10 portfolio analytics tests
 ├── frontend/
 │   └── index.html           # React 18 SPA (single-file, no build step)
+├── deploy/
+│   └── cloudflare-worker/   # Cloudflare Workers deployment profile (Hono + D1)
 └── docs/
     └── ADDING_DATA_AND_METRICS.md
 ```
@@ -125,6 +133,7 @@ farmland-terminal/
 ### Tech Stack
 - **Backend**: FastAPI + SQLAlchemy + SQLite (zero-config, portable database)
 - **Frontend**: React 18 + Babel standalone (no build step, single HTML file)
+- **Cloud Deploy Profile**: Cloudflare Workers + Hono + D1 (`deploy/cloudflare-worker`)
 - **Desktop**: pywebview for native OS window (WebKit on macOS, EdgeChromium on Windows)
 - **Database**: SQLite stored at `backend/farmland.db` (auto-created on first run)
 
@@ -162,16 +171,15 @@ cd backend
 python -m pytest tests/ -v
 ```
 
-All 61 tests should pass in under 2 seconds.
+Expected baseline is 61 tests; one portfolio test can fail if using a persistent local DB with prior state.
 
 ## Data
 
-The app ships with seed data for 45 counties across 5 Corn Belt states (Iowa, Illinois, Indiana, Minnesota, Missouri) with:
-- 11 years of annual data per county (2015–2025): cash rent, benchmark land value, corn yield, soybean yield, operating costs, Treasury rates
-- 33 agricultural facilities (grain elevators, ethanol plants, rail terminals, river ports)
-- 3 pre-built screen configurations (Value Play, Cash Flow, Balanced)
-- 3 assumption sets (Default, Conservative, Aggressive)
-- 1 sample portfolio ("Corn Belt Core" with 4 holdings)
+This workspace follows the no-synthetic-data policy (`D-014`):
+- Runtime paths do not auto-seed fabricated records.
+- Local SQLite starts schema-only.
+- Production data should come from live ingestion sources (USDA NASS / FRED via the Cloudflare Worker).
+- If data is unavailable, use explicit placeholders rather than generated samples.
 
 See `docs/ADDING_DATA_AND_METRICS.md` for instructions on adding custom data and metrics.
 

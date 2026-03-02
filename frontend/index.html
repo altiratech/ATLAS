@@ -3,111 +3,448 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Farmland Terminal</title>
+  <title>Altira Atlas</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    :root{--bg0:#0a0e17;--bg1:#111827;--bg2:#1a2234;--bg3:#151d2e;--accent:#22d3ee;--green:#34d399;--red:#f87171;--amber:#fbbf24;--purple:#a78bfa;--text1:#f1f5f9;--text2:#94a3b8;--border:#1e293b}
-    html,body{width:100%;height:100%;background:var(--bg0);color:var(--text1);font-family:'Inter',sans-serif;line-height:1.5}
+    :root{
+      --bg0:#050607;
+      --bg1:#0b0e11;
+      --bg2:#11161b;
+      --bg3:#191f26;
+      --line:#29333d;
+      --line-strong:#4c5a66;
+      --border:#29333d;
+      --accent:#ffb100;
+      --accent-2:#63d2ff;
+      --green:#7ed321;
+      --red:#ff4d4d;
+      --amber:#ffb100;
+      --text1:#f2f4f6;
+      --text2:#a9b2bc;
+      --text3:#6e7782;
+    }
+    html,body{
+      width:100%;
+      height:100%;
+      background:var(--bg0);
+      color:var(--text1);
+      font-family:'IBM Plex Sans Condensed',sans-serif;
+      line-height:1.2;
+      letter-spacing:.01em;
+    }
+    body{
+      background-image:
+        radial-gradient(circle at 10% -10%, rgba(255,177,0,.07), transparent 45%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, transparent 1px 12px),
+        linear-gradient(180deg, var(--bg1), var(--bg0));
+    }
     #root{width:100%;height:100%}
     .app{display:flex;height:100vh;overflow:hidden}
-    /* Sidebar */
-    .side{width:220px;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:1.25rem 0;overflow-y:auto;flex-shrink:0}
-    .side-logo{padding:0 1.25rem 1.25rem;font-size:1.15rem;font-weight:700;color:var(--accent);border-bottom:1px solid var(--border);margin-bottom:1rem;letter-spacing:.08em;font-family:'JetBrains Mono',monospace}
-    .nav-sec{padding:0 .625rem;margin-bottom:.75rem}
-    .nav-lbl{font-size:.65rem;font-weight:600;text-transform:uppercase;color:var(--text2);padding:.5rem .75rem;letter-spacing:.1em}
-    .nav-i{padding:.625rem .75rem;margin:.125rem 0;cursor:pointer;border-radius:.375rem;font-size:.85rem;color:var(--text2);transition:all .15s;display:flex;align-items:center;gap:.625rem}
-    .nav-i:hover{background:var(--bg2);color:var(--accent)}
-    .nav-i.act{background:var(--bg3);color:var(--accent);border-left:3px solid var(--accent);padding-left:calc(.75rem - 3px)}
-    .nav-ic{font-size:1rem;min-width:1.1rem}
-    /* Main */
+    .side{
+      width:236px;
+      background:rgba(6,8,10,.94);
+      border-right:1px solid var(--line-strong);
+      display:flex;
+      flex-direction:column;
+      padding:.85rem 0;
+      overflow-y:auto;
+      flex-shrink:0;
+    }
+    .side-logo{
+      padding:0 .95rem .8rem;
+      font-size:.93rem;
+      font-weight:700;
+      color:var(--accent);
+      border-bottom:1px solid var(--line);
+      margin-bottom:.75rem;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-family:'IBM Plex Mono',monospace;
+    }
+    .nav-sec{padding:0 .55rem;margin-bottom:.45rem}
+    .nav-lbl{
+      font-size:.62rem;
+      font-weight:600;
+      text-transform:uppercase;
+      color:var(--text3);
+      padding:.38rem .6rem;
+      letter-spacing:.18em;
+    }
+    .nav-i{
+      padding:.42rem .6rem;
+      margin:.08rem 0;
+      cursor:pointer;
+      font-size:.78rem;
+      color:var(--text2);
+      border:1px solid transparent;
+      transition:all .08s linear;
+      display:flex;
+      align-items:center;
+      gap:.45rem;
+      text-transform:uppercase;
+      letter-spacing:.08em;
+    }
+    .nav-i:hover{border-color:var(--line);background:var(--bg2);color:var(--text1)}
+    .nav-i.act{
+      background:var(--bg3);
+      color:var(--accent);
+      border-color:var(--line-strong);
+      box-shadow:inset 3px 0 0 var(--accent);
+    }
+    .nav-ic{
+      min-width:2.05rem;
+      font-size:.63rem;
+      color:var(--text3);
+      font-family:'IBM Plex Mono',monospace;
+      letter-spacing:.08em;
+    }
     .main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
-    .top{height:52px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 1.5rem;flex-shrink:0}
-    .top-t{font-size:1rem;font-weight:600}
-    .top-a{display:flex;align-items:center;gap:.75rem}
-    .content{flex:1;overflow-y:auto;padding:1.5rem}
-    /* Buttons */
-    .btn{padding:.4rem .875rem;border:1px solid var(--border);background:var(--bg2);color:var(--text1);border-radius:.375rem;cursor:pointer;font-size:.8rem;font-weight:500;transition:all .15s;font-family:'Inter',sans-serif}
+    .top{
+      height:44px;
+      background:rgba(7,10,12,.95);
+      border-bottom:1px solid var(--line-strong);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 1rem;
+      flex-shrink:0;
+    }
+    .top-t{
+      font-size:.84rem;
+      font-weight:600;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+    }
+    .top-a{display:flex;align-items:center;gap:.5rem}
+    .content{flex:1;overflow-y:auto;padding:1rem}
+    .btn{
+      padding:.32rem .56rem;
+      border:1px solid var(--line);
+      background:var(--bg2);
+      color:var(--text1);
+      cursor:pointer;
+      font-size:.68rem;
+      font-weight:600;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      font-family:'IBM Plex Mono',monospace;
+      transition:all .08s linear;
+    }
     .btn:hover{border-color:var(--accent);color:var(--accent)}
-    .btn-p{background:var(--accent);color:var(--bg0);border-color:var(--accent)}
-    .btn-p:hover{background:#06b6d4}
-    .btn-sm{padding:.3rem .625rem;font-size:.75rem}
-    .btn-d{background:rgba(248,113,113,.15);border-color:var(--red);color:var(--red)}
-    .btn-d:hover{background:rgba(248,113,113,.25)}
-    .btn:disabled{opacity:.4;cursor:not-allowed}
-    /* Cards */
-    .card{background:var(--bg1);border:1px solid var(--border);border-radius:.5rem;padding:1.25rem}
-    .card:hover{border-color:rgba(34,211,238,.3)}
-    .sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.25rem;margin-bottom:1.5rem}
-    .sc{background:linear-gradient(135deg,var(--bg2),var(--bg1));border:1px solid var(--border);border-radius:.5rem;padding:1.25rem;transition:border-color .15s}
-    .sc:hover{border-color:rgba(34,211,238,.3)}
-    .sc-l{font-size:.7rem;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem}
-    .sc-v{font-size:1.5rem;font-weight:700;color:var(--accent);font-family:'JetBrains Mono',monospace;margin-bottom:.25rem}
-    .sc-c{font-size:.8rem;font-weight:500;font-family:'JetBrains Mono',monospace}
+    .btn-p{background:var(--accent);color:#121212;border-color:var(--accent)}
+    .btn-p:hover{background:#d99800;color:#0f0f0f}
+    .btn-sm{padding:.28rem .48rem;font-size:.62rem}
+    .btn-d{background:rgba(255,77,77,.12);border-color:var(--red);color:var(--red)}
+    .btn-d:hover{background:rgba(255,77,77,.18)}
+    .btn:disabled{opacity:.45;cursor:not-allowed}
+    .card{
+      background:rgba(12,16,20,.96);
+      border:1px solid var(--line);
+      padding:.82rem;
+    }
+    .sg{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+      gap:.55rem;
+      margin-bottom:.75rem;
+    }
+    .sc{
+      background:var(--bg2);
+      border:1px solid var(--line);
+      padding:.7rem;
+    }
+    .sc-l{
+      font-size:.58rem;
+      font-weight:600;
+      color:var(--text3);
+      text-transform:uppercase;
+      letter-spacing:.16em;
+      margin-bottom:.28rem;
+    }
+    .sc-v{
+      font-size:1.08rem;
+      font-weight:700;
+      color:var(--accent);
+      font-family:'IBM Plex Mono',monospace;
+      margin-bottom:.18rem;
+      letter-spacing:.02em;
+    }
+    .sc-c{font-size:.67rem;font-weight:500;font-family:'IBM Plex Mono',monospace;color:var(--text2)}
     .pos{color:var(--green)}.neg{color:var(--red)}
-    /* Tables */
-    .tc{overflow-x:auto;margin-top:1rem}
-    table{width:100%;border-collapse:collapse;font-size:.85rem}
-    thead{background:var(--bg2)}
-    th{padding:.625rem .875rem;text-align:left;font-weight:600;color:var(--text2);cursor:pointer;user-select:none;text-transform:uppercase;font-size:.7rem;letter-spacing:.05em;transition:color .15s;white-space:nowrap}
+    .tc{overflow-x:auto;margin-top:.55rem;border:1px solid var(--line)}
+    table{width:100%;border-collapse:collapse;font-size:.73rem}
+    thead{background:#0e1318}
+    th{
+      padding:.38rem .48rem;
+      text-align:left;
+      font-weight:600;
+      color:var(--text2);
+      cursor:pointer;
+      user-select:none;
+      text-transform:uppercase;
+      font-size:.58rem;
+      letter-spacing:.12em;
+      white-space:nowrap;
+      border-bottom:1px solid var(--line-strong);
+    }
     th:hover{color:var(--accent)}
-    th.s-a::after{content:" \u25B2";color:var(--accent);font-size:.6rem}
-    th.s-d::after{content:" \u25BC";color:var(--accent);font-size:.6rem}
-    tbody tr{border-bottom:1px solid rgba(30,41,59,.8);transition:background .1s}
-    tbody tr:hover{background:var(--bg2);cursor:pointer}
-    td{padding:.625rem .875rem;color:var(--text2)}
-    td.n{font-family:'JetBrains Mono',monospace;text-align:right}
-    /* Forms */
-    .fg{margin-bottom:.875rem}
-    label{display:block;font-size:.75rem;font-weight:500;color:var(--text2);margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.05em}
-    input[type="text"],input[type="number"],select,textarea{width:100%;padding:.4rem .625rem;background:var(--bg2);border:1px solid var(--border);border-radius:.375rem;color:var(--text1);font-family:'Inter',sans-serif;font-size:.85rem;transition:border-color .15s}
-    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 8px rgba(34,211,238,.15)}
+    th.s-a::after{content:" ▲";color:var(--accent);font-size:.55rem}
+    th.s-d::after{content:" ▼";color:var(--accent);font-size:.55rem}
+    tbody tr{border-bottom:1px solid rgba(41,51,61,.9)}
+    tbody tr:hover{background:#141b22;cursor:pointer}
+    td{padding:.34rem .48rem;color:var(--text2)}
+    td.n{font-family:'IBM Plex Mono',monospace;text-align:right}
+    .fg{margin-bottom:.62rem}
+    label{
+      display:block;
+      font-size:.6rem;
+      font-weight:600;
+      color:var(--text3);
+      margin-bottom:.2rem;
+      text-transform:uppercase;
+      letter-spacing:.14em;
+    }
+    input[type="text"],input[type="number"],select,textarea{
+      width:100%;
+      padding:.34rem .48rem;
+      background:var(--bg2);
+      border:1px solid var(--line);
+      color:var(--text1);
+      font-family:'IBM Plex Sans Condensed',sans-serif;
+      font-size:.75rem;
+    }
+    input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
     input[type="range"]{width:100%;accent-color:var(--accent)}
-    /* Command Palette */
-    .cp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding-top:80px}
-    .cp-input{width:480px;padding:.875rem 1rem;background:var(--bg1);border:1px solid var(--accent);border-radius:.5rem .5rem 0 0;color:var(--text1);font-size:.9rem;box-shadow:0 20px 50px rgba(0,0,0,.8)}
-    .cp-list{width:480px;background:var(--bg1);border:1px solid var(--border);border-top:none;border-radius:0 0 .5rem .5rem;max-height:360px;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.8)}
-    .cp-item{padding:.625rem 1rem;border-bottom:1px solid rgba(30,41,59,.5);cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background .1s}
-    .cp-item:hover,.cp-item.sel{background:var(--bg2);color:var(--accent)}
-    /* Toast */
-    .toast-c{position:fixed;bottom:1.5rem;right:1.5rem;z-index:60;display:flex;flex-direction:column;gap:.75rem}
-    .toast{background:var(--bg1);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:.375rem;padding:.75rem 1rem;min-width:280px;display:flex;justify-content:space-between;align-items:center;animation:slideR .3s ease}
+    .cp-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:50;display:flex;align-items:flex-start;justify-content:center;padding-top:72px}
+    .cp-input{
+      width:560px;
+      padding:.62rem .75rem;
+      background:#0a0e12;
+      border:1px solid var(--accent);
+      color:var(--text1);
+      font-size:.78rem;
+      font-family:'IBM Plex Mono',monospace;
+      letter-spacing:.04em;
+    }
+    .cp-list{
+      width:560px;
+      background:var(--bg1);
+      border:1px solid var(--line-strong);
+      border-top:none;
+      max-height:360px;
+      overflow-y:auto;
+    }
+    .cp-item{
+      padding:.42rem .7rem;
+      border-bottom:1px solid rgba(41,51,61,.65);
+      cursor:pointer;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+    .cp-item:hover,.cp-item.sel{background:var(--bg3);color:var(--accent)}
+    .toast-c{position:fixed;bottom:1rem;right:1rem;z-index:60;display:flex;flex-direction:column;gap:.42rem}
+    .toast{
+      background:#0b1014;
+      border:1px solid var(--line-strong);
+      border-left:4px solid var(--accent);
+      padding:.5rem .66rem;
+      min-width:260px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      animation:slideR .2s ease;
+    }
     .toast.ok{border-left-color:var(--green)}.toast.err{border-left-color:var(--red)}
-    .toast-x{background:none;border:none;color:var(--text2);cursor:pointer;font-size:1rem;margin-left:.75rem}
-    /* Loading */
-    .ld{display:flex;align-items:center;justify-content:center;height:300px;color:var(--text2);flex-direction:column;gap:.75rem}
-    .sp{border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;width:36px;height:36px;animation:spin .8s linear infinite}
-    .err-box{background:rgba(248,113,113,.1);border:1px solid var(--red);border-radius:.5rem;padding:1.25rem;color:var(--red);margin:1.5rem 0}
-    .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2.5rem 1.5rem;color:var(--text2);text-align:center}
-    .empty-ic{font-size:2.5rem;margin-bottom:.75rem;opacity:.5}
-    /* Tabs */
-    .tabs{display:flex;border-bottom:1px solid var(--border);gap:0;margin-bottom:1.25rem}
-    .tab{padding:.625rem 1.25rem;border-bottom:2px solid transparent;background:none;border-top:none;border-left:none;border-right:none;color:var(--text2);cursor:pointer;font-size:.85rem;font-weight:500;transition:all .15s;font-family:'Inter',sans-serif}
+    .toast-x{background:none;border:none;color:var(--text2);cursor:pointer;font-size:.9rem;margin-left:.45rem}
+    .ld{display:flex;align-items:center;justify-content:center;height:220px;color:var(--text2);flex-direction:column;gap:.55rem;font-size:.74rem}
+    .sp{border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;width:28px;height:28px;animation:spin .8s linear infinite}
+    .err-box{background:rgba(255,77,77,.08);border:1px solid var(--red);padding:.72rem;color:var(--red);margin:.8rem 0}
+    .empty{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:1.5rem 1rem;color:var(--text2);text-align:center}
+    .tabs{display:flex;border-bottom:1px solid var(--line);gap:0;margin-bottom:.75rem}
+    .tab{
+      padding:.4rem .68rem;
+      border-bottom:2px solid transparent;
+      background:none;
+      border-top:none;
+      border-left:none;
+      border-right:none;
+      color:var(--text2);
+      cursor:pointer;
+      font-size:.66rem;
+      font-weight:600;
+      transition:all .08s linear;
+      font-family:'IBM Plex Mono',monospace;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+    }
     .tab:hover{color:var(--accent)}
     .tab.act{border-bottom-color:var(--accent);color:var(--accent)}
-    /* Dropdown */
     .dd{position:relative;width:100%}
-    .dd-menu{position:absolute;top:100%;left:0;right:0;background:var(--bg1);border:1px solid var(--border);border-radius:.375rem;margin-top:.375rem;z-index:10;max-height:280px;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.5)}
-    .dd-item{padding:.625rem .875rem;border-bottom:1px solid rgba(30,41,59,.5);cursor:pointer;font-size:.85rem;transition:background .1s}
-    .dd-item:hover{background:var(--bg2);color:var(--accent)}
-    /* Sparkline */
-    .spark{height:36px;margin:.375rem 0}
-    /* Badge */
-    .badge{display:inline-block;padding:.125rem .5rem;border-radius:.25rem;font-size:.7rem;font-weight:600;font-family:'JetBrains Mono',monospace}
-    .badge-g{background:rgba(52,211,153,.15);color:var(--green)}
-    .badge-r{background:rgba(248,113,113,.15);color:var(--red)}
-    .badge-a{background:rgba(251,191,36,.15);color:var(--amber)}
-    .badge-b{background:rgba(34,211,238,.15);color:var(--accent)}
-    /* Scrollbar */
-    ::-webkit-scrollbar{width:6px;height:6px}
-    ::-webkit-scrollbar-track{background:var(--bg1)}
-    ::-webkit-scrollbar-thumb{background:var(--bg3);border-radius:3px}
-    ::-webkit-scrollbar-thumb:hover{background:var(--border)}
+    .dd-menu{
+      position:absolute;
+      top:100%;
+      left:0;
+      right:0;
+      background:#0c1116;
+      border:1px solid var(--line-strong);
+      margin-top:.18rem;
+      z-index:10;
+      max-height:260px;
+      overflow-y:auto;
+    }
+    .dd-item{padding:.42rem .58rem;border-bottom:1px solid rgba(41,51,61,.65);cursor:pointer;font-size:.73rem}
+    .dd-item:hover{background:#1a222b;color:var(--accent)}
+    .spark{height:30px;margin:.3rem 0}
+    .badge{
+      display:inline-block;
+      padding:.08rem .34rem;
+      font-size:.58rem;
+      font-weight:600;
+      font-family:'IBM Plex Mono',monospace;
+      border:1px solid var(--line-strong);
+      color:var(--text2);
+      text-transform:uppercase;
+      letter-spacing:.1em;
+      background:transparent;
+    }
+    .badge-g{border-color:var(--green);color:var(--green)}
+    .badge-r{border-color:var(--red);color:var(--red)}
+    .badge-a{border-color:var(--amber);color:var(--amber)}
+    .badge-b{border-color:var(--accent-2);color:var(--accent-2)}
+    .hero-card{
+      margin-bottom:.82rem;
+      border:1px solid var(--line-strong);
+      background:
+        linear-gradient(115deg, rgba(255,177,0,.1), transparent 45%),
+        linear-gradient(180deg, #10161d, #0a0f14);
+    }
+    .hero-k{
+      font-size:.62rem;
+      color:var(--accent-2);
+      text-transform:uppercase;
+      letter-spacing:.2em;
+      margin-bottom:.38rem;
+      font-family:'IBM Plex Mono',monospace;
+    }
+    .hero-h{
+      font-size:1.35rem;
+      line-height:1.15;
+      margin-bottom:.34rem;
+      text-transform:uppercase;
+      letter-spacing:.05em;
+    }
+    .hero-p{max-width:860px;font-size:.84rem;color:var(--text2);line-height:1.45}
+    .hero-actions{margin-top:.72rem;display:flex;gap:.52rem;flex-wrap:wrap}
+    .workflow-grid{
+      display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+      gap:.52rem;
+      margin-bottom:.8rem;
+    }
+    .workflow-card{background:var(--bg2);border:1px solid var(--line);padding:.62rem}
+    .workflow-step{
+      font-size:.58rem;
+      color:var(--text3);
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      margin-bottom:.22rem;
+      font-family:'IBM Plex Mono',monospace;
+    }
+    .workflow-h{font-size:.8rem;font-weight:600;margin-bottom:.18rem}
+    .workflow-p{font-size:.74rem;color:var(--text2);line-height:1.4}
+    .why-grid{display:grid;gap:.45rem}
+    .why-row{
+      display:grid;
+      grid-template-columns:180px 1.7fr 1fr;
+      gap:.62rem;
+      padding:.5rem;
+      border:1px solid var(--line);
+      background:var(--bg2);
+      align-items:start;
+    }
+    .why-tool{font-size:.72rem;font-weight:600;color:var(--text1);text-transform:uppercase;letter-spacing:.08em}
+    .why-why,.why-next{font-size:.74rem;color:var(--text2);line-height:1.35}
+    .about-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.55rem;margin-bottom:.8rem}
+    .about-block{background:var(--bg2);border:1px solid var(--line);padding:.65rem}
+    .about-h{
+      font-size:.68rem;
+      margin-bottom:.26rem;
+      text-transform:uppercase;
+      letter-spacing:.14em;
+      color:var(--accent);
+      font-family:'IBM Plex Mono',monospace;
+    }
+    .about-p{font-size:.78rem;color:var(--text2);line-height:1.45}
+    .lnk{color:var(--accent-2);text-decoration:none;border-bottom:1px solid transparent}
+    .lnk:hover{border-bottom-color:var(--accent-2)}
+    .legacy-b{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:.6rem;
+      padding:.42rem .65rem;
+      border-bottom:1px solid var(--line-strong);
+      background:rgba(99,210,255,.09);
+      color:var(--text1);
+      font-size:.7rem;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+    }
+    .rw-grid{
+      display:grid;
+      grid-template-columns:2fr 1fr;
+      gap:.7rem;
+      margin-bottom:.7rem;
+    }
+    .rw-actions{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.55rem}
+    .rw-note{
+      background:var(--bg2);
+      border:1px solid var(--line);
+      padding:.55rem;
+      margin-bottom:.42rem;
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:.55rem;
+    }
+    .rw-meta{
+      font-size:.62rem;
+      color:var(--text3);
+      text-transform:uppercase;
+      letter-spacing:.1em;
+      margin-bottom:.18rem;
+      font-family:'IBM Plex Mono',monospace;
+    }
+    .pack-row{
+      display:flex;
+      justify-content:space-between;
+      gap:.5rem;
+      align-items:flex-start;
+      border:1px solid var(--line);
+      background:var(--bg2);
+      padding:.45rem;
+      margin-bottom:.4rem;
+    }
+    @media (max-width: 920px) {
+      .why-row{grid-template-columns:1fr;gap:.35rem}
+      .rw-grid{grid-template-columns:1fr}
+    }
+    ::-webkit-scrollbar{width:7px;height:7px}
+    ::-webkit-scrollbar-track{background:#0a0d10}
+    ::-webkit-scrollbar-thumb{background:#2d3742}
+    ::-webkit-scrollbar-thumb:hover{background:#465360}
+    @media (max-width: 980px) {
+      .side{width:180px}
+      .content{padding:.62rem}
+      .sg{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}
+    }
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes slideR{from{transform:translateX(100%)}to{transform:translateX(0)}}
   </style>
@@ -119,7 +456,11 @@
 // CONSTANTS & HELPERS
 // ═══════════════════════════════════════════════════════════════════
 const API = window.location.origin + '/api/v1';
+const APP_NAME = 'Altira Atlas';
+const APP_TAGLINE = 'Land Intelligence, Scenario Modeling, and Capital Research for Agriculture';
+const AUTH_TOKEN_KEY = 'altira_atlas_auth_token_v1';
 const PG = {
+  MISSION:'mission', ABOUT:'about', RESEARCH:'research',
   DASH:'dash', SCREEN:'screen', COUNTY:'county', WATCH:'watch',
   COMPARE:'compare', SCENARIO:'scenario', BACKTEST:'backtest',
   PORTFOLIO:'portfolio', SCREENS_MGR:'screens_mgr', ASSUME:'assume',
@@ -133,11 +474,122 @@ const $pct = (n) => n != null ? Number(n).toFixed(2) + '%' : 'N/A';
 const $chg = (n) => n != null ? (n > 0 ? '+' : '') + Number(n).toFixed(1) + '%' : '--';
 
 function toast(msg, type='info') { return {id: Date.now()+Math.random(), msg, type, dur: 3000}; }
+const parseTags = (raw) => raw.split(',').map(t => t.trim()).filter(Boolean);
 
-async function api(path, opts) {
-  const res = await fetch(API + path, opts);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+function readAuthToken() {
+  try {
+    return window.localStorage.getItem(AUTH_TOKEN_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+function writeAuthToken(token) {
+  try {
+    if (!token) return false;
+    window.localStorage.setItem(AUTH_TOKEN_KEY, token);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearAuthToken() {
+  try {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+  } catch {}
+}
+
+let AUTH_TOKEN = readAuthToken();
+let AUTH_BOOTSTRAP_INFLIGHT = null;
+
+function defaultResearchRecord() {
+  return { thesis:'', tags:[], conviction:50, status:'exploring', notes:[], scenario_packs:[], updated_at:null };
+}
+
+function normalizeResearchRecord(record) {
+  const base = defaultResearchRecord();
+  const safe = record && typeof record === 'object' ? record : {};
+  const conviction = Number(safe.conviction);
+  return {
+    ...base,
+    ...safe,
+    tags: Array.isArray(safe.tags) ? safe.tags : [],
+    notes: Array.isArray(safe.notes) ? safe.notes : [],
+    scenario_packs: Array.isArray(safe.scenario_packs) ? safe.scenario_packs : [],
+    conviction: Number.isFinite(conviction) ? Math.max(0, Math.min(100, conviction)) : base.conviction,
+    status: safe.status || base.status,
+  };
+}
+
+function indexResearchWorkspaceStore(rows) {
+  const store = {};
+  for (const row of (rows || [])) {
+    if (!row || typeof row !== 'object' || !row.geo_key) continue;
+    store[row.geo_key] = normalizeResearchRecord(row);
+  }
+  return store;
+}
+
+async function bootstrapAuth(force = false) {
+  if (AUTH_BOOTSTRAP_INFLIGHT && !force) return AUTH_BOOTSTRAP_INFLIGHT;
+  const pending = (async () => {
+    const headers = new Headers();
+    if (AUTH_TOKEN) headers.set('Authorization', `Bearer ${AUTH_TOKEN}`);
+    const res = await fetch(API + '/auth/bootstrap', { method:'POST', headers });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const data = await res.json();
+    if (data && data.token) {
+      AUTH_TOKEN = data.token;
+      writeAuthToken(data.token);
+    }
+    return data;
+  })();
+  AUTH_BOOTSTRAP_INFLIGHT = pending;
+  try {
+    return await pending;
+  } finally {
+    if (AUTH_BOOTSTRAP_INFLIGHT === pending) AUTH_BOOTSTRAP_INFLIGHT = null;
+  }
+}
+
+async function api(path, opts, attemptedRefresh = false) {
+  const headers = new Headers((opts && opts.headers) || {});
+  if (AUTH_TOKEN && !headers.has('Authorization')) headers.set('Authorization', `Bearer ${AUTH_TOKEN}`);
+  const res = await fetch(API + path, { ...(opts || {}), headers });
+  if (res.status === 401 && !attemptedRefresh) {
+    await bootstrapAuth(true);
+    return api(path, opts, true);
+  }
+  if (!res.ok) {
+    const err = new Error(`${res.status} ${res.statusText}`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
+}
+
+async function logoutAuth() {
+  const token = AUTH_TOKEN;
+  if (!token) return;
+  try {
+    await fetch(API + '/auth/logout', {
+      method:'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch {}
+  AUTH_TOKEN = '';
+  clearAuthToken();
+}
+
+async function fetchResearchWorkspaces() {
+  const rows = await api('/research/workspaces');
+  return indexResearchWorkspaceStore(rows);
+}
+
+async function fetchResearchWorkspace(geoKey) {
+  const row = await api(`/research/workspaces/${geoKey}`);
+  return normalizeResearchRecord(row);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -168,8 +620,8 @@ function MiniBar({items, height=120}) {
   const mx = Math.max(...items.map(d => Math.abs(d.value)));
   return <div style={{display:'flex',alignItems:'flex-end',gap:'.375rem',height:`${height}px`,margin:'1rem 0'}}>
     {items.map((it,i) => <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center'}}>
-      <div style={{width:'100%',background:'linear-gradient(to top,var(--accent),rgba(34,211,238,.6))',borderRadius:'.25rem .25rem 0 0',minHeight:'3px',height:`${(Math.abs(it.value)/mx)*100}%`,transition:'height .3s'}} title={`${it.label}: ${it.value}`}></div>
-      <div style={{fontSize:'.65rem',marginTop:'.375rem',color:'var(--text2)',fontFamily:"'JetBrains Mono',monospace",textAlign:'center'}}>{it.label}</div>
+      <div style={{width:'100%',background:'var(--accent)',minHeight:'3px',height:`${(Math.abs(it.value)/mx)*100}%`,transition:'height .3s'}} title={`${it.label}: ${it.value}`}></div>
+      <div style={{fontSize:'.65rem',marginTop:'.375rem',color:'var(--text2)',fontFamily:"'IBM Plex Mono',monospace",textAlign:'center'}}>{it.label}</div>
     </div>)}
   </div>;
 }
@@ -215,9 +667,328 @@ function CountyPicker({value, onChange, placeholder='Select county...'}) {
        : filtered.length === 0 ? <div style={{padding:'.75rem',textAlign:'center',color:'var(--text2)',fontSize:'.85rem'}}>No results</div>
        : filtered.slice(0,60).map(c => <div key={c.fips} className="dd-item" onClick={()=>{onChange(c.fips);setOpen(false);setQ('');}}>
           <span style={{color:'var(--text1)'}}>{c.name}</span>, <span style={{color:'var(--text2)'}}>{c.state}</span>
-          <span style={{float:'right',fontSize:'.7rem',color:'var(--text2)',fontFamily:"'JetBrains Mono',monospace"}}>{c.fips}</span>
+          <span style={{float:'right',fontSize:'.7rem',color:'var(--text2)',fontFamily:"'IBM Plex Mono',monospace"}}>{c.fips}</span>
         </div>)}
     </div>}
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// MISSION / START HERE
+// ═══════════════════════════════════════════════════════════════════
+function MissionPage({nav}) {
+  const workflow = [
+    {id:'01', title:'Discover the market', body:'Scan county-level signals and recent movers to see where valuation and rent trends are diverging.'},
+    {id:'02', title:'Test assumptions', body:'Run scenario and backtest modules before making commitments, so decisions are based on modeled outcomes.'},
+    {id:'03', title:'Focus your research', body:'Build watchlists, notes, and screens that keep attention on the highest-conviction locations.'},
+    {id:'04', title:'Build portfolio context', body:'Track exposure, risk concentration, and fair-value gaps across target holdings and active assets.'},
+  ];
+
+  const toolGuide = [
+    {tool:'Dashboard', why:'Find where market conditions are shifting right now.', next:'Review top movers and open 2-3 counties.'},
+    {tool:'Screener', why:'Filter opportunities instead of reviewing every county manually.', next:'Set minimum cap rate and access score.'},
+    {tool:'County Detail', why:'Inspect valuation logic, history, sensitivity, and notes in one place.', next:'Open one county and record your thesis.'},
+    {tool:'Watchlist', why:'Monitor high-priority counties over time.', next:'Track valuation and rent changes week to week.'},
+    {tool:'Comparison', why:'Evaluate counties side by side before committing capital.', next:'Compare at least 3 target counties.'},
+    {tool:'Research Workspace', why:'Capture thesis, status, conviction, and notes in one research system.', next:'Create workspace records for top 10 counties.'},
+    {tool:'Scenario Lab', why:'Test upside/downside by changing growth, risk, and rent assumptions.', next:'Run best/base/worst-case scenarios.'},
+    {tool:'Backtest', why:'Check whether your screening logic would have worked historically.', next:'Backtest your screen over 3-5 years.'},
+    {tool:'Portfolio', why:'Quantify concentration risk and unrealized value gaps.', next:'Create one model portfolio and assess HHI.'},
+    {tool:'Data Sources', why:'Verify where every input comes from and how often it updates.', next:'Confirm cadence before presenting outputs.'},
+  ];
+
+  return <div>
+    <div className="card hero-card">
+      <div className="hero-k">Altira Platform</div>
+      <h2 className="hero-h">{APP_NAME}</h2>
+      <p className="hero-p">{APP_TAGLINE}. This product combines property-level discovery, institutional research workflows, and investment modeling so users can move from raw data to decisions without juggling disconnected tools.</p>
+      <div className="hero-actions">
+        <button className="btn btn-p" onClick={()=>nav(PG.DASH)}>Open Market Dashboard</button>
+        <button className="btn" onClick={()=>nav(PG.ABOUT)}>Read About</button>
+      </div>
+    </div>
+
+    <div className="workflow-grid">
+      {workflow.map(step => <div key={step.id} className="workflow-card">
+        <div className="workflow-step">Step {step.id}</div>
+        <div className="workflow-h">{step.title}</div>
+        <div className="workflow-p">{step.body}</div>
+      </div>)}
+    </div>
+
+    <div className="card" style={{marginBottom:'.8rem'}}>
+      <h3 style={{fontSize:'.94rem',marginBottom:'.55rem'}}>Why Each Tool Exists</h3>
+      <div className="why-grid">
+        {toolGuide.map(item => <div key={item.tool} className="why-row">
+          <div className="why-tool">{item.tool}</div>
+          <div className="why-why">{item.why}</div>
+          <div className="why-next">{item.next}</div>
+        </div>)}
+      </div>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// ABOUT
+// ═══════════════════════════════════════════════════════════════════
+function AboutPage() {
+  return <div>
+    <div className="card hero-card" style={{marginBottom:'.8rem'}}>
+      <div className="hero-k">About</div>
+      <h2 className="hero-h">{APP_NAME}</h2>
+      <p className="hero-p">Altira Atlas is an agriculture intelligence platform built to connect land economics, market research, and investment workflows. It is designed for users who need clarity, defensible assumptions, and faster decisions.</p>
+    </div>
+
+    <div className="about-grid">
+      <div className="about-block">
+        <div className="about-h">Why This Project</div>
+        <div className="about-p">Key farmland decisions still require pulling fragmented data from USDA datasets, macro feeds, county research, and manual spreadsheets. Altira Atlas exists to reduce that friction and make analysis repeatable.</div>
+      </div>
+      <div className="about-block">
+        <div className="about-h">What It Merges</div>
+        <div className="about-p">The platform blends financial modeling, property intelligence, market research, and deal workflow support into one operating system so users can move from discovery to diligence without context switching.</div>
+      </div>
+      <div className="about-block">
+        <div className="about-h">Who It Serves</div>
+        <div className="about-p">Independent operators, advisors, lenders, investment teams, and analysts who need a rigorous way to research counties, test assumptions, and track conviction over time.</div>
+      </div>
+      <div className="about-block">
+        <div className="about-h">Current Product Scope</div>
+        <div className="about-p">Current releases prioritize research and modeling workflows first: market scanning, county deep dives, scenarios, and backtests. Transaction and network layers are planned after this foundation is stable.</div>
+      </div>
+    </div>
+
+    <div className="card">
+      <h3 style={{fontSize:'.94rem',marginBottom:'.45rem'}}>Product Description</h3>
+      <p className="about-p" style={{marginBottom:'.5rem'}}>Altira Atlas helps users answer three practical questions: where should we focus, what could happen under different conditions, and which opportunities are strong enough to act on. The design emphasizes data density, traceability, and fast iteration.</p>
+      <p className="about-p">For a standalone company projects homepage concept, open <a className="lnk" href="/altiratech-home" target="_blank" rel="noreferrer">/altiratech-home</a>.</p>
+    </div>
+  </div>;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RESEARCH WORKSPACE
+// ═══════════════════════════════════════════════════════════════════
+function ResearchWorkspace({addToast, nav, params, researchUser}) {
+  const [store, setStore] = React.useState({});
+  const [storeLoading, setStoreLoading] = React.useState(true);
+  const [storeErr, setStoreErr] = React.useState(null);
+  const [counties, setCounties] = React.useState([]);
+  const [county, setCounty] = React.useState(params?.fips || '');
+  const [thesis, setThesis] = React.useState('');
+  const [tagsInput, setTagsInput] = React.useState('');
+  const [status, setStatus] = React.useState('exploring');
+  const [conviction, setConviction] = React.useState(50);
+  const [noteInput, setNoteInput] = React.useState('');
+
+  const statuses = [
+    { value:'exploring', label:'Exploring' },
+    { value:'watch', label:'Watchlist Candidate' },
+    { value:'diligence', label:'In Diligence' },
+    { value:'high_conviction', label:'High Conviction' },
+    { value:'pass', label:'Pass' },
+    { value:'active', label:'Active Position' },
+  ];
+
+  const loadStore = React.useCallback(() => {
+    setStoreLoading(true);
+    setStoreErr(null);
+    fetchResearchWorkspaces()
+      .then(setStore)
+      .catch((e) => {
+        setStore({});
+        setStoreErr(e.message || 'Failed to load research workspaces');
+      })
+      .finally(() => setStoreLoading(false));
+  }, []);
+
+  React.useEffect(() => {
+    api('/counties').then(setCounties).catch(()=>setCounties([]));
+    loadStore();
+  }, [loadStore, researchUser]);
+
+  React.useEffect(() => { if (params?.fips) setCounty(params.fips); }, [params?.fips]);
+
+  React.useEffect(() => {
+    if (!county) {
+      const base = defaultResearchRecord();
+      setThesis(base.thesis);
+      setTagsInput('');
+      setStatus(base.status);
+      setConviction(base.conviction);
+      setNoteInput('');
+      return;
+    }
+    const rec = normalizeResearchRecord(store[county]);
+    setThesis(rec.thesis);
+    setTagsInput(rec.tags.join(', '));
+    setStatus(rec.status);
+    setConviction(rec.conviction);
+    setNoteInput('');
+  }, [county, store]);
+
+  const countyMap = React.useMemo(
+    () => Object.fromEntries(counties.map(c => [c.fips, `${c.name}, ${c.state}`])),
+    [counties]
+  );
+
+  const active = county ? normalizeResearchRecord(store[county]) : defaultResearchRecord();
+
+  const saveWorkspace = async () => {
+    if (!county) { addToast(toast('Select a county first', 'err')); return; }
+    try {
+      const updated = await api(`/research/workspaces/${county}`, {
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          thesis: thesis.trim(),
+          tags: parseTags(tagsInput),
+          status,
+          conviction: Number(conviction),
+        }),
+      });
+      setStore(prev => ({ ...prev, [county]: normalizeResearchRecord(updated) }));
+      addToast(toast('Research workspace saved', 'ok'));
+    } catch (e) {
+      addToast(toast('Save failed', 'err'));
+    }
+  };
+
+  const addNote = async () => {
+    if (!county) { addToast(toast('Select a county first', 'err')); return; }
+    if (!noteInput.trim()) return;
+    try {
+      const note = await api(`/research/workspaces/${county}/notes`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ content: noteInput.trim() }),
+      });
+      setStore(prev => {
+        const current = normalizeResearchRecord(prev[county]);
+        return {
+          ...prev,
+          [county]: normalizeResearchRecord({
+            ...current,
+            notes: [note, ...current.notes],
+            updated_at: note.created_at || current.updated_at,
+          }),
+        };
+      });
+      setNoteInput('');
+      addToast(toast('Research note added', 'ok'));
+    } catch (e) {
+      addToast(toast('Save failed', 'err'));
+    }
+  };
+
+  const deleteNote = async (id) => {
+    if (!county) return;
+    try {
+      await api(`/research/notes/${id}`, { method:'DELETE' });
+      setStore(prev => {
+        const current = normalizeResearchRecord(prev[county]);
+        return {
+          ...prev,
+          [county]: normalizeResearchRecord({
+            ...current,
+            notes: current.notes.filter(n => n.id !== id),
+            updated_at: new Date().toISOString(),
+          }),
+        };
+      });
+    } catch (e) {
+      addToast(toast('Delete failed', 'err'));
+    }
+  };
+
+  const records = React.useMemo(() => Object.entries(store)
+    .map(([fips, rec]) => ({ fips, ...normalizeResearchRecord(rec) }))
+    .filter(r => r.thesis || r.tags.length || r.notes.length || r.scenario_packs.length)
+    .sort((a,b) => (b.updated_at || '').localeCompare(a.updated_at || '')), [store]);
+
+  return <div>
+    {storeErr && <ErrBox title="Research Sync Error" msg={storeErr} onRetry={loadStore}/>}
+    <div className="rw-grid">
+      <div className="card">
+        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Research Workspace</h3>
+        <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} placeholder="Select county for research workspace..."/></div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
+          <div className="fg"><label>Decision Status</label>
+            <select value={status} onChange={e=>setStatus(e.target.value)}>
+              {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+            </select>
+          </div>
+          <div className="fg"><label>Conviction Score: {Math.round(conviction)}/100</label>
+            <input type="range" min="0" max="100" step="1" value={conviction} onChange={e=>setConviction(Number(e.target.value))}/>
+          </div>
+        </div>
+        <div className="fg"><label>Tags (comma separated)</label><input type="text" value={tagsInput} onChange={e=>setTagsInput(e.target.value)} placeholder="water, cap-rate, soils, logistics"/></div>
+        <div className="fg"><label>Thesis</label>
+          <textarea value={thesis} onChange={e=>setThesis(e.target.value)} placeholder="Why this county matters, what must be true, and what could break..." style={{minHeight:'92px'}}/>
+        </div>
+        <div className="rw-actions">
+          <button className="btn btn-p" onClick={saveWorkspace}>Save Workspace</button>
+          {county && <button className="btn" onClick={()=>nav(PG.SCENARIO, {fips: county})}>Open Scenario Lab</button>}
+        </div>
+      </div>
+
+      <div className="card">
+        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Workspace Snapshot</h3>
+        <div className="sc"><div className="sc-l">Session User</div><div className="sc-v" style={{fontSize:'.82rem'}}>{researchUser || '--'}</div></div>
+        <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{county ? (countyMap[county] || county) : 'None'}</div></div>
+        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
+        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Research Notes</div><div className="sc-v">{active.notes.length}</div></div>
+        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Last Update</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.updated_at ? new Date(active.updated_at).toLocaleString() : '--'}</div></div>
+      </div>
+    </div>
+
+    <div className="card" style={{marginBottom:'.7rem'}}>
+      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Research Notes</h3>
+      <div style={{display:'flex',gap:'.45rem',marginBottom:'.6rem'}}>
+        <textarea value={noteInput} onChange={e=>setNoteInput(e.target.value)} placeholder="Add diligence note, risk, catalyst, or follow-up question..." style={{minHeight:'68px',resize:'vertical'}}/>
+        <button className="btn btn-p" onClick={addNote}>Add Note</button>
+      </div>
+      {active.notes.length === 0 ? <div className="empty"><p>No notes yet</p></div>
+      : active.notes.map(n => <div className="rw-note" key={n.id}>
+        <div style={{flex:1}}>
+          <div className="rw-meta">{new Date(n.created_at).toLocaleString()}</div>
+          <div style={{fontSize:'.82rem'}}>{n.content}</div>
+        </div>
+        <button className="btn btn-sm btn-d" onClick={()=>deleteNote(n.id)}>Del</button>
+      </div>)}
+    </div>
+
+    <div className="card" style={{marginBottom:'.7rem'}}>
+      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Saved Scenario Packs For Selected County</h3>
+      {active.scenario_packs.length === 0 ? <div className="empty"><p>No scenario packs saved yet. Save one in Scenario Lab.</p></div>
+      : active.scenario_packs.map(pack => <div key={pack.id} className="pack-row">
+        <div>
+          <div style={{fontSize:'.8rem',fontWeight:600,marginBottom:'.18rem'}}>{pack.name}</div>
+          <div style={{fontSize:'.74rem',color:'var(--text2)'}}>Risk Premium {pack.risk_premium}% | Growth {pack.growth_rate}% | Rent Shock {pack.rent_shock}%</div>
+        </div>
+        <button className="btn btn-sm" onClick={()=>nav(PG.SCENARIO,{fips:county,pack_id:pack.id})}>Open</button>
+      </div>)}
+    </div>
+
+    <div className="card">
+      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Research Queue</h3>
+      {storeLoading && records.length === 0 ? <Loading/>
+      : records.length === 0 ? <div className="empty"><p>No saved research workspaces yet.</p></div>
+      : <STable
+          cols={[
+            {key:'county',label:'County'},
+            {key:'status',label:'Status'},
+            {key:'conviction',label:'Conviction',num:true,fmt:v=>`${Math.round(v)}/100`},
+            {key:'tags',label:'Tags',fmt:v=>v.join(', ') || '--'},
+            {key:'scenario_packs',label:'Packs',num:true,fmt:v=>v.length},
+            {key:'notes',label:'Notes',num:true,fmt:v=>v.length},
+            {key:'updated_at',label:'Updated',fmt:v=>v?new Date(v).toLocaleDateString():'--'},
+          ]}
+          rows={records.map(r => ({...r, county: countyMap[r.fips] || r.fips}))}
+          onRow={r=>setCounty(r.fips)}
+        />}
+    </div>
   </div>;
 }
 
@@ -303,10 +1074,10 @@ function Dashboard({addToast, nav}) {
         {capBuckets.length > 0 ? <MiniBar items={capBuckets} height={100}/> : <div className="empty"><p>No data</p></div>}
         <div style={{marginTop:'1rem'}}>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.5rem',fontSize:'.8rem'}}>
-            <div><span style={{color:'var(--text2)'}}>P25:</span> <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{$pct(cap.p25)}</span></div>
-            <div><span style={{color:'var(--text2)'}}>P75:</span> <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{$pct(cap.p75)}</span></div>
-            <div><span style={{color:'var(--text2)'}}>Mean:</span> <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{$pct(cap.mean)}</span></div>
-            <div><span style={{color:'var(--text2)'}}>Median:</span> <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{$pct(cap.median)}</span></div>
+            <div><span style={{color:'var(--text2)'}}>P25:</span> <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{$pct(cap.p25)}</span></div>
+            <div><span style={{color:'var(--text2)'}}>P75:</span> <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{$pct(cap.p75)}</span></div>
+            <div><span style={{color:'var(--text2)'}}>Mean:</span> <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{$pct(cap.mean)}</span></div>
+            <div><span style={{color:'var(--text2)'}}>Median:</span> <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{$pct(cap.median)}</span></div>
           </div>
         </div>
       </div>
@@ -505,9 +1276,9 @@ function CountyPage({addToast, params, nav}) {
 
     <div className="sg">
       <div className="sc"><div className="sc-l">Cash Rent</div><div className="sc-v">{$$(m.cash_rent)}</div><Spark data={rentHist}/></div>
-      <div className="sc"><div className="sc-l">Land Value</div><div className="sc-v">{$$(m.benchmark_value)}</div><Spark data={valHist} color="#34d399"/></div>
-      <div className="sc"><div className="sc-l">Fair Value</div><div className="sc-v">{$$(m.fair_value)}</div><Spark data={fvHist} color="#a78bfa"/></div>
-      <div className="sc"><div className="sc-l">Implied Cap Rate</div><div className="sc-v">{$pct(m.implied_cap_rate)}</div><Spark data={capHist} color="#fbbf24"/></div>
+      <div className="sc"><div className="sc-l">Land Value</div><div className="sc-v">{$$(m.benchmark_value)}</div><Spark data={valHist} color="#63d2ff"/></div>
+      <div className="sc"><div className="sc-l">Fair Value</div><div className="sc-v">{$$(m.fair_value)}</div><Spark data={fvHist} color="#ffb100"/></div>
+      <div className="sc"><div className="sc-l">Implied Cap Rate</div><div className="sc-v">{$pct(m.implied_cap_rate)}</div><Spark data={capHist} color="#f25f1e"/></div>
     </div>
     <div className="sg">
       <div className="sc"><div className="sc-l">NOI / Acre</div><div className="sc-v">{$$(m.noi_per_acre)}</div></div>
@@ -594,8 +1365,8 @@ function CountyPage({addToast, params, nav}) {
           <textarea placeholder="Add a research note..." value={newNote} onChange={e=>setNewNote(e.target.value)} style={{flex:1,minHeight:'60px',resize:'vertical'}}/>
           <button className="btn btn-p" onClick={addNote} style={{alignSelf:'flex-end'}}>Save</button>
         </div>
-        {notes.length === 0 ? <div className="empty"><div className="empty-ic">📝</div><p>No notes yet</p></div>
-         : notes.map(n => <div key={n.id} style={{background:'var(--bg2)',padding:'.875rem',borderRadius:'.375rem',marginBottom:'.5rem',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+        {notes.length === 0 ? <div className="empty"><p>No notes yet</p></div>
+         : notes.map(n => <div key={n.id} style={{background:'var(--bg2)',padding:'.875rem',marginBottom:'.5rem',display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
           <div style={{flex:1}}><div style={{fontSize:'.7rem',color:'var(--text2)',marginBottom:'.25rem'}}>{n.created_at}</div><div style={{fontSize:'.85rem'}}>{n.content}</div></div>
           <button className="btn btn-sm btn-d" onClick={()=>delNote(n.id)} style={{marginLeft:'.75rem',flexShrink:0}}>Del</button>
         </div>)}
@@ -628,7 +1399,7 @@ function Watchlist({addToast, nav}) {
 
   if (loading) return <Loading/>;
   if (err) return <ErrBox title="Watchlist Error" msg={err} onRetry={load}/>;
-  if (items.length === 0) return <div className="empty"><div className="empty-ic">👀</div><h3>Watchlist empty</h3><p>Add counties from the screener or county detail page</p></div>;
+  if (items.length === 0) return <div className="empty"><h3>Watchlist empty</h3><p>Add counties from the screener or county detail page</p></div>;
 
   return <div className="card">
     <h3 style={{fontSize:'1rem',marginBottom:'1rem'}}>Watched Counties ({items.length})</h3>
@@ -640,7 +1411,7 @@ function Watchlist({addToast, nav}) {
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
             <div>
               <div style={{fontWeight:600,marginBottom:'.25rem'}}>{w.county}, {w.state}</div>
-              <div style={{fontSize:'.8rem',color:'var(--text2)',fontFamily:"'JetBrains Mono',monospace"}}>
+              <div style={{fontSize:'.8rem',color:'var(--text2)',fontFamily:"'IBM Plex Mono',monospace"}}>
                 Cap: {$pct(m.implied_cap_rate)} | Rent: {$$(m.cash_rent)} | FV: {$$(m.fair_value)} | Access: {$(m.access_score,1)}
               </div>
             </div>
@@ -716,13 +1487,50 @@ function Comparison({addToast, params}) {
 // ═══════════════════════════════════════════════════════════════════
 // SCENARIO LAB
 // ═══════════════════════════════════════════════════════════════════
-function ScenarioLab({addToast}) {
-  const [county, setCounty] = React.useState('');
+function ScenarioLab({addToast, params, researchUser}) {
+  const [county, setCounty] = React.useState(params?.fips || '');
   const [rp, setRp] = React.useState(4.5);
   const [gr, setGr] = React.useState(2.0);
   const [rs, setRs] = React.useState(0);
   const [result, setResult] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
+  const [packName, setPackName] = React.useState('');
+  const [packs, setPacks] = React.useState([]);
+  const [packsLoading, setPacksLoading] = React.useState(false);
+  const navPackRef = React.useRef('');
+
+  const loadPacks = React.useCallback((fips) => {
+    if (!fips) {
+      setPacks([]);
+      return;
+    }
+    setPacksLoading(true);
+    fetchResearchWorkspace(fips)
+      .then((workspace) => {
+        const ordered = [...workspace.scenario_packs].sort((a,b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+        setPacks(ordered);
+      })
+      .catch(() => {
+        setPacks([]);
+        addToast(toast('Failed to load saved packs', 'err'));
+      })
+      .finally(() => setPacksLoading(false));
+  }, [addToast]);
+
+  React.useEffect(() => { loadPacks(county); }, [county, loadPacks, researchUser]);
+  React.useEffect(() => { navPackRef.current = ''; }, [county]);
+  React.useEffect(() => { if (params?.fips) setCounty(params.fips); }, [params?.fips]);
+  React.useEffect(() => {
+    const packId = params?.pack_id ? String(params.pack_id) : '';
+    if (!packId || !county || navPackRef.current === packId) return;
+    const found = packs.find(p => String(p.id) === packId);
+    if (!found) return;
+    setRp(Number(found.risk_premium));
+    setGr(Number(found.growth_rate));
+    setRs(Number(found.rent_shock));
+    navPackRef.current = String(packId);
+    addToast(toast(`Loaded pack: ${found.name}`, 'ok'));
+  }, [params?.pack_id, county, packs]);
 
   const run = async () => {
     if (!county) { addToast(toast('Select a county','err')); return; }
@@ -747,16 +1555,78 @@ function ScenarioLab({addToast}) {
   const base = result?.base;
   const bm = base?.metrics || {};
 
+  const savePack = async () => {
+    if (!county) { addToast(toast('Select a county first', 'err')); return; }
+    const name = packName.trim() || `Pack ${new Date().toLocaleDateString('en-US')}`;
+    try {
+      const created = await api(`/research/workspaces/${county}/scenario-packs`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name,
+          risk_premium: Number(rp),
+          growth_rate: Number(gr),
+          rent_shock: Number(rs),
+        }),
+      });
+      setPackName('');
+      setPacks(prev => [created, ...prev].sort((a,b) => (b.updated_at || '').localeCompare(a.updated_at || '')));
+      addToast(toast('Scenario pack saved', 'ok'));
+    } catch (e) {
+      addToast(toast('Failed to save pack', 'err'));
+    }
+  };
+
+  const loadPack = (pack) => {
+    setRp(Number(pack.risk_premium));
+    setGr(Number(pack.growth_rate));
+    setRs(Number(pack.rent_shock));
+    addToast(toast(`Loaded pack: ${pack.name}`, 'ok'));
+  };
+
+  const deletePack = async (packId) => {
+    if (!county) return;
+    try {
+      await api(`/research/scenario-packs/${packId}`, { method:'DELETE' });
+      setPacks(prev => prev.filter(p => p.id !== packId));
+      addToast(toast('Scenario pack removed', 'ok'));
+    } catch (e) {
+      addToast(toast('Delete failed', 'err'));
+    }
+  };
+
   return <div>
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Scenario Parameters</h3>
       <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty}/></div>
+      <div style={{fontSize:'.7rem',color:'var(--text2)',marginBottom:'.5rem'}}>Session User: {researchUser || '--'}</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
         <div className="fg"><label>Risk Premium: {rp}%</label><input type="range" min="2" max="8" step="0.25" value={rp} onChange={e=>setRp(parseFloat(e.target.value))}/></div>
         <div className="fg"><label>Growth Rate: {gr}%</label><input type="range" min="0" max="5" step="0.25" value={gr} onChange={e=>setGr(parseFloat(e.target.value))}/></div>
         <div className="fg"><label>Rent Shock: {rs}%</label><input type="range" min="-20" max="20" step="1" value={rs} onChange={e=>setRs(parseFloat(e.target.value))}/></div>
       </div>
-      <button className="btn btn-p" onClick={run} disabled={loading}>{loading?'Running...':'Run Scenario'}</button>
+      <div className="rw-actions">
+        <button className="btn btn-p" onClick={run} disabled={loading}>{loading?'Running...':'Run Scenario'}</button>
+      </div>
+      <div style={{marginTop:'.7rem',borderTop:'1px solid var(--line)',paddingTop:'.6rem'}}>
+        <h4 style={{fontSize:'.78rem',marginBottom:'.45rem',letterSpacing:'.12em',textTransform:'uppercase'}}>Saved Scenario Packs</h4>
+        <div style={{display:'flex',gap:'.45rem',marginBottom:'.5rem'}}>
+          <input type="text" value={packName} onChange={e=>setPackName(e.target.value)} placeholder="Pack name (e.g., High-Risk Upside)"/>
+          <button className="btn btn-sm" onClick={savePack}>Save Pack</button>
+        </div>
+        {packsLoading ? <div style={{fontSize:'.75rem',color:'var(--text2)'}}>Loading saved packs...</div>
+        : packs.length === 0 ? <div style={{fontSize:'.75rem',color:'var(--text2)'}}>No saved packs for selected county.</div>
+        : packs.map(pack => <div className="pack-row" key={pack.id}>
+          <div>
+            <div style={{fontSize:'.76rem',fontWeight:600,marginBottom:'.16rem'}}>{pack.name}</div>
+            <div style={{fontSize:'.72rem',color:'var(--text2)'}}>RP {pack.risk_premium}% | G {pack.growth_rate}% | Shock {pack.rent_shock}%</div>
+          </div>
+          <div style={{display:'flex',gap:'.35rem'}}>
+            <button className="btn btn-sm" onClick={()=>loadPack(pack)}>Load</button>
+            <button className="btn btn-sm btn-d" onClick={()=>deletePack(pack.id)}>Del</button>
+          </div>
+        </div>)}
+      </div>
     </div>
 
     {base && <div>
@@ -932,10 +1802,10 @@ function PortfolioPage({addToast}) {
           {detail.state_exposure && <div>
             {Object.entries(detail.state_exposure).sort((a,b)=>b[1]-a[1]).map(([st,pct])=><div key={st} style={{display:'flex',alignItems:'center',gap:'.5rem',marginBottom:'.5rem'}}>
               <span style={{width:'30px',fontWeight:600,fontSize:'.85rem'}}>{st}</span>
-              <div style={{flex:1,background:'var(--bg2)',borderRadius:'.25rem',height:'20px',overflow:'hidden'}}>
-                <div style={{width:`${pct}%`,height:'100%',background:'linear-gradient(90deg,var(--accent),rgba(34,211,238,.5))',borderRadius:'.25rem',transition:'width .3s'}}></div>
+              <div style={{flex:1,background:'var(--bg2)',height:'20px',overflow:'hidden'}}>
+                <div style={{width:`${pct}%`,height:'100%',background:'var(--accent-2)',transition:'width .3s'}}></div>
               </div>
-              <span style={{fontSize:'.8rem',fontFamily:"'JetBrains Mono',monospace",color:'var(--text2)',width:'45px',textAlign:'right'}}>{pct}%</span>
+              <span style={{fontSize:'.8rem',fontFamily:"'IBM Plex Mono',monospace",color:'var(--text2)',width:'45px',textAlign:'right'}}>{pct}%</span>
             </div>)}
           </div>}
           <div style={{marginTop:'1rem'}}>
@@ -943,7 +1813,7 @@ function PortfolioPage({addToast}) {
             {detail.weighted_metrics && <div style={{fontSize:'.8rem'}}>
               {Object.entries(detail.weighted_metrics).slice(0,6).map(([k,v])=><div key={k} style={{display:'flex',justifyContent:'space-between',padding:'.25rem 0',borderBottom:'1px solid var(--border)'}}>
                 <span style={{color:'var(--text2)',textTransform:'capitalize'}}>{k.replace(/_/g,' ')}</span>
-                <span style={{fontFamily:"'JetBrains Mono',monospace"}}>{$(v,2)}</span>
+                <span style={{fontFamily:"'IBM Plex Mono',monospace"}}>{$(v,2)}</span>
               </div>)}
             </div>}
           </div>
@@ -963,7 +1833,7 @@ function ScreensMgr({addToast}) {
   if (loading) return <Loading/>;
   return <div className="card">
     <h3 style={{fontSize:'1rem',marginBottom:'1rem'}}>Saved Screens</h3>
-    {screens.length === 0 ? <div className="empty"><div className="empty-ic">💾</div><p>No screens saved. Create one from the Screener page.</p></div>
+    {screens.length === 0 ? <div className="empty"><p>No screens saved. Create one from the Screener page.</p></div>
      : <div style={{display:'grid',gap:'.75rem'}}>
         {screens.map(s => <div key={s.id} className="sc">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -988,11 +1858,11 @@ function AssumptionsMgr({addToast}) {
   if (loading) return <Loading/>;
   return <div className="card">
     <h3 style={{fontSize:'1rem',marginBottom:'1rem'}}>Assumption Sets</h3>
-    {sets.length === 0 ? <div className="empty"><div className="empty-ic">⚙️</div><p>No assumption sets defined</p></div>
+    {sets.length === 0 ? <div className="empty"><p>No assumption sets defined</p></div>
      : <div style={{display:'grid',gap:'.75rem'}}>
         {sets.map(s => <div key={s.id} className="sc">
           <div style={{fontWeight:600,marginBottom:'.25rem'}}>{s.name} <span className="badge badge-b">v{s.version}</span></div>
-          {s.params && <div style={{fontSize:'.8rem',color:'var(--text2)',fontFamily:"'JetBrains Mono',monospace"}}>
+          {s.params && <div style={{fontSize:'.8rem',color:'var(--text2)',fontFamily:"'IBM Plex Mono',monospace"}}>
             {Object.entries(s.params).map(([k,v])=><div key={k}>{k}: {typeof v==='number'?v.toFixed(4):String(v)}</div>)}
           </div>}
         </div>)}
@@ -1030,7 +1900,7 @@ function SourcesPage({addToast}) {
     <div className="card">
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Metric Catalog ({metrics.length} metrics)</h3>
       <div style={{display:'grid',gap:'.5rem'}}>
-        {metrics.map(m => <div key={m.key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.625rem',background:'var(--bg2)',borderRadius:'.375rem'}}>
+        {metrics.map(m => <div key={m.key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.625rem',background:'var(--bg2)'}}>
           <div><div style={{fontWeight:500,fontSize:'.85rem'}}>{m.label}</div><div style={{fontSize:'.75rem',color:'var(--text2)'}}>{m.description}</div></div>
           <div style={{textAlign:'right',flexShrink:0}}>
             <span className="badge badge-b">{m.unit||'--'}</span>
@@ -1064,7 +1934,10 @@ function CmdPalette({isOpen, onClose, nav}) {
   if (!isOpen) return null;
 
   const pages = [
+    {name:'Mission',desc:'What this platform does and why',action:()=>nav(PG.MISSION)},
+    {name:'About',desc:'Project purpose and scope',action:()=>nav(PG.ABOUT)},
     {name:'Dashboard',desc:'Market overview',action:()=>nav(PG.DASH)},
+    {name:'Research Workspace',desc:'Capture thesis, tags, and conviction',action:()=>nav(PG.RESEARCH)},
     {name:'Screener',desc:'Filter counties',action:()=>nav(PG.SCREEN)},
     {name:'Watchlist',desc:'Tracked counties',action:()=>nav(PG.WATCH)},
     {name:'Comparison',desc:'Side-by-side',action:()=>nav(PG.COMPARE)},
@@ -1107,10 +1980,40 @@ function CmdPalette({isOpen, onClose, nav}) {
 // APP
 // ═══════════════════════════════════════════════════════════════════
 function App() {
-  const [pg, setPg] = React.useState(PG.DASH);
+  const [pg, setPg] = React.useState(PG.MISSION);
   const [pp, setPp] = React.useState({});
   const [toasts, setToasts] = React.useState([]);
   const [cmdOpen, setCmdOpen] = React.useState(false);
+  const [legacyRedirectNote, setLegacyRedirectNote] = React.useState(false);
+  const [authReady, setAuthReady] = React.useState(false);
+  const [authState, setAuthState] = React.useState(null);
+  const [authErr, setAuthErr] = React.useState('');
+
+  const runAuthBootstrap = React.useCallback(async (force = false) => {
+    setAuthReady(false);
+    setAuthErr('');
+    try {
+      const data = await bootstrapAuth(force);
+      setAuthState(data || null);
+      return data;
+    } catch (e) {
+      setAuthState(null);
+      setAuthErr(e?.message || 'Authentication bootstrap failed');
+      throw e;
+    } finally {
+      setAuthReady(true);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('legacy_redirect') !== '1') return;
+    setLegacyRedirectNote(true);
+    url.searchParams.delete('legacy_redirect');
+    const q = url.searchParams.toString();
+    const cleaned = `${url.pathname}${q ? `?${q}` : ''}${url.hash || ''}`;
+    window.history.replaceState({}, '', cleaned);
+  }, []);
 
   React.useEffect(() => {
     const h = e => { if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();setCmdOpen(o=>!o);} };
@@ -1124,10 +2027,29 @@ function App() {
     return ()=>clearTimeout(t);
   }, [toasts]);
 
+  React.useEffect(() => {
+    runAuthBootstrap().catch(() => {});
+  }, [runAuthBootstrap]);
+
   const addToast = t => setToasts(ts=>[...ts,t]);
   const nav = (p,params={}) => { setPg(p); setPp(params); setCmdOpen(false); };
+  const researchUser = authState?.user_key || '';
+  const authSource = authState?.source || '--';
+
+  const resetSession = async () => {
+    await logoutAuth();
+    try {
+      await runAuthBootstrap(true);
+      addToast(toast('Session reset', 'ok'));
+    } catch {
+      addToast(toast('Session reset failed', 'err'));
+    }
+  };
 
   const titles = {
+    [PG.MISSION]:'Mission',
+    [PG.ABOUT]:'About',
+    [PG.RESEARCH]:'Research Workspace',
     [PG.DASH]:'Dashboard',[PG.SCREEN]:'Screener',[PG.COUNTY]:'County Detail',
     [PG.WATCH]:'Watchlist',[PG.COMPARE]:'Comparison',[PG.SCENARIO]:'Scenario Lab',
     [PG.BACKTEST]:'Backtest',[PG.PORTFOLIO]:'Portfolio',[PG.SCREENS_MGR]:'Screens',
@@ -1135,13 +2057,24 @@ function App() {
   };
 
   const render = () => {
+    if (!authReady) return <Loading/>;
+    if (authErr) return (
+      <ErrBox
+        title="Authentication Error"
+        msg={`${authErr}. Retry to continue.`}
+        onRetry={() => runAuthBootstrap(true).catch(() => {})}
+      />
+    );
     switch(pg) {
+      case PG.MISSION: return <MissionPage nav={nav}/>;
+      case PG.ABOUT: return <AboutPage/>;
+      case PG.RESEARCH: return <ResearchWorkspace addToast={addToast} nav={nav} params={pp} researchUser={researchUser}/>;
       case PG.DASH: return <Dashboard addToast={addToast} nav={nav}/>;
       case PG.SCREEN: return <Screener addToast={addToast} nav={nav}/>;
       case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav}/>;
       case PG.WATCH: return <Watchlist addToast={addToast} nav={nav}/>;
       case PG.COMPARE: return <Comparison addToast={addToast} params={pp}/>;
-      case PG.SCENARIO: return <ScenarioLab addToast={addToast}/>;
+      case PG.SCENARIO: return <ScenarioLab addToast={addToast} params={pp} researchUser={researchUser}/>;
       case PG.BACKTEST: return <Backtest addToast={addToast}/>;
       case PG.PORTFOLIO: return <PortfolioPage addToast={addToast}/>;
       case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast}/>;
@@ -1152,27 +2085,32 @@ function App() {
   };
 
   const navItems = [
+    {section:'Start Here', items:[
+      {id:PG.MISSION,label:'Mission',icon:'MN'},
+      {id:PG.ABOUT,label:'About',icon:'AB'},
+    ]},
     {section:'Analysis', items:[
-      {id:PG.DASH,label:'Dashboard',icon:'📊'},
-      {id:PG.SCREEN,label:'Screener',icon:'🔍'},
-      {id:PG.WATCH,label:'Watchlist',icon:'👀'},
-      {id:PG.COMPARE,label:'Comparison',icon:'⚖️'},
+      {id:PG.DASH,label:'Dashboard',icon:'D1'},
+      {id:PG.SCREEN,label:'Screener',icon:'SC'},
+      {id:PG.WATCH,label:'Watchlist',icon:'WL'},
+      {id:PG.COMPARE,label:'Comparison',icon:'CP'},
     ]},
     {section:'Research', items:[
-      {id:PG.SCENARIO,label:'Scenario Lab',icon:'🧪'},
-      {id:PG.BACKTEST,label:'Backtest',icon:'📈'},
-      {id:PG.PORTFOLIO,label:'Portfolio',icon:'💼'},
+      {id:PG.RESEARCH,label:'Workspace',icon:'RW'},
+      {id:PG.SCENARIO,label:'Scenario Lab',icon:'SL'},
+      {id:PG.BACKTEST,label:'Backtest',icon:'BT'},
+      {id:PG.PORTFOLIO,label:'Portfolio',icon:'PF'},
     ]},
     {section:'Settings', items:[
-      {id:PG.SCREENS_MGR,label:'Screens',icon:'💾'},
-      {id:PG.ASSUME,label:'Assumptions',icon:'⚙️'},
-      {id:PG.SOURCES,label:'Data Sources',icon:'🗃️'},
+      {id:PG.SCREENS_MGR,label:'Screens',icon:'SM'},
+      {id:PG.ASSUME,label:'Assumptions',icon:'AS'},
+      {id:PG.SOURCES,label:'Data Sources',icon:'DS'},
     ]},
   ];
 
   return <div className="app">
     <div className="side">
-      <div className="side-logo">⚘ FARMLAND</div>
+      <div className="side-logo">{APP_NAME}</div>
       {navItems.map(sec => <div key={sec.section} className="nav-sec">
         <div className="nav-lbl">{sec.section}</div>
         {sec.items.map(it => <div key={it.id} className={`nav-i ${pg===it.id?'act':''}`} onClick={()=>nav(it.id)}>
@@ -1182,11 +2120,21 @@ function App() {
     </div>
     <div className="main">
       <div className="top">
-        <div className="top-t">{titles[pg]||'Farmland Terminal'}</div>
+        <div className="top-t">{titles[pg]||APP_NAME}</div>
         <div className="top-a">
-          <button className="btn btn-sm" onClick={()=>setCmdOpen(true)} title="Cmd+K">⌘K Search</button>
+          <button className="btn btn-sm" disabled title={`Identity source: ${authSource}`}>
+            User: {researchUser || '--'}
+          </button>
+          <button className="btn btn-sm" onClick={resetSession} disabled={!authReady} title="Reset auth session">
+            Reset Session
+          </button>
+          <button className="btn btn-sm" onClick={()=>setCmdOpen(true)} title="Cmd+K">Cmd+K Search</button>
         </div>
       </div>
+      {legacyRedirectNote && <div className="legacy-b">
+        <span>Legacy domain migrated. Canonical URL is atlas.altiratech.com.</span>
+        <button className="btn btn-sm" onClick={()=>setLegacyRedirectNote(false)}>Dismiss</button>
+      </div>}
       <div className="content">{render()}</div>
     </div>
     <CmdPalette isOpen={cmdOpen} onClose={()=>setCmdOpen(false)} nav={nav}/>
