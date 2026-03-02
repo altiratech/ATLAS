@@ -673,33 +673,21 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
   };
 }
 
-async function ensureResearchSchema(db: D1Database) {
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS research_workspaces (
-         id INTEGER PRIMARY KEY AUTOINCREMENT,
-         owner_key TEXT NOT NULL DEFAULT 'owner_default',
-         geo_key TEXT NOT NULL REFERENCES geo_county(fips),
-         thesis TEXT,
-         analysis_json TEXT,
-         tags_json TEXT,
-         status TEXT NOT NULL DEFAULT 'exploring',
-         conviction REAL NOT NULL DEFAULT 50,
-         created_at TEXT DEFAULT (datetime('now')),
-         updated_at TEXT DEFAULT (datetime('now')),
-         UNIQUE(owner_key, geo_key)
-       )`,
-    )
-    .run();
+let researchSchemaReady = false;
+let researchSchemaPromise: Promise<void> | null = null;
 
-  const workspaceCols = await db.prepare('PRAGMA table_info(research_workspaces)').all<{ name: string }>();
-  const hasOwnerKey = workspaceCols.results.some((col) => col.name === 'owner_key');
-  if (!hasOwnerKey && workspaceCols.results.length > 0) {
-    await db.prepare('PRAGMA foreign_keys=OFF').run();
-    try {
+async function getResearchWorkspaceColumns(db: D1Database): Promise<Set<string>> {
+  const cols = await db.prepare('PRAGMA table_info(research_workspaces)').all<{ name: string }>();
+  return new Set((cols.results ?? []).map((col) => col.name));
+}
+
+async function ensureResearchSchema(db: D1Database) {
+  if (researchSchemaReady) return;
+  if (!researchSchemaPromise) {
+    researchSchemaPromise = (async () => {
       await db
         .prepare(
-          `CREATE TABLE IF NOT EXISTS research_workspaces_new (
+          `CREATE TABLE IF NOT EXISTS research_workspaces (
              id INTEGER PRIMARY KEY AUTOINCREMENT,
              owner_key TEXT NOT NULL DEFAULT 'owner_default',
              geo_key TEXT NOT NULL REFERENCES geo_county(fips),
@@ -714,105 +702,142 @@ async function ensureResearchSchema(db: D1Database) {
            )`,
         )
         .run();
+
+      let workspaceCols = await getResearchWorkspaceColumns(db);
+      if (!workspaceCols.has('owner_key') && workspaceCols.size > 0) {
+        await db.prepare('PRAGMA foreign_keys=OFF').run();
+        try {
+          await db
+            .prepare(
+              `CREATE TABLE IF NOT EXISTS research_workspaces_new (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 owner_key TEXT NOT NULL DEFAULT 'owner_default',
+                 geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+                 thesis TEXT,
+                 analysis_json TEXT,
+                 tags_json TEXT,
+                 status TEXT NOT NULL DEFAULT 'exploring',
+                 conviction REAL NOT NULL DEFAULT 50,
+                 created_at TEXT DEFAULT (datetime('now')),
+                 updated_at TEXT DEFAULT (datetime('now')),
+                 UNIQUE(owner_key, geo_key)
+               )`,
+            )
+            .run();
+          await db
+            .prepare(
+              `INSERT INTO research_workspaces_new (
+                 id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
+               )
+               SELECT
+                 id,
+                 'owner_default',
+                 geo_key,
+                 thesis,
+                 NULL,
+                 tags_json,
+                 COALESCE(status, 'exploring'),
+                 COALESCE(conviction, 50),
+                 created_at,
+                 updated_at
+               FROM research_workspaces`,
+            )
+            .run();
+          await db.prepare('DROP TABLE research_workspaces').run();
+          await db.prepare('ALTER TABLE research_workspaces_new RENAME TO research_workspaces').run();
+        } finally {
+          await db.prepare('PRAGMA foreign_keys=ON').run();
+        }
+        workspaceCols = await getResearchWorkspaceColumns(db);
+      }
+
+      if (!workspaceCols.has('analysis_json')) {
+        try {
+          await db.prepare('ALTER TABLE research_workspaces ADD COLUMN analysis_json TEXT').run();
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (!msg.toLowerCase().includes('duplicate column')) {
+            throw error;
+          }
+        }
+      }
+
       await db
         .prepare(
-           `INSERT INTO research_workspaces_new (
-             id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
-           )
-           SELECT
-             id,
-             'owner_default',
-             geo_key,
-             thesis,
-             NULL,
-             tags_json,
-             COALESCE(status, 'exploring'),
-             COALESCE(conviction, 50),
-             created_at,
-             updated_at
-           FROM research_workspaces`,
+          `CREATE TABLE IF NOT EXISTS research_notes (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+             content TEXT NOT NULL,
+             created_at TEXT DEFAULT (datetime('now'))
+           )`,
         )
         .run();
-      await db.prepare('DROP TABLE research_workspaces').run();
-      await db.prepare('ALTER TABLE research_workspaces_new RENAME TO research_workspaces').run();
-    } finally {
-      await db.prepare('PRAGMA foreign_keys=ON').run();
-    }
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS research_scenario_packs (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+             name TEXT NOT NULL,
+             risk_premium REAL NOT NULL,
+             growth_rate REAL NOT NULL,
+             rent_shock REAL NOT NULL,
+             created_at TEXT DEFAULT (datetime('now')),
+             updated_at TEXT DEFAULT (datetime('now'))
+           )`,
+        )
+        .run();
+
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_research_workspace_geo ON research_workspaces(geo_key)').run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_research_workspace_owner ON research_workspaces(owner_key)').run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_research_notes_workspace ON research_notes(workspace_id, created_at DESC)').run();
+      await db
+        .prepare('CREATE INDEX IF NOT EXISTS ix_research_scenario_packs_workspace ON research_scenario_packs(workspace_id, updated_at DESC)')
+        .run();
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS research_scenario_runs (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+             scenario_name TEXT,
+             as_of_date TEXT NOT NULL,
+             assumptions_json TEXT NOT NULL,
+             comparison_json TEXT NOT NULL,
+             created_at TEXT DEFAULT (datetime('now'))
+           )`,
+        )
+        .run();
+      await db
+        .prepare('CREATE INDEX IF NOT EXISTS ix_research_scenario_runs_workspace ON research_scenario_runs(workspace_id, created_at DESC)')
+        .run();
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS auth_sessions (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             user_key TEXT NOT NULL,
+             token_hash TEXT NOT NULL UNIQUE,
+             identity_source TEXT NOT NULL DEFAULT 'session',
+             created_at TEXT DEFAULT (datetime('now')),
+             last_seen_at TEXT DEFAULT (datetime('now')),
+             expires_at TEXT NOT NULL,
+             revoked_at TEXT,
+             user_agent TEXT,
+             ip_hash TEXT
+           )`,
+        )
+        .run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_auth_sessions_user ON auth_sessions(user_key)').run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_auth_sessions_expires ON auth_sessions(expires_at)').run();
+
+      researchSchemaReady = true;
+    })().catch((error) => {
+      researchSchemaPromise = null;
+      throw error;
+    });
   }
-
-  const hasAnalysisJson = workspaceCols.results.some((col) => col.name === 'analysis_json');
-  if (!hasAnalysisJson) {
-    await db.prepare('ALTER TABLE research_workspaces ADD COLUMN analysis_json TEXT').run();
-  }
-
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS research_notes (
-         id INTEGER PRIMARY KEY AUTOINCREMENT,
-         workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
-         content TEXT NOT NULL,
-         created_at TEXT DEFAULT (datetime('now'))
-       )`,
-    )
-    .run();
-
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS research_scenario_packs (
-         id INTEGER PRIMARY KEY AUTOINCREMENT,
-         workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
-         name TEXT NOT NULL,
-         risk_premium REAL NOT NULL,
-         growth_rate REAL NOT NULL,
-         rent_shock REAL NOT NULL,
-         created_at TEXT DEFAULT (datetime('now')),
-         updated_at TEXT DEFAULT (datetime('now'))
-       )`,
-    )
-    .run();
-
-  await db.prepare('CREATE INDEX IF NOT EXISTS ix_research_workspace_geo ON research_workspaces(geo_key)').run();
-  await db.prepare('CREATE INDEX IF NOT EXISTS ix_research_workspace_owner ON research_workspaces(owner_key)').run();
-  await db.prepare('CREATE INDEX IF NOT EXISTS ix_research_notes_workspace ON research_notes(workspace_id, created_at DESC)').run();
-  await db
-    .prepare('CREATE INDEX IF NOT EXISTS ix_research_scenario_packs_workspace ON research_scenario_packs(workspace_id, updated_at DESC)')
-    .run();
-
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS research_scenario_runs (
-         id INTEGER PRIMARY KEY AUTOINCREMENT,
-         workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
-         scenario_name TEXT,
-         as_of_date TEXT NOT NULL,
-         assumptions_json TEXT NOT NULL,
-         comparison_json TEXT NOT NULL,
-         created_at TEXT DEFAULT (datetime('now'))
-       )`,
-    )
-    .run();
-  await db
-    .prepare('CREATE INDEX IF NOT EXISTS ix_research_scenario_runs_workspace ON research_scenario_runs(workspace_id, created_at DESC)')
-    .run();
-
-  await db
-    .prepare(
-      `CREATE TABLE IF NOT EXISTS auth_sessions (
-         id INTEGER PRIMARY KEY AUTOINCREMENT,
-         user_key TEXT NOT NULL,
-         token_hash TEXT NOT NULL UNIQUE,
-         identity_source TEXT NOT NULL DEFAULT 'session',
-         created_at TEXT DEFAULT (datetime('now')),
-         last_seen_at TEXT DEFAULT (datetime('now')),
-         expires_at TEXT NOT NULL,
-         revoked_at TEXT,
-         user_agent TEXT,
-         ip_hash TEXT
-       )`,
-    )
-    .run();
-  await db.prepare('CREATE INDEX IF NOT EXISTS ix_auth_sessions_user ON auth_sessions(user_key)').run();
-  await db.prepare('CREATE INDEX IF NOT EXISTS ix_auth_sessions_expires ON auth_sessions(expires_at)').run();
+  await researchSchemaPromise;
 }
 
 async function ensureAgCompositeIndexSchema(db: D1Database) {
