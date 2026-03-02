@@ -9,6 +9,7 @@ __pycache__/
 # Local runtime state
 backend/farmland.db
 backend/app/farmland.db
+backend/app/farmland.db-journal
 
 # Node/Cloudflare deploy profile artifacts
 deploy/cloudflare-worker/node_modules/
