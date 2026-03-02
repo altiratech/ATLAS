@@ -1804,6 +1804,12 @@ app.get('/api/v1/debug/nass', async (c) => {
 
 app.post('/api/v1/ingest', async (c) => {
   const db = c.env.DB;
+  await ensureResearchSchema(db);
+  try {
+    await requireAuthState(c, db);
+  } catch {
+    return c.json({ error: 'Authentication required' }, 401);
+  }
   const rawStartYear = c.req.query('start_year');
   const rawEndYear = c.req.query('end_year');
   const startYear = parseOptionalYear(rawStartYear);

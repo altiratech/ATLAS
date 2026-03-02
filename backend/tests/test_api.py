@@ -286,6 +286,46 @@ class TestAuth:
         r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 401
 
+    def test_bootstrap_enforced_rejects_anon(self, monkeypatch):
+        """When ALLOW_ANON_SESSIONS=0, bootstrap without identity returns 401."""
+        import app.main as main_mod
+        monkeypatch.setattr(main_mod, "ALLOW_ANON_SESSIONS", False)
+        c = TestClient(app)
+        r = c.post("/api/v1/auth/bootstrap")
+        assert r.status_code == 401
+        assert "required" in r.json().get("detail", "").lower()
+
+    def test_bootstrap_enforced_allows_cf_access(self, monkeypatch):
+        """When ALLOW_ANON_SESSIONS=0, CF Access identity still creates a session."""
+        import app.main as main_mod
+        monkeypatch.setattr(main_mod, "ALLOW_ANON_SESSIONS", False)
+        c = TestClient(app)
+        r = c.post("/api/v1/auth/bootstrap", headers={
+            "cf-access-authenticated-user-email": "test@altiratech.com"
+        })
+        assert r.status_code == 200
+        data = r.json()
+        assert data["token"]
+        assert data["user_key"] == "test@altiratech.com"
+        assert data["source"] == "cloudflare_access"
+        assert data["is_anonymous"] is False
+
+    def test_bootstrap_enforced_allows_existing_session(self, monkeypatch):
+        """When ALLOW_ANON_SESSIONS=0, an existing valid token still works."""
+        # First create a session while anon is allowed (default)
+        c = TestClient(app)
+        session = c.post("/api/v1/auth/bootstrap").json()
+        token = session["token"]
+        # Now disable anon sessions
+        import app.main as main_mod
+        monkeypatch.setattr(main_mod, "ALLOW_ANON_SESSIONS", False)
+        # Existing token should still validate
+        r = c.post("/api/v1/auth/bootstrap", headers={
+            "Authorization": f"Bearer {token}"
+        })
+        assert r.status_code == 200
+        assert r.json()["user_key"] == session["user_key"]
+
 
 # ── Research Workspace ──────────────────────────────────────────────
 class TestResearchWorkspace:
