@@ -141,6 +141,9 @@ const NASS_SERIES: NassSeries[] = [
 const NASS_BASE = 'https://quickstats.nass.usda.gov/api/api_GET/';
 const FRED_BASE = 'https://api.stlouisfed.org/fred/series/observations';
 const AG_INDEX_TICKERS = ['DBA', 'MOO', 'CROP', 'WEAT'] as const;
+const NASS_TIMEOUT_MS = 25_000;
+const FRED_TIMEOUT_MS = 20_000;
+const YAHOO_TIMEOUT_MS = 20_000;
 
 function seriesCatalogKey(seriesKey: string, geoLevel: string): string {
   return `${seriesKey}:${geoLevel}`;
@@ -215,12 +218,27 @@ async function ensureSeriesCatalog(db: D1Database): Promise<Record<string, numbe
 
 async function fetchNass(apiKey: string, params: Record<string, string>): Promise<NassRecord[]> {
   const query = new URLSearchParams({ key: apiKey, format: 'JSON', ...params });
-  const response = await fetch(`${NASS_BASE}?${query}`);
+  const response = await fetchWithTimeout(`${NASS_BASE}?${query}`, NASS_TIMEOUT_MS);
   if (!response.ok) {
     throw new Error(`NASS API ${response.status}: ${await response.text()}`);
   }
   const payload = (await response.json()) as { data?: NassRecord[] };
   return payload.data ?? [];
+}
+
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timerId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: controller.signal });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeoutMs}ms`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timerId);
+  }
 }
 
 async function upsertDataPoint(
@@ -337,7 +355,7 @@ async function fetchFredAnnualAvg(
     frequency: 'a',
     aggregation_method: 'avg',
   });
-  const response = await fetch(`${FRED_BASE}?${query}`);
+  const response = await fetchWithTimeout(`${FRED_BASE}?${query}`, FRED_TIMEOUT_MS);
   if (!response.ok) {
     throw new Error(`FRED API ${response.status}: ${await response.text()}`);
   }
@@ -432,7 +450,7 @@ async function ensureAgCompositeIndexTable(db: D1Database): Promise<void> {
 
 async function fetchYahooDailyClose(symbol: string, range = '3y'): Promise<Array<{ date: string; close: number }>> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, YAHOO_TIMEOUT_MS);
   if (!response.ok) {
     throw new Error(`Yahoo Finance ${symbol} ${response.status}: ${await response.text()}`);
   }
