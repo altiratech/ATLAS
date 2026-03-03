@@ -13,6 +13,7 @@ Cloudflare Workers deployment profile for Altira Atlas.
 - Domain migration check: `./scripts/check-domain-migration.sh`
 - Production smoke checks: `./scripts/smoke-release.sh`
 - Top-20 backfill: `./scripts/backfill-top20.sh [start_year] [end_year] [chunk_size]`
+- Bulk NASS backfill (official file download): `node ./scripts/backfill-nass-bulk.mjs --start-year 2005 --end-year 2026`
 
 ## Production Backfill Setup
 1. Configure an ingest admin secret on the Worker (never commit this in `wrangler.toml`):
@@ -26,6 +27,17 @@ Cloudflare Workers deployment profile for Altira Atlas.
    - `ATLAS_INGEST_ADMIN_TOKEN=\"<token>\" ATLAS_CF_ACCESS_CLIENT_ID=\"<id>\" ATLAS_CF_ACCESS_CLIENT_SECRET=\"<secret>\" ATLAS_BACKFILL_STATES=\"IA,IL,IN\" ./scripts/backfill-top20.sh 2005 2026 1`
 6. Recommended default is `chunk_size=1` plus state-by-state orchestration (script now calls one state per request) to avoid long-run request failures.
 7. Backfill script now has automatic fallback: if `state+year` NASS ingest fails, it retries that same state/year one series at a time (`nass_series=...`).
+
+## Bulk Baseline Backfill (Recommended First Pass)
+Use the dedicated bulk workflow to populate historical baseline from official USDA files, then keep API ingest for incremental updates.
+
+1. Trigger workflow: `Actions` -> `Backfill NASS Bulk Baseline` -> `Run workflow`.
+2. Defaults auto-discover latest NASS bulk files from `https://www.nass.usda.gov/datasets/`:
+   - `qs.crops_<stamp>.txt.gz`
+   - `qs.economics_<stamp>.txt.gz`
+3. Optional explicit URLs can be supplied via workflow inputs (`crops_url`, `economics_url`).
+4. Bulk loader writes through `/api/v1/ingest/bulk` using existing auth headers (`ATLAS_INGEST_ADMIN_TOKEN` and optional Cloudflare Access service token headers).
+5. Keep `Backfill Top-20 Atlas Data` for targeted API-driven deltas and retries, not first-time historical baseline.
 
 ## Ingest Endpoint Auth Modes
 - Session mode (existing): `Authorization: Bearer <atlas_session_token>`

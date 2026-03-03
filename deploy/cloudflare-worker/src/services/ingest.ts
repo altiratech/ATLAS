@@ -30,6 +30,14 @@ interface IngestResult {
   errors: string[];
 }
 
+export interface BulkDataPointInput {
+  seriesKey: string;
+  geoLevel: 'county' | 'state' | 'national';
+  geoKey: string;
+  asOfDate: string;
+  value: number;
+}
+
 interface NassRecord {
   state_alpha: string;
   county_code: string;
@@ -564,6 +572,54 @@ async function logFreshness(db: D1Database, source: string, ingestResult: Ingest
       }),
     )
     .run();
+}
+
+export async function ingestBulkDataPoints(
+  rawEnv: RawEnv,
+  rows: BulkDataPointInput[],
+  source = 'USDA-NASS-BULK',
+): Promise<IngestResult> {
+  const result: IngestResult = {
+    source,
+    inserted: 0,
+    skipped: 0,
+    errors: [],
+  };
+
+  if (!rows.length) {
+    await logFreshness(rawEnv.DB, source, result);
+    return result;
+  }
+
+  const catalog = await ensureSeriesCatalog(rawEnv.DB);
+  for (const row of rows) {
+    const value = Number(row.value);
+    if (!Number.isFinite(value)) {
+      result.errors.push(
+        `invalid_value/${row.seriesKey}/${row.geoLevel}/${row.geoKey}/${row.asOfDate}`,
+      );
+      continue;
+    }
+
+    const seriesId = catalog[seriesCatalogKey(row.seriesKey, row.geoLevel)];
+    if (!seriesId) {
+      result.errors.push(`unknown_series/${row.seriesKey}:${row.geoLevel}`);
+      continue;
+    }
+
+    try {
+      const changed = await upsertDataPoint(rawEnv.DB, seriesId, row.geoKey, row.asOfDate, value);
+      if (changed) result.inserted += 1;
+      else result.skipped += 1;
+    } catch (error: any) {
+      result.errors.push(
+        `write_error/${row.seriesKey}/${row.geoLevel}/${row.geoKey}/${row.asOfDate}: ${error.message}`,
+      );
+    }
+  }
+
+  await logFreshness(rawEnv.DB, source, result);
+  return result;
 }
 
 export async function runIngestion(

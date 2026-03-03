@@ -1,0 +1,78 @@
+name: Backfill NASS Bulk Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: First year to ingest (YYYY)
+        required: true
+        default: '2005'
+      end_year:
+        description: Last year to ingest (YYYY)
+        required: true
+        default: '2026'
+      states_csv:
+        description: Comma-separated state list
+        required: true
+        default: 'IA,IL,IN,NE,KS,MN,OH,WI,MO,SD,ND,TX,CA,WA,OR,ID,MT,CO,MI,PA'
+      batch_size:
+        description: Bulk rows per API batch (max 1000)
+        required: true
+        default: '500'
+      run_macro:
+        description: Run macro pass (FRED + ag index) after bulk rows
+        required: true
+        default: 'true'
+      include_crops:
+        description: Process NASS crops bulk file
+        required: true
+        default: 'true'
+      include_economics:
+        description: Process NASS economics bulk file
+        required: true
+        default: 'true'
+      base_url:
+        description: Atlas API base URL
+        required: true
+        default: 'https://atlas.altiratech.com'
+      crops_url:
+        description: Optional explicit crops URL (blank = auto-discover latest)
+        required: false
+        default: ''
+      economics_url:
+        description: Optional explicit economics URL (blank = auto-discover latest)
+        required: false
+        default: ''
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run NASS bulk backfill
+        working-directory: deploy/cloudflare-worker
+        env:
+          ATLAS_INGEST_ADMIN_TOKEN: ${{ secrets.ATLAS_INGEST_ADMIN_TOKEN }}
+          ATLAS_CF_ACCESS_CLIENT_ID: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_ID }}
+          ATLAS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_SECRET }}
+          NASS_CROPS_URL: ${{ inputs.crops_url }}
+          NASS_ECONOMICS_URL: ${{ inputs.economics_url }}
+        run: |
+          set -euo pipefail
+          node ./scripts/backfill-nass-bulk.mjs \
+            --start-year "${{ inputs.start_year }}" \
+            --end-year "${{ inputs.end_year }}" \
+            --states "${{ inputs.states_csv }}" \
+            --batch-size "${{ inputs.batch_size }}" \
+            --run-macro "${{ inputs.run_macro }}" \
+            --include-crops "${{ inputs.include_crops }}" \
+            --include-economics "${{ inputs.include_economics }}" \
+            --base-url "${{ inputs.base_url }}"

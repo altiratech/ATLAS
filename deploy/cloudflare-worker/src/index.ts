@@ -22,7 +22,7 @@ import {
   getAllCounties,
   getCounty,
 } from './db/queries';
-import { runIngestion, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
+import { runIngestion, ingestBulkDataPoints, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
 
@@ -2554,6 +2554,94 @@ app.get('/api/v1/debug/nass', async (c) => {
     url_without_key: url.replace(nassKey, 'REDACTED'),
     record_count: resp.ok ? (JSON.parse(body).data?.length ?? 0) : null,
     response: resp.ok ? JSON.parse(body).data?.slice(0, 3) : JSON.parse(body),
+  });
+});
+
+type BulkIngestRowPayload = {
+  series_key?: string;
+  geo_level?: string;
+  geo_key?: string;
+  as_of_date?: string;
+  value?: number | string;
+};
+
+app.post('/api/v1/ingest/bulk', async (c) => {
+  const db = c.env.DB;
+  const authMode = hasValidIngestAdminToken(c) ? 'ingest_admin_token' : 'session';
+  if (authMode === 'session') {
+    const auth = await requireAuthOrError(c, db);
+    if (auth instanceof Response) return auth;
+  }
+
+  let payload: { source?: string; rows?: BulkIngestRowPayload[] };
+  try {
+    payload = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body.' }, 400);
+  }
+
+  const rawRows = Array.isArray(payload?.rows) ? payload.rows : [];
+  if (!rawRows.length) {
+    return c.json({ error: 'rows is required and must contain at least one row.' }, 400);
+  }
+  if (rawRows.length > 1000) {
+    return c.json({ error: 'rows exceeds max batch size (1000).' }, 400);
+  }
+
+  const allowedSeries = new Set<string>([...NASS_SERIES_KEYS, 'corn_price']);
+  const allowedGeoLevels = new Set(['county', 'state', 'national']);
+  const normalizedRows: Array<{
+    seriesKey: string;
+    geoLevel: 'county' | 'state' | 'national';
+    geoKey: string;
+    asOfDate: string;
+    value: number;
+  }> = [];
+
+  for (let i = 0; i < rawRows.length; i += 1) {
+    const row = rawRows[i] ?? {};
+    const seriesKey = (row.series_key ?? '').trim().toLowerCase();
+    const geoLevel = (row.geo_level ?? '').trim().toLowerCase();
+    const geoKey = (row.geo_key ?? '').trim().toUpperCase();
+    const asOfDate = (row.as_of_date ?? '').trim();
+    const value = Number(row.value);
+
+    if (!allowedSeries.has(seriesKey)) {
+      return c.json({ error: `rows[${i}].series_key is invalid.` }, 400);
+    }
+    if (!allowedGeoLevels.has(geoLevel)) {
+      return c.json({ error: `rows[${i}].geo_level is invalid.` }, 400);
+    }
+    if (!geoKey || geoKey.length > 16) {
+      return c.json({ error: `rows[${i}].geo_key is invalid.` }, 400);
+    }
+    if (!/^\d{4}$/.test(asOfDate)) {
+      return c.json({ error: `rows[${i}].as_of_date must be YYYY.` }, 400);
+    }
+    if (!Number.isFinite(value)) {
+      return c.json({ error: `rows[${i}].value must be numeric.` }, 400);
+    }
+
+    normalizedRows.push({
+      seriesKey,
+      geoLevel: geoLevel as 'county' | 'state' | 'national',
+      geoKey,
+      asOfDate,
+      value,
+    });
+  }
+
+  const source = (payload?.source ?? 'USDA-NASS-BULK').trim() || 'USDA-NASS-BULK';
+  const result = await ingestBulkDataPoints(
+    { DB: db, FRED_API_KEY: c.env.FRED_API_KEY, NASS_API_KEY: c.env.NASS_API_KEY },
+    normalizedRows,
+    source,
+  );
+
+  return c.json({
+    ...result,
+    auth_mode: authMode,
+    received_rows: normalizedRows.length,
   });
 });
 
