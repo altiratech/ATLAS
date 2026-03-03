@@ -23,14 +23,19 @@ Cloudflare Workers deployment profile for Altira Atlas.
    - `ATLAS_CF_ACCESS_CLIENT_SECRET`
 4. Trigger workflow: `Actions` -> `Backfill Top-20 Atlas Data` -> `Run workflow`.
 5. Optional local operator run:
-   - `ATLAS_INGEST_ADMIN_TOKEN=\"<token>\" ATLAS_CF_ACCESS_CLIENT_ID=\"<id>\" ATLAS_CF_ACCESS_CLIENT_SECRET=\"<secret>\" ./scripts/backfill-top20.sh 2005 2026 1`
-6. Recommended default is `chunk_size=1` (year-by-year) to avoid long-run ingestion timeouts.
+   - `ATLAS_INGEST_ADMIN_TOKEN=\"<token>\" ATLAS_CF_ACCESS_CLIENT_ID=\"<id>\" ATLAS_CF_ACCESS_CLIENT_SECRET=\"<secret>\" ATLAS_BACKFILL_STATES=\"IA,IL,IN\" ./scripts/backfill-top20.sh 2005 2026 1`
+6. Recommended default is `chunk_size=1` plus state-by-state orchestration (script now calls one state per request) to avoid long-run request failures.
 
 ## Ingest Endpoint Auth Modes
 - Session mode (existing): `Authorization: Bearer <atlas_session_token>`
 - Admin mode (new): `X-Atlas-Ingest-Token: <INGEST_ADMIN_TOKEN>`
 - If the admin secret is not configured, the endpoint stays session-only.
 - If Cloudflare Access protects the hostname, include service token headers (`CF-Access-Client-Id`, `CF-Access-Client-Secret`) for automation.
+- Ingest supports optional query scoping for backfill orchestration:
+  - `states=IA,IL`
+  - `include_nass=0|1`
+  - `include_fred=0|1`
+  - `include_ag_index=0|1`
 
 ## Notes
 - Canonical project root remains `Code/active/farmland-terminal`.

@@ -76,7 +76,7 @@ interface YahooChartResponse {
   };
 }
 
-const TRACKED_STATES = [
+export const TRACKED_STATES = [
   'IA', 'IL', 'IN', 'NE', 'KS', 'MN', 'OH', 'WI', 'MO', 'SD',
   'ND', 'TX', 'CA', 'WA', 'OR', 'ID', 'MT', 'CO', 'MI', 'PA',
 ] as const;
@@ -256,6 +256,7 @@ async function ingestNass(
   catalog: Record<string, number>,
   startYear: number,
   endYear: number,
+  states: readonly string[],
 ): Promise<IngestResult> {
   const result: IngestResult = { source: 'USDA-NASS', inserted: 0, skipped: 0, errors: [] };
   const chunks = yearChunks(startYear, endYear);
@@ -264,7 +265,7 @@ async function ingestNass(
     const countySeriesId = catalog[seriesCatalogKey(series.seriesKey, 'county')];
     const stateSeriesId = catalog[seriesCatalogKey(series.seriesKey, 'state')];
 
-    for (const state of TRACKED_STATES) {
+    for (const state of states) {
       if (series.countyEnabled && countySeriesId) {
         for (const [chunkStart, chunkEnd] of chunks) {
           try {
@@ -542,7 +543,14 @@ async function logFreshness(db: D1Database, source: string, ingestResult: Ingest
 
 export async function runIngestion(
   rawEnv: RawEnv,
-  options?: { startYear?: number; endYear?: number },
+  options?: {
+    startYear?: number;
+    endYear?: number;
+    states?: string[];
+    includeNass?: boolean;
+    includeFred?: boolean;
+    includeAgIndex?: boolean;
+  },
 ): Promise<{
   nass: IngestResult;
   fred: IngestResult;
@@ -555,6 +563,10 @@ export async function runIngestion(
   const currentYear = new Date().getUTCFullYear();
   const startYear = options?.startYear ?? currentYear - 2;
   const endYear = options?.endYear ?? currentYear;
+  const selectedStates = options?.states?.length ? [...options.states] : [...TRACKED_STATES];
+  const includeNass = options?.includeNass ?? true;
+  const includeFred = options?.includeFred ?? true;
+  const includeAgIndex = options?.includeAgIndex ?? true;
 
   const [fredKey, nassKey] = await Promise.all([
     rawEnv.FRED_API_KEY.get(),
@@ -569,17 +581,28 @@ export async function runIngestion(
 
   const catalog = await ensureSeriesCatalog(env.DB);
 
-  const [nass, fred, agIndex] = await Promise.all([
-    ingestNass(env, catalog, startYear, endYear),
-    ingestFred(env, catalog, startYear, endYear),
-    ingestAgCompositeIndex(env.DB),
-  ]);
+  const emptyResult = (source: string): IngestResult => ({
+    source,
+    inserted: 0,
+    skipped: 0,
+    errors: [],
+  });
 
-  await Promise.all([
-    logFreshness(env.DB, 'USDA-NASS', nass),
-    logFreshness(env.DB, 'FRED', fred),
-    logFreshness(env.DB, 'AG-COMPOSITE', agIndex),
-  ]);
+  const nass = includeNass
+    ? await ingestNass(env, catalog, startYear, endYear, selectedStates)
+    : emptyResult('USDA-NASS');
+  const fred = includeFred
+    ? await ingestFred(env, catalog, startYear, endYear)
+    : emptyResult('FRED');
+  const agIndex = includeAgIndex
+    ? await ingestAgCompositeIndex(env.DB)
+    : emptyResult('AG-COMPOSITE');
+
+  const freshnessWrites: Promise<void>[] = [];
+  if (includeNass) freshnessWrites.push(logFreshness(env.DB, 'USDA-NASS', nass));
+  if (includeFred) freshnessWrites.push(logFreshness(env.DB, 'FRED', fred));
+  if (includeAgIndex) freshnessWrites.push(logFreshness(env.DB, 'AG-COMPOSITE', agIndex));
+  await Promise.all(freshnessWrites);
 
   return {
     nass,
@@ -587,6 +610,6 @@ export async function runIngestion(
     ag_index: agIndex,
     duration_ms: Date.now() - startedAt,
     year_range: { start: startYear, end: endYear },
-    states: TRACKED_STATES,
+    states: selectedStates,
   };
 }

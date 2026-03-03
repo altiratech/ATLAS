@@ -22,7 +22,7 @@ import {
   getAllCounties,
   getCounty,
 } from './db/queries';
-import { runIngestion } from './services/ingest';
+import { runIngestion, TRACKED_STATES } from './services/ingest';
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
 
@@ -150,6 +150,14 @@ function parseOptionalYear(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Number.parseInt(value, 10);
   return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+function parseOptionalBoolean(value: string | undefined): boolean | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
+  return undefined;
 }
 
 type CacheEntry = {
@@ -2562,9 +2570,41 @@ app.post('/api/v1/ingest', async (c) => {
   }
   const rawStartYear = c.req.query('start_year');
   const rawEndYear = c.req.query('end_year');
+  const rawStates = c.req.query('states');
+  const rawIncludeNass = c.req.query('include_nass');
+  const rawIncludeFred = c.req.query('include_fred');
+  const rawIncludeAgIndex = c.req.query('include_ag_index');
   const startYear = parseOptionalYear(rawStartYear);
   const endYear = parseOptionalYear(rawEndYear);
+  const includeNass = parseOptionalBoolean(rawIncludeNass);
+  const includeFred = parseOptionalBoolean(rawIncludeFred);
+  const includeAgIndex = parseOptionalBoolean(rawIncludeAgIndex);
   const currentYear = new Date().getFullYear();
+
+  let selectedStates: string[] | undefined;
+  if (rawStates) {
+    selectedStates = Array.from(
+      new Set(
+        rawStates
+          .split(',')
+          .map((state) => state.trim().toUpperCase())
+          .filter(Boolean),
+      ),
+    );
+    if (!selectedStates.length) {
+      return c.json({ error: 'Invalid states. Provide a comma-separated list like states=IA,IL,IN.' }, 400);
+    }
+    const trackedSet = new Set<string>(TRACKED_STATES);
+    const invalidStates = selectedStates.filter((state) => !trackedSet.has(state));
+    if (invalidStates.length) {
+      return c.json(
+        {
+          error: `Invalid states: ${invalidStates.join(', ')}. Allowed states: ${TRACKED_STATES.join(', ')}`,
+        },
+        400,
+      );
+    }
+  }
 
   if (rawStartYear && startYear === undefined) {
     return c.json({ error: 'Invalid start_year. Expected a 4-digit year.' }, 400);
@@ -2584,10 +2624,32 @@ app.post('/api/v1/ingest', async (c) => {
   if (startYear != null && endYear != null && endYear - startYear > 75) {
     return c.json({ error: 'Year range too large. Use a range of 75 years or less.' }, 400);
   }
+  if (rawIncludeNass && includeNass === undefined) {
+    return c.json({ error: 'Invalid include_nass. Use true/false or 1/0.' }, 400);
+  }
+  if (rawIncludeFred && includeFred === undefined) {
+    return c.json({ error: 'Invalid include_fred. Use true/false or 1/0.' }, 400);
+  }
+  if (rawIncludeAgIndex && includeAgIndex === undefined) {
+    return c.json({ error: 'Invalid include_ag_index. Use true/false or 1/0.' }, 400);
+  }
+  if (includeNass === false && includeFred === false && includeAgIndex === false) {
+    return c.json(
+      { error: 'At least one ingest target must be enabled (include_nass/include_fred/include_ag_index).' },
+      400,
+    );
+  }
 
   const result = await runIngestion(
     { DB: db, FRED_API_KEY: c.env.FRED_API_KEY, NASS_API_KEY: c.env.NASS_API_KEY },
-    { startYear, endYear },
+    {
+      startYear,
+      endYear,
+      states: selectedStates,
+      includeNass,
+      includeFred,
+      includeAgIndex,
+    },
   );
   return c.json({
     ...result,

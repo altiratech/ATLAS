@@ -15,6 +15,18 @@ on:
         description: Years per ingest call
         required: true
         default: '1'
+      states_csv:
+        description: Comma-separated state list (e.g. IA,IL,IN)
+        required: true
+        default: 'IA,IL,IN,NE,KS,MN,OH,WI,MO,SD,ND,TX,CA,WA,OR,ID,MT,CO,MI,PA'
+      run_macro:
+        description: Run one final national pass for FRED + ag index
+        required: true
+        default: 'true'
+      ingest_max_time:
+        description: Max seconds per ingest HTTP call
+        required: true
+        default: '900'
       base_url:
         description: Atlas API base URL
         required: true
@@ -35,5 +47,8 @@ jobs:
           ATLAS_CF_ACCESS_CLIENT_ID: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_ID }}
           ATLAS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_SECRET }}
           ATLAS_BASE_URL: ${{ inputs.base_url }}
+          ATLAS_BACKFILL_STATES: ${{ inputs.states_csv }}
+          ATLAS_BACKFILL_RUN_MACRO: ${{ inputs.run_macro }}
+          ATLAS_INGEST_MAX_TIME: ${{ inputs.ingest_max_time }}
         run: |
           ./scripts/backfill-top20.sh "${{ inputs.start_year }}" "${{ inputs.end_year }}" "${{ inputs.chunk_size }}"
