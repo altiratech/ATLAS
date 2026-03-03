@@ -11,6 +11,7 @@ Cloudflare Workers deployment profile for Altira Atlas.
 - Local dev: `npm run dev`
 - Deploy: `npm run deploy`
 - Domain migration check: `./scripts/check-domain-migration.sh`
+- Production smoke checks: `./scripts/smoke-release.sh`
 
 ## Notes
 - Canonical project root remains `Code/active/farmland-terminal`.
