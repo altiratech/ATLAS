@@ -1,6 +1,7 @@
 # Altira Atlas — Full Vision & Prioritized Implementation Roadmap
 
 **Created:** 2026-03-02 (ET)
+**Revised:** 2026-03-03 (ET) — Alternative Land Intelligence pivot (D-051)
 **Owner:** Ryan + Claude + Codex
 **Status:** Living document — canonical north star + execution priority stack
 
@@ -8,60 +9,105 @@ This document has two purposes:
 1. **Preserve the complete product vision** so it never gets lost in sprint plumbing.
 2. **Prioritize every feature** by (UX impact × implementation ease), highest first.
 
+### Revision Note (2026-03-03)
+
+Atlas scope expanded from agriculture-only to **alternative land intelligence**. Core thesis: the metric engine, z-score framework, scenario lab, and research workspace are asset-class-agnostic. Farmland remains Module 1 and the launched product. Data center sites, energy project land, timberland, and industrial land are additional asset classes that run through the same engine in future phases.
+
+Dropped: AgTech Research & Intelligence (Module 5), Farm Operations Dashboard (Module 7).
+Reframed: Deal Flow & Investment (Module 6) shifts from agtech/farmland to real estate broadly.
+Added: Data Center & Digital Infrastructure Intelligence, Energy & Renewables Land Intelligence as future modules.
+
+The near-term execution plan (3-week sprint ending 2026-03-22) is unchanged — it remains fully focused on the ag data foundation and research workflow. The pivot affects the vision and post-sprint roadmap, not the current sprint.
+
 ---
 
 ## Part 1: The North Star Vision
 
 ### What Atlas Becomes
 
-Altira Atlas is the **single pane of glass for agriculture intelligence** — a Bloomberg-grade research terminal purpose-built for farmland investors, ag lenders, agtech venture capitalists, and farm operators who need to understand where opportunity and risk are shifting across the entire agriculture ecosystem.
+Altira Atlas is the **single pane of glass for alternative land intelligence** — a Bloomberg-grade research terminal purpose-built for institutional investors, lenders, and operators who need to understand where opportunity and risk are shifting across land asset classes that are undergoing structural transition: farmland, data center sites, energy project land, timberland, and industrial land.
 
-The platform unifies data that today lives in 15+ disconnected sources (USDA-NASS, FRED, CME, county assessor records, PitchBook, Crunchbase, broker PDFs, SSURGO, NOAA) into one dense, keyboard-navigable interface with a core UX principle borrowed from CurrentMarketValuation.com: **every metric tells you where it sits relative to its own history** — z-scores, percentile gauges, standard deviation bands — so a user can glance at any number and instantly know whether it's historically cheap, expensive, or normal.
+The platform unifies data that today lives in 15+ disconnected sources (USDA-NASS, FRED, EIA, state PUCs, NREL, county assessor records, Regrid, NOAA, SSURGO) into one dense, keyboard-navigable interface with a core UX principle borrowed from CurrentMarketValuation.com: **every metric tells you where it sits relative to its own history** — z-scores, percentile gauges, standard deviation bands — so a user can glance at any number and instantly know whether it's historically cheap, expensive, or normal.
+
+The unifying insight: land is being repriced by converging forces — agricultural consolidation, data center buildout, renewable energy deployment, climate risk, and water scarcity. The same county in Iowa might be valued simultaneously as cropland, as a solar site, and as a data center campus. No platform offers that unified analytical view today.
 
 ### Who It Serves (Named Targets)
 
 Institutional decision-makers first (B2B, per D-016):
+
+**Multi-asset land investors:**
+- **Nuveen Natural Capital** (TIAA's farmland arm) — needs portfolio-level analytics, scenario modeling across farmland holdings, alternative-use optionality assessment
+- **CalPERS** (pension fund with farmland + infrastructure allocation) — needs risk metrics, diversification analytics across land types, macro context
+- **Brookfield Infrastructure Partners** — needs data center site scoring, energy project land intelligence, infrastructure pipeline analytics
+
+**Farmland-specific:**
 - **Gladstone Land** (public farmland REIT) — needs county-level cap rate screening, yield trends, fair value modeling
-- **Nuveen Natural Capital** (TIAA's farmland arm) — needs portfolio-level analytics, scenario modeling across holdings
-- **CalPERS** (pension fund with farmland allocation) — needs risk metrics, diversification analytics, macro context
-- **TPG Rise Climate** (climate-focused PE) — needs agtech deal flow intelligence, carbon/ESG overlay
 - **CoBank** (Farm Credit System) — needs lending risk metrics, county credit quality, DSCR analysis
-- **S2G Ventures** (food/ag VC) — needs agtech company database, deal flow, market sizing
+
+**Data center & digital infrastructure:**
+- **Tract** (25,000+ acre data center land platform, backed by Berkshire Partners/PSP/Permira) — needs site scoring, power/water/fiber proximity analysis, zoning intelligence
+- **Digital Realty / QTS (Blackstone)** — needs market-level supply/demand intelligence, land cost benchmarking
+- **Vantage Data Centers / EdgeCore** — needs greenfield site identification, environmental risk screening
+
+**Energy & renewables:**
+- **NextEra Energy Partners** — needs solar/wind resource scoring, interconnection queue analytics, PPA pricing benchmarks
+- **TPG Rise Climate** (climate-focused PE) — needs energy project land scoring, carbon/ESG overlay, climate risk integration
+
+**Ag lenders & advisors:**
+- Farm credit associations, regional banks with ag lending books, farmland appraisers
 
 ### The Macro Thesis Behind the Product
 
-Agriculture is entering a structural inflection:
+Land is entering a structural repricing driven by converging forces:
+
+**Agriculture transition:**
 - Family farms declining (2.02M in 2018 → 1.87M in 2025) — consolidation accelerating
 - Grain prices at historically low levels when inflation-adjusted — mean reversion likely
 - Land prices elevated relative to cash flows — cap rate compression
 - Immigration policy tightening farm labor supply — automation demand rising
-- AgTech VC investment surging — precision ag, biologicals, AI/robotics, alt protein
-- Climate volatility increasing — weather risk becoming a first-class investment variable
+
+**Data center buildout:**
+- US data center capacity growing ~25% CAGR driven by AI compute demand
+- Land requirements accelerating (hyperscale campuses need 100-500+ acres with specific power/water/fiber characteristics)
+- Farmland is being converted — Iowa, Virginia, Texas, Ohio, Georgia are prime examples of the farmland-to-data-center pipeline
+
+**Energy transition:**
+- Solar and wind projects require large contiguous land parcels (1,000+ acres for utility-scale)
+- Farmers increasingly approached for solar leases ($800-1,500/acre/year vs. $200-400 cash rent)
+- Battery storage siting expanding rapidly near urban load centers
+- Interconnection queue backlogs creating premium for pre-positioned sites
+
+**Climate & water:**
+- Climate volatility increasing — weather risk becoming a first-class investment variable across all land types
+- Water scarcity affecting both agriculture and data center cooling costs
+- Carbon credit markets creating new revenue streams for landowners
 
 The platform that provides structured intelligence across all of these dimensions captures an enormous, underserved market. Nobody is building the unified view. Everyone is a point solution.
 
 ### The Seven Modules (Complete End-State)
 
-**Module 1: Land Intelligence** (current core — expand)
-County→state→parcel land valuations, cap rates, cash rents, fair value modeling, access scoring, comparable sales, tax analysis. Z-score historical context on every metric.
+**Module 1: Land Intelligence** (current core — expand across asset classes)
+County→state→parcel land valuations, cap rates, cash rents, fair value modeling, access scoring, comparable sales, tax analysis. Z-score historical context on every metric. Phase 1 is farmland; Phase 2 adds data center site scoring (power proximity, fiber density, water access, zoning) and energy project land scoring (solar irradiance, wind capacity factor, grid interconnection, terrain).
 
-**Module 2: Commodity & Input Pricing**
-Spot/futures commodity prices, basis tracking, input costs (fertilizer, seed, fuel, chemicals), margin calculator, seasonal patterns, sensitivity analysis. Published composite agriculture index tracking 3-4 ETFs + third-party indexes.
+**Module 2: Commodity, Energy & Input Pricing**
+Agricultural: spot/futures commodity prices, basis tracking, input costs (fertilizer, seed, fuel, chemicals), margin calculator, seasonal patterns, sensitivity analysis. Published composite agriculture index tracking 3-4 ETFs + third-party indexes.
+Energy: wholesale electricity rates by ISO/RTO region, natural gas pricing, PPA pricing benchmarks by state, renewable energy credit (REC) pricing. Utility tariff comparison for data center site evaluation.
 
-**Module 3: Soil & Environmental Intelligence**
-SSURGO soil data, productivity indices, climate trends (GDD, drought, precipitation), planting decision engine, 30-year climate projections, Monte Carlo yield simulations.
+**Module 3: Soil, Environmental & Site Intelligence**
+Agricultural: SSURGO soil data, productivity indices, planting decision context.
+Cross-asset: climate trends (GDD, drought, precipitation), 30-year climate projections, flood zone mapping, seismic risk, environmental remediation history, brownfield registry. Monte Carlo yield/risk simulations applicable to any land use case.
 
-**Module 4: Water & Mineral Rights**
-Water rights registry, aquifer depletion tracking, irrigation allocations, mineral lease data, carbon credit program comparison, renewable energy lease rates.
+**Module 4: Water, Carbon & Infrastructure Intelligence**
+Water rights registry, aquifer depletion tracking, irrigation allocations, water market pricing — critical for both agriculture and data center cooling economics.
+Carbon credit program comparison, renewable energy lease rates, mineral rights data.
+Infrastructure overlay: power transmission proximity, substation capacity, fiber backbone maps, utility interconnection queue positions. These are the decisive factors for data center and energy project siting.
 
-**Module 5: AgTech Research & Intelligence**
-CB Insights-style company database (2,000+ profiles), funding history, market sizing by segment, patent landscape, adoption curves, regulatory pipeline. AI-curated news feed.
+**Module 5: News & Market Intelligence**
+AI-curated news feed covering farmland markets, data center development, energy project siting, and land transaction activity. Algorithmic scanning of AgFunderNews, utility commission filings, zoning board decisions, FERC/PUC orders, and real estate transaction databases. Claude API-powered summarization.
 
 **Module 6: Deal Flow & Investment Platform**
-Farmland deal listings, agtech startup pipeline, fund performance benchmarks, due diligence templates, portfolio analytics. Tools-first, marketplace later (per D-018).
-
-**Module 7: Farm Operations Dashboard**
-Field-level yield mapping, input tracking, crop insurance comparison, marketing plan, cash flow projections. Integration with existing FMS (Granular, Climate FieldView, JD Ops Center).
+Real estate-focused deal flow: land deal listings (farmland, data center sites, energy project land, timberland), fund performance benchmarks (NCREIF farmland, data center REITs, infrastructure funds, timberland indices), due diligence templates by asset class, portfolio analytics with geographic and asset-type diversification, private credit deal tracking.
+Tools-first, marketplace later (per D-018). No agtech startup pipeline — this is strictly real estate and land-based investment intelligence.
 
 ### Core UX Principles
 
@@ -70,6 +116,7 @@ Field-level yield mapping, input tracking, crop insurance comparison, marketing 
 3. **Charts below, stats above** — current dashboard layout stays. Charting section sits in a dedicated area below the existing stat cards.
 4. **Keyboard-first** — Cmd+K command palette, vim-like navigation, power-user shortcuts.
 5. **No fluff** — every pixel earns its place. Institutional users want density, not whitespace.
+6. **Asset-class tabs, not separate apps** — a single interface with switchable context (Farmland | Data Centers | Energy | Timberland), not multiple products.
 
 ---
 
@@ -82,7 +129,7 @@ Implementation Ease: 5 = can ship in 1-2 days, 1 = months of work + external dep
 
 ### Tier 1: Ship This Week (Score 15-25)
 
-These are the features that deliver the most visible product improvement with the least effort.
+These are the features that deliver the most visible product improvement with the least effort. All are agriculture-focused — the launched product.
 
 ---
 
@@ -170,19 +217,13 @@ UX: Makes the research workspace feel like a real analyst tool instead of a simp
 Build: Add structured fields to research workspace: thesis template (bull case / bear case / key risks / catalysts / timeline), risk flag badges, catalyst date tracking. Schema changes to research tables.
 Effort: ~2-3 days. Backend schema + API changes + frontend form updates.
 
-**3.2 — AgTech Company Database (Phase 1: Manual + YC Scrape)**
-Score: 4 × 2 = 8
-UX: First step toward CB Insights-style intelligence. Even 100-200 curated agtech profiles give the platform unique content.
-Build: New database table for agtech companies (name, sector, stage, funding, description, website). Seed with Y Combinator agtech directory scrape (~150-200 companies) + manual entry of top 50 known names. Frontend: dedicated "AgTech Intel" nav section with filterable company list.
-Effort: ~3-4 days. New schema, scraper, and frontend view.
-
-**3.3 — Sensitivity Output Quality Upgrade**
+**3.2 — Sensitivity Output Quality Upgrade**
 Score: 3 × 3 = 9
 UX: Sensitivity analysis gets plain-language interpretation ("A 1% increase in discount rate reduces fair value by 12%") and key driver ranking.
 Build: Post-process sensitivity matrix to generate ranked driver impact list and natural language summary. Frontend: add interpretation panel below the sensitivity grid.
 Effort: ~2 days. Math is simple; copy/template work.
 
-**3.4 — Saved Screen + Research Linkage**
+**3.3 — Saved Screen + Research Linkage**
 Score: 3 × 3 = 9
 UX: Users can go from screener results → open scenario for selected counties → save to research workspace in one flow.
 Build: Add "Open in Scenario Lab" and "Add to Research" actions on screener result rows. Wire navigation between views with context preservation.
@@ -208,7 +249,7 @@ Effort: ~1 week. USDA-ERS data is free but requires custom parsing.
 
 **4.3 — Interactive Maps (County Choropleth)**
 Score: 4 × 2 = 8
-UX: Maps are visually compelling and help users identify geographic patterns instantly.
+UX: Maps are visually compelling and help users identify geographic patterns instantly. Becomes critical when multiple land types are layered (farmland value + solar irradiance + data center activity in one view).
 Build: Mapbox GL JS or Deck.gl choropleth layer showing any metric by county. Color-coded by z-score (red = expensive, green = cheap).
 Effort: ~1-2 weeks. Requires GeoJSON county boundaries + map rendering integration.
 
@@ -218,64 +259,73 @@ UX: Creates a public-facing "hook" that drives awareness. People link to and ref
 Build: Dedicated public page for the Altira Agriculture Index with methodology, daily level, historical chart, component weights. SEO-optimized.
 Effort: ~1 week. Builds on the composite index from 1.5 but adds public presentation layer.
 
-**4.5 — Portfolio Analytics Upgrade (HHI, State Exposure, Unrealized P&L)**
+**4.5 — Portfolio Analytics Upgrade (HHI, Asset-Type Exposure, Unrealized P&L)**
 Score: 3 × 2 = 6
-UX: Existing portfolio manager gets institutional-grade analytics.
-Build: Enhance portfolio detail view with geographic concentration heatmap, crop exposure breakdown, yield attribution, historical portfolio value tracking.
+UX: Portfolio manager gets institutional-grade analytics. Structured for multi-asset-class diversification once additional land types are added.
+Build: Enhance portfolio detail view with geographic concentration heatmap, crop/land-type exposure breakdown, yield attribution, historical portfolio value tracking.
 Effort: ~1 week. Portfolio engine exists; this is analytics layer enhancement.
+
+**4.6 — Energy Pricing Integration (Wholesale Electricity, Natural Gas)**
+Score: 3 × 2 = 6
+UX: First non-ag data feed. Validates the multi-asset thesis with minimal integration cost.
+Build: EIA API for wholesale electricity prices by ISO/RTO region + natural gas hub pricing. Display as a new "Energy" section on the dashboard. Z-score treatment identical to ag metrics.
+Effort: ~1 week. EIA API is free and well-documented.
 
 ---
 
 ### Tier 5: Months 3-6 (Score 2-6)
 
+These items define the post-sprint expansion path. Ordered by strategic priority, not just score.
+
 ---
 
-**5.1 — SSURGO Soil Data Layer**
+**5.1 — Data Center Site Intelligence Layer**
+Score: 3 × 1 = 3 (high strategic value, high implementation cost)
+UX: The signature differentiator for the alternative land pivot. Score any US county for data center suitability.
+Build: Composite scoring model using power infrastructure (EIA transmission data, utility rate maps), fiber/backbone proximity (FCC broadband data), water availability (USGS, state water rights), seismic risk (USGS hazard maps), climate risk (cooling degree days, extreme weather frequency), and zoning friendliness. Display as a "Data Center Suitability" overlay on county detail and maps.
+Effort: ~4-6 weeks. Multiple government data APIs, each with its own format. Scoring model needs calibration against known data center locations.
+Data sources: EIA (power), FCC (broadband), USGS (water, seismic), NOAA (climate), state PUC filings (utility rates), PJM/CAISO/ERCOT (interconnection queues).
+
+**5.2 — Energy Project Land Scoring**
 Score: 3 × 1 = 3
-UX: Soil productivity data is the gold standard for farmland valuation precision.
+UX: Score any county for solar, wind, or battery storage project suitability.
+Build: Solar irradiance data (NREL NSRDB), wind capacity factor (NREL Wind Toolkit), grid interconnection queue position (ISO/RTO data), state renewable portfolio standards and incentives, PPA pricing benchmarks. Display alongside farmland metrics for landowners evaluating alternative uses.
+Effort: ~4-6 weeks. NREL data is free and high quality; ISO interconnection queue data is fragmented across regions.
+
+**5.3 — SSURGO Soil Data Layer**
+Score: 3 × 1 = 3
+UX: Soil productivity data is the gold standard for farmland valuation precision. Also relevant for solar siting (slope, drainage, flood risk).
 Build: Bulk load SSURGO/gSSURGO data for tracked counties. Compute productivity indices (CSR2, PI). Display on county detail.
 Effort: ~3-4 weeks. SSURGO data is massive and complex (spatial joins, soil map units).
 
-**5.2 — Climate Risk Layer (NOAA + PRISM)**
+**5.4 — Climate Risk Layer (NOAA + PRISM)**
 Score: 3 × 1 = 3
-UX: Climate trends become visible alongside financial metrics — critical for long-term farmland valuation.
+UX: Climate trends visible alongside financial metrics — critical for long-term valuation of any land type.
 Build: Ingest NOAA historical climate data, PRISM growing season metrics, Palmer Drought Index. Integrate into county detail as a "Climate" tab.
 Effort: ~3-4 weeks. Multiple data sources with different formats and granularity.
 
-**5.3 — Parcel-Level Data (Regrid Integration)**
+**5.5 — Parcel-Level Data (Regrid Integration)**
 Score: 4 × 1 = 4
-UX: The "Zillow for farmland" layer — actual parcel boundaries, ownership, sale history.
+UX: The "Zillow for land" layer — actual parcel boundaries, ownership, sale history. Applicable to all land types.
 Build: Regrid API integration for parcel boundaries and ownership data (per D-020). Layer own analytics on top.
 Effort: ~4-6 weeks. API integration + data licensing + frontend map rendering.
 
-**5.4 — Natural Language Query (Claude API)**
+**5.6 — Natural Language Query (Claude API)**
 Score: 5 × 1 = 5
-UX: "Show me Iowa counties where corn yields grew >3% annually and cash rents are below state median" — typed in plain English.
-Build: Claude API-powered query layer over the full data lake (per D-021). Requires solid data foundation first.
+UX: "Show me Iowa counties where corn yields grew >3% annually and solar irradiance exceeds 5.0 kWh/m²/day" — typed in plain English. The cross-asset query is the killer feature.
+Build: Claude API-powered query layer over the full data lake (per D-021). Requires solid multi-asset data foundation first.
 Effort: ~4-8 weeks. Prompt engineering, query-to-SQL translation, result formatting, guardrails.
 
-**5.5 — AgTech VC Deal Flow Database (Paid Sources)**
-Score: 3 × 1 = 3
-UX: Institutional-grade venture data — full funding rounds, cap tables, investor profiles.
-Build: Crunchbase API ($500+/mo) or PitchBook ($25K+/yr) integration. Company enrichment pipeline.
-Effort: ~4-6 weeks + ongoing data licensing costs.
-
-**5.6 — Water Rights & Carbon Credit Intelligence**
+**5.7 — Water Rights & Carbon Credit Intelligence**
 Score: 2 × 1 = 2
-UX: Niche but high-value for specialized investors (western states water, ESG/carbon).
+UX: Niche but high-value for specialized investors (western states water, ESG/carbon, data center cooling costs).
 Build: State water rights database integration, carbon credit program comparison engine.
 Effort: ~6-8 weeks. Highly fragmented data across 50 state systems.
 
-**5.7 — Farm Operations Dashboard**
-Score: 2 × 1 = 2
-UX: Serves a different user (the operator, not the investor). Important for long-term TAM expansion but not core to V1 positioning.
-Build: Field-level tracking, FMS integrations (Granular, FieldView, JD). Full operational layer.
-Effort: ~3-6 months. Requires third-party API partnerships.
-
-**5.8 — Deal Flow Marketplace**
+**5.8 — Deal Flow Platform (Real Estate Focus)**
 Score: 3 × 1 = 3
-UX: The "AngelList for agriculture" layer — listings, deal rooms, investor matching.
-Build: Marketplace infrastructure, deal listing workflow, due diligence rooms. Requires securities compliance partnership (per D-019).
+UX: Deal listings, fund performance benchmarks, due diligence templates, portfolio analytics — strictly real estate and land-based.
+Build: Marketplace infrastructure, deal listing workflow, due diligence rooms. Fund performance tracking (NCREIF Farmland, data center REITs, infrastructure indices, timberland). Requires securities compliance partnership for any transaction facilitation (per D-019).
 Effort: ~6-12 months. Platform infrastructure + legal/compliance partnership.
 
 ---
@@ -288,42 +338,53 @@ Goal: Dashboard has charts. Every metric has a z-score badge. Data covers 20 sta
 User test: "Open the dashboard and within 5 seconds understand whether farmland is cheap or expensive right now."
 
 ### Phase 1: Weeks 2-3 (Mar 9-22) — "Make It Useful"
-Ship: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3, 3.4
-Goal: Full research workflow (discover → analyze → model → export memo). News feed live. AgTech intel seeded.
+Ship: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3
+Goal: Full research workflow (discover → analyze → model → export memo). News feed live.
 User test: "Start from the screener, find an interesting county, run 3 scenarios, save a thesis, export a decision memo — all without leaving the app."
 
 ### Phase 2: Month 2 (Mar 23 - Apr 22) — "Make It Indispensable"
-Ship: 4.1, 4.2, 4.3, 4.4, 4.5
-Goal: Commodity data live. Interactive maps. Published ag index page. Portfolio analytics upgraded.
-User test: "Check commodity prices, see margin implications for a county, view geographic patterns on a map, share the ag index page with a colleague."
+Ship: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
+Goal: Commodity data live. Interactive maps. Published ag index page. Portfolio analytics upgraded. First energy data feed (wholesale electricity).
+User test: "Check commodity prices, see margin implications for a county, view geographic patterns on a map, compare energy prices across regions."
 
-### Phase 3: Months 3-6 — "Make It Dominant"
-Ship: 5.1-5.8 based on user feedback priority
-Goal: Full-stack agriculture intelligence. Soil, climate, parcels, NLP queries, deal flow.
-User test: "Ask a natural language question about any county, get a data-backed answer with sources, parcels, and climate context."
+### Phase 3: Months 3-6 — "Make It Multi-Asset"
+Ship: 5.1, 5.2, 5.3, 5.4, 5.5 in priority order based on user feedback
+Goal: Data center site intelligence and energy project land scoring live. Soil and climate layers integrated. Parcel-level data available.
+User test: "Look at an Iowa county and see its farmland value, solar lease potential, data center suitability score, and climate risk profile — all on one page."
+
+### Phase 4: Months 6-12 — "Make It the Platform"
+Ship: 5.6, 5.7, 5.8
+Goal: Natural language queries across all asset classes. Water/carbon intelligence. Deal flow platform with real listings.
+User test: "Ask a natural language question spanning multiple land types, get a data-backed answer, find relevant deal listings, and export a diligence package."
 
 ---
 
 ## Part 4: Data Source Stack
 
-### Free / Phase 1 ($0/month)
+### Free / Phase 1 ($0/month) — Agriculture Foundation
 - USDA NASS API — crop production, acreage, yields, cash rents, land values
 - FRED API — commodity prices, treasury rates, farm input costs
 - Yahoo Finance (yfinance) — ETF closes for composite index (DBA, MOO, CROP, WEAT)
-- Y Combinator directory — 150-200 agtech company profiles
 - AgFunderNews RSS — deal flow headlines
 - USDA ERS reports — farm economics context
 - NOAA API — weather/climate data
 
-### Growth / Phase 2 ($150-300/month)
+### Growth / Phase 2 ($150-300/month) — Expanding Coverage
 - IEX Cloud ($9/mo) — deeper ETF/company data
 - OpenWeatherMap ($30-50/mo) — historical weather depth
-- AngelList API ($100-300/mo) — early-stage startup data
+- EIA API (free) — wholesale electricity prices, natural gas pricing, power plant locations
 
-### Enterprise / Phase 3 ($500+/month)
-- Crunchbase API ($500+/mo) — comprehensive startup data
+### Multi-Asset / Phase 3 ($300-1,000/month) — Alternative Land Intelligence
+- NREL APIs (free) — solar irradiance (NSRDB), wind capacity factors (Wind Toolkit)
+- FCC Broadband Data (free) — fiber/backbone proximity maps
+- USGS APIs (free) — water data, seismic hazard maps
+- State PUC/ISO data (free but fragmented) — utility rates, interconnection queues
 - Regrid API ($500+/mo) — parcel boundaries and ownership
-- PitchBook ($25K+/yr) — institutional-grade cap table/deal data
+
+### Enterprise / Phase 4 ($1,000+/month)
+- PJM/CAISO/ERCOT direct feeds — real-time interconnection queue data
+- CoStar/Reonomy equivalent for comparable land sales (if needed)
+- Claude API usage costs (scales with NL query volume)
 
 ---
 
@@ -335,16 +396,19 @@ These are resolved. Don't re-litigate.
 |---|---|---|
 | Dashboard layout | Keep current. Charts go BELOW existing stat cards. | User directive |
 | UI aesthetic | Industrial terminal. Dark, sharp, dense. No SaaS softness. | D-022, D-023 |
-| Z-score framework | Apply to every metric. CurrentMarketValuation.com paradigm. | User directive |
+| Z-score framework | Apply to every metric, every asset class. CurrentMarketValuation.com paradigm. | User directive |
 | Proprietary index | Published. Start with 3-4 ETFs + third-party indexes. | User directive |
 | News curation | Algorithmic / AI-powered agentic scanning. Not editorial. | User directive |
-| AgTech data | Swim with the current — free sources first, paid when PMF proven. | User directive |
-| Target users | B2B institutional first (Gladstone, Nuveen, CalPERS, TPG, CoBank, S2G). | D-016 |
+| Data sourcing | Swim with the current — free sources first, paid when PMF proven. | User directive |
+| Target users | B2B institutional first. Multi-asset mandate investors are ideal. | D-016 |
 | GTM sequence | Data/tools → listings → transactions (Zillow evolution). | D-018 |
 | Parcel data | Partner with Regrid when ready. | D-020 |
 | AI layer | Claude API on top of complete data lake. Data first. | D-021 |
 | Auth | Session-based, CF Access in production. | D-028, D-033 |
 | Deploy | GitHub Actions CI/CD → Cloudflare Workers. | D-036 |
+| Asset-class expansion | Farmland first, then data centers, then energy, then timberland. | D-051 |
+| Dropped modules | AgTech Research & Intelligence, Farm Operations Dashboard. | D-051 |
+| Deal flow scope | Real estate and land-based investment only. No agtech startups. | D-051 |
 
 ---
 

@@ -1,6 +1,6 @@
 # Altira Atlas Canonical Scope and 3-Week Plan
 
-Last updated: 2026-03-02 (ET)
+Last updated: 2026-03-03 (ET)
 Owner: Ryan + Codex + Claude
 
 This file is the canonical scope statement for Atlas execution.
@@ -113,14 +113,20 @@ Claude:
 Codex:
 - integration, tests, commits/pushes, CI/CD deploy verification, production checks, continuity docs.
 
-## 6) Ambition After This Sprint (Still the Vision)
+## 6) Ambition After This Sprint (Revised Vision — D-051)
 
-After research/modeling V1 is stable, Atlas expands in this order:
-1. land intelligence expansion (state + county + parcel depth),
-2. pricing/input intelligence (commodity, basis, margin stack),
-3. soil/climate and environmental risk layers,
-4. agtech intelligence + capital/deal workflows,
-5. network/community and later transaction infrastructure,
-6. farm operations integration.
+After research/modeling V1 is stable, Atlas expands as an **alternative land intelligence platform**. Farmland is Module 1 (launched). The engine is asset-class-agnostic.
 
-The ambition is unchanged. The sequencing is disciplined.
+Expansion order:
+1. Land intelligence deepening (state + county + parcel depth for farmland),
+2. Pricing/input intelligence (commodity, basis, margin stack + wholesale energy pricing),
+3. Soil/climate and environmental risk layers (cross-asset: ag, solar, data center siting),
+4. **Data center site intelligence** (power proximity, fiber density, water access, zoning scoring),
+5. **Energy project land scoring** (solar irradiance, wind capacity, interconnection queue, PPA benchmarks),
+6. Deal flow platform (real estate-focused: land listings, fund benchmarks, due diligence, portfolio analytics),
+7. Parcel-level data (Regrid), natural language queries (Claude API), water/carbon intelligence.
+
+Dropped from prior vision: AgTech Research & Intelligence, Farm Operations Dashboard.
+Reframed: Deal Flow shifted from agtech/farmland to real estate broadly.
+
+The ambition expanded. The sequencing remains disciplined.

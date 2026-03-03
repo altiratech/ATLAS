@@ -1,15 +1,18 @@
-# Altira Atlas: Agriculture Intelligence Platform
+# Altira Atlas: Alternative Land Intelligence Platform
 
 **Brainstorm & Strategic Vision Document**
 **February 28, 2026**
+**Revised: March 3, 2026 — Alternative Land Intelligence Pivot (D-051)**
+
+> **Revision note:** Original brainstorm framed Atlas as agriculture-only. As of D-051, Atlas is an **alternative land intelligence platform** — farmland remains Module 1 and the launched product, but the vision extends to data center sites, energy project land, timberland, and industrial land. The core engine (z-scores, metric DAG, scenario lab, research workspace) is asset-class-agnostic. Dropped: AgTech Research & Intelligence (Module 5), Farm Operations Dashboard (Module 7). Reframed: Deal Flow shifted to real estate broadly. See `docs/ATLAS_FULL_VISION_AND_PRIORITIZED_ROADMAP.md` for the current canonical vision and prioritized stack.
 
 ---
 
 ## The One-Liner
 
-**Altira Atlas** — a centralized intelligence platform that gives farmland investors, ag professionals, and farmers real-time access to pricing, land valuation, soil data, climate modeling, deal flow, and market research across the entire agriculture ecosystem.
+**Altira Atlas** — a centralized intelligence platform that gives institutional investors, lenders, and land operators structured access to pricing, valuation, environmental risk, climate modeling, deal flow, and market research across alternative land asset classes — farmland, data center sites, energy project land, timberland, and industrial land.
 
-Think: Zillow-style farmland discovery + CB Insights-grade market research + AngelList-style capital workflows, purpose-built for agriculture.
+Think: Bloomberg terminal for land assets under structural transition — agricultural consolidation, data center buildout, and energy deployment are repricing the same counties simultaneously, and nobody offers the unified analytical view.
 
 ---
 
