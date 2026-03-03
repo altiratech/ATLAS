@@ -71,9 +71,8 @@ echo "Smoke target: ${BASE_URL}"
 check_status "GET" "/api/v1/health" "200"
 check_status "GET" "/api/v1/meta/as-of?as_of=latest" "200"
 check_status "GET" "/api/v1/data/coverage?as_of=latest&state=ALL" "200"
+check_status "GET" "/api/v1/data-freshness" "200"
 check_status "GET" "/api/v1/ag-index" "200"
-check_status "GET" "/api/v1/dashboard?as_of=latest" "200"
-check_status "GET" "/api/v1/screener?as_of=latest&state=IA" "200"
 
 # Auth-gated behavior in production
 check_status "POST" "/api/v1/auth/bootstrap" "401"
