@@ -6,6 +6,7 @@ DEFAULT_URLS=(
   "https://atlas.altiratech.com"
   "https://farmland.altiratech.com"
 )
+HEALTH_STATUS=""
 
 tmp_body="$(mktemp)"
 cleanup() {
@@ -50,12 +51,16 @@ check_contains() {
 
 pick_base_url() {
   if [[ -n "$BASE_URL" ]]; then
+    HEALTH_STATUS="$(curl -sS --connect-timeout 8 --max-time 30 -o /dev/null -w '%{http_code}' "${BASE_URL}/api/v1/health")"
     return 0
   fi
 
   for candidate in "${DEFAULT_URLS[@]}"; do
-    if curl -sS --connect-timeout 8 --max-time 30 -o /dev/null -w '%{http_code}' "${candidate}/api/v1/health" | grep -q '^200$'; then
+    local code
+    code="$(curl -sS --connect-timeout 8 --max-time 30 -o /dev/null -w '%{http_code}' "${candidate}/api/v1/health")"
+    if [[ "$code" == "200" || "$code" == "302" ]]; then
       BASE_URL="$candidate"
+      HEALTH_STATUS="$code"
       return 0
     fi
   done
@@ -66,6 +71,17 @@ pick_base_url() {
 
 pick_base_url
 echo "Smoke target: ${BASE_URL}"
+
+if [[ "${HEALTH_STATUS}" == "302" ]]; then
+  echo "Detected edge auth redirect mode (Cloudflare Access)."
+  check_status "GET" "/api/v1/health" "302"
+  check_status "POST" "/api/v1/auth/bootstrap" "302"
+  check_status "POST" "/api/v1/watchlist" "302"
+  check_status "POST" "/api/v1/ingest" "302"
+  check_status "GET" "/" "302"
+  echo "Smoke checks completed."
+  exit 0
+fi
 
 # Public read routes
 check_status "GET" "/api/v1/health" "200"
