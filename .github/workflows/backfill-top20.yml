@@ -32,6 +32,8 @@ jobs:
         working-directory: deploy/cloudflare-worker
         env:
           ATLAS_INGEST_ADMIN_TOKEN: ${{ secrets.ATLAS_INGEST_ADMIN_TOKEN }}
+          ATLAS_CF_ACCESS_CLIENT_ID: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_ID }}
+          ATLAS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_SECRET }}
           ATLAS_BASE_URL: ${{ inputs.base_url }}
         run: |
           ./scripts/backfill-top20.sh "${{ inputs.start_year }}" "${{ inputs.end_year }}" "${{ inputs.chunk_size }}"
