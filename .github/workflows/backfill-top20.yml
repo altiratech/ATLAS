@@ -27,6 +27,10 @@ on:
         description: Max seconds per ingest HTTP call
         required: true
         default: '900'
+      fallback_by_series:
+        description: Retry failed state/year NASS calls one series at a time
+        required: true
+        default: 'true'
       base_url:
         description: Atlas API base URL
         required: true
@@ -50,5 +54,6 @@ jobs:
           ATLAS_BACKFILL_STATES: ${{ inputs.states_csv }}
           ATLAS_BACKFILL_RUN_MACRO: ${{ inputs.run_macro }}
           ATLAS_INGEST_MAX_TIME: ${{ inputs.ingest_max_time }}
+          ATLAS_BACKFILL_FALLBACK_BY_SERIES: ${{ inputs.fallback_by_series }}
         run: |
           ./scripts/backfill-top20.sh "${{ inputs.start_year }}" "${{ inputs.end_year }}" "${{ inputs.chunk_size }}"

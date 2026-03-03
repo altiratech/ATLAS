@@ -137,6 +137,9 @@ const NASS_SERIES: NassSeries[] = [
     countyEnabled: true,
   },
 ];
+export const NASS_SERIES_KEYS = NASS_SERIES.map((series) => series.seriesKey) as Array<
+  (typeof NASS_SERIES)[number]['seriesKey']
+>;
 
 const NASS_BASE = 'https://quickstats.nass.usda.gov/api/api_GET/';
 const FRED_BASE = 'https://api.stlouisfed.org/fred/series/observations';
@@ -275,11 +278,15 @@ async function ingestNass(
   startYear: number,
   endYear: number,
   states: readonly string[],
+  seriesKeys?: string[],
 ): Promise<IngestResult> {
   const result: IngestResult = { source: 'USDA-NASS', inserted: 0, skipped: 0, errors: [] };
   const chunks = yearChunks(startYear, endYear);
+  const selectedSeries = seriesKeys?.length
+    ? NASS_SERIES.filter((series) => seriesKeys.includes(series.seriesKey))
+    : NASS_SERIES;
 
-  for (const series of NASS_SERIES) {
+  for (const series of selectedSeries) {
     const countySeriesId = catalog[seriesCatalogKey(series.seriesKey, 'county')];
     const stateSeriesId = catalog[seriesCatalogKey(series.seriesKey, 'state')];
 
@@ -565,6 +572,7 @@ export async function runIngestion(
     startYear?: number;
     endYear?: number;
     states?: string[];
+    nassSeriesKeys?: string[];
     includeNass?: boolean;
     includeFred?: boolean;
     includeAgIndex?: boolean;
@@ -582,6 +590,7 @@ export async function runIngestion(
   const startYear = options?.startYear ?? currentYear - 2;
   const endYear = options?.endYear ?? currentYear;
   const selectedStates = options?.states?.length ? [...options.states] : [...TRACKED_STATES];
+  const selectedNassSeries = options?.nassSeriesKeys?.length ? [...options.nassSeriesKeys] : undefined;
   const includeNass = options?.includeNass ?? true;
   const includeFred = options?.includeFred ?? true;
   const includeAgIndex = options?.includeAgIndex ?? true;
@@ -607,7 +616,7 @@ export async function runIngestion(
   });
 
   const nass = includeNass
-    ? await ingestNass(env, catalog, startYear, endYear, selectedStates)
+    ? await ingestNass(env, catalog, startYear, endYear, selectedStates, selectedNassSeries)
     : emptyResult('USDA-NASS');
   const fred = includeFred
     ? await ingestFred(env, catalog, startYear, endYear)

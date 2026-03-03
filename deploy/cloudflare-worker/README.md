@@ -25,6 +25,7 @@ Cloudflare Workers deployment profile for Altira Atlas.
 5. Optional local operator run:
    - `ATLAS_INGEST_ADMIN_TOKEN=\"<token>\" ATLAS_CF_ACCESS_CLIENT_ID=\"<id>\" ATLAS_CF_ACCESS_CLIENT_SECRET=\"<secret>\" ATLAS_BACKFILL_STATES=\"IA,IL,IN\" ./scripts/backfill-top20.sh 2005 2026 1`
 6. Recommended default is `chunk_size=1` plus state-by-state orchestration (script now calls one state per request) to avoid long-run request failures.
+7. Backfill script now has automatic fallback: if `state+year` NASS ingest fails, it retries that same state/year one series at a time (`nass_series=...`).
 
 ## Ingest Endpoint Auth Modes
 - Session mode (existing): `Authorization: Bearer <atlas_session_token>`
@@ -33,6 +34,7 @@ Cloudflare Workers deployment profile for Altira Atlas.
 - If Cloudflare Access protects the hostname, include service token headers (`CF-Access-Client-Id`, `CF-Access-Client-Secret`) for automation.
 - Ingest supports optional query scoping for backfill orchestration:
   - `states=IA,IL`
+  - `nass_series=cash_rent,corn_yield`
   - `include_nass=0|1`
   - `include_fred=0|1`
   - `include_ag_index=0|1`

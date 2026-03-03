@@ -22,7 +22,7 @@ import {
   getAllCounties,
   getCounty,
 } from './db/queries';
-import { runIngestion, TRACKED_STATES } from './services/ingest';
+import { runIngestion, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
 
@@ -2571,6 +2571,7 @@ app.post('/api/v1/ingest', async (c) => {
   const rawStartYear = c.req.query('start_year');
   const rawEndYear = c.req.query('end_year');
   const rawStates = c.req.query('states');
+  const rawNassSeries = c.req.query('nass_series');
   const rawIncludeNass = c.req.query('include_nass');
   const rawIncludeFred = c.req.query('include_fred');
   const rawIncludeAgIndex = c.req.query('include_ag_index');
@@ -2582,6 +2583,7 @@ app.post('/api/v1/ingest', async (c) => {
   const currentYear = new Date().getFullYear();
 
   let selectedStates: string[] | undefined;
+  let selectedNassSeries: string[] | undefined;
   if (rawStates) {
     selectedStates = Array.from(
       new Set(
@@ -2600,6 +2602,32 @@ app.post('/api/v1/ingest', async (c) => {
       return c.json(
         {
           error: `Invalid states: ${invalidStates.join(', ')}. Allowed states: ${TRACKED_STATES.join(', ')}`,
+        },
+        400,
+      );
+    }
+  }
+  if (rawNassSeries) {
+    selectedNassSeries = Array.from(
+      new Set(
+        rawNassSeries
+          .split(',')
+          .map((series) => series.trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    if (!selectedNassSeries.length) {
+      return c.json(
+        { error: 'Invalid nass_series. Provide a comma-separated list like nass_series=cash_rent,corn_yield.' },
+        400,
+      );
+    }
+    const allowedNassSeries = new Set<string>(NASS_SERIES_KEYS);
+    const invalidSeries = selectedNassSeries.filter((series) => !allowedNassSeries.has(series));
+    if (invalidSeries.length) {
+      return c.json(
+        {
+          error: `Invalid nass_series: ${invalidSeries.join(', ')}. Allowed series: ${NASS_SERIES_KEYS.join(', ')}`,
         },
         400,
       );
@@ -2646,6 +2674,7 @@ app.post('/api/v1/ingest', async (c) => {
       startYear,
       endYear,
       states: selectedStates,
+      nassSeriesKeys: selectedNassSeries,
       includeNass,
       includeFred,
       includeAgIndex,

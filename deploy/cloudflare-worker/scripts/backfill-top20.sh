@@ -10,6 +10,7 @@ set -euo pipefail
 #   ATLAS_BACKFILL_STATES="IA,IL,IN" (default: full top-20 list)
 #   ATLAS_BACKFILL_RUN_MACRO="1" (run national FRED + ag-index pass once at end; default 1)
 #   ATLAS_INGEST_MAX_TIME="900" (seconds per ingest HTTP call; default 900)
+#   ATLAS_BACKFILL_FALLBACK_BY_SERIES="1" (if a state/year NASS call fails, retry one series at a time; default 1)
 
 BASE_URL="${ATLAS_BASE_URL:-https://atlas.altiratech.com}"
 START_YEAR="${1:-2005}"
@@ -19,6 +20,8 @@ DEFAULT_STATES="IA,IL,IN,NE,KS,MN,OH,WI,MO,SD,ND,TX,CA,WA,OR,ID,MT,CO,MI,PA"
 STATE_LIST_CSV="${ATLAS_BACKFILL_STATES:-$DEFAULT_STATES}"
 RUN_MACRO="${ATLAS_BACKFILL_RUN_MACRO:-1}"
 INGEST_MAX_TIME="${ATLAS_INGEST_MAX_TIME:-900}"
+FALLBACK_BY_SERIES="${ATLAS_BACKFILL_FALLBACK_BY_SERIES:-1}"
+NASS_SERIES=("cash_rent" "land_value" "corn_yield" "soybean_yield" "wheat_yield")
 tmp_body="$(mktemp)"
 
 cleanup() {
@@ -101,11 +104,12 @@ call_ingest() {
     echo "error: ${label} failed with HTTP ${status_code}"
     echo "response body:"
     cat "$tmp_body"
-    exit 1
+    return 1
   fi
 
   cat "$tmp_body"
   echo
+  return 0
 }
 
 echo "Backfill target: ${BASE_URL} (${START_YEAR}-${END_YEAR}, chunk=${CHUNK_SIZE})"
@@ -113,6 +117,7 @@ echo "Auth mode: ${AUTH_MODE}"
 echo "States: ${STATES[*]}"
 echo "Per-request timeout: ${INGEST_MAX_TIME}s"
 echo "Run macro pass (FRED + ag-index): ${RUN_MACRO}"
+echo "Fallback by series on failure: ${FALLBACK_BY_SERIES}"
 
 for (( chunk_start=START_YEAR; chunk_start<=END_YEAR; chunk_start+=CHUNK_SIZE )); do
   chunk_end=$((chunk_start + CHUNK_SIZE - 1))
@@ -122,9 +127,21 @@ for (( chunk_start=START_YEAR; chunk_start<=END_YEAR; chunk_start+=CHUNK_SIZE ))
 
   for state in "${STATES[@]}"; do
     echo "→ Ingest ${state} ${chunk_start}-${chunk_end} (NASS only)"
-    call_ingest \
+    if ! call_ingest \
       "${BASE_URL}/api/v1/ingest?start_year=${chunk_start}&end_year=${chunk_end}&states=${state}&include_fred=0&include_ag_index=0" \
-      "ingest ${state} ${chunk_start}-${chunk_end}"
+      "ingest ${state} ${chunk_start}-${chunk_end}"; then
+      if [[ "$FALLBACK_BY_SERIES" == "1" || "${FALLBACK_BY_SERIES,,}" == "true" || "${FALLBACK_BY_SERIES,,}" == "yes" ]]; then
+        echo "warn: fallback to per-series retries for ${state} ${chunk_start}-${chunk_end}"
+        for series in "${NASS_SERIES[@]}"; do
+          echo "  ↳ Retry ${state} ${chunk_start}-${chunk_end} series=${series}"
+          call_ingest \
+            "${BASE_URL}/api/v1/ingest?start_year=${chunk_start}&end_year=${chunk_end}&states=${state}&nass_series=${series}&include_fred=0&include_ag_index=0" \
+            "fallback ingest ${state} ${chunk_start}-${chunk_end} series=${series}" || exit 1
+        done
+      else
+        exit 1
+      fi
+    fi
   done
 done
 
