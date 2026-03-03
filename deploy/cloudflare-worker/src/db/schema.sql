@@ -161,6 +161,25 @@ CREATE TABLE IF NOT EXISTS fallback_logs (
   details_json TEXT
 );
 
+CREATE TABLE IF NOT EXISTS ingest_progress (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source TEXT NOT NULL,
+  year INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  status TEXT NOT NULL,
+  rows_total INTEGER NOT NULL DEFAULT 0,
+  inserted INTEGER NOT NULL DEFAULT 0,
+  skipped INTEGER NOT NULL DEFAULT 0,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT,
+  meta_json TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(source, year, state)
+);
+CREATE INDEX IF NOT EXISTS ix_ingest_progress_source_year ON ingest_progress(source, year);
+CREATE INDEX IF NOT EXISTS ix_ingest_progress_status ON ingest_progress(status);
+
 -- ── Watchlist ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS watchlist_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

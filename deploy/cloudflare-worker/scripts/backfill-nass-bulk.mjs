@@ -3,6 +3,7 @@
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import readline from 'node:readline';
+import { writeFile } from 'node:fs/promises';
 
 const DEFAULT_BASE_URL = 'https://atlas.altiratech.com';
 const DEFAULT_STATES = [
@@ -388,6 +389,7 @@ async function main() {
   const includeEconomics = parseBool(cli['include-economics'], true);
   const runMacro = parseBool(cli['run-macro'], true);
   const dryRun = parseBool(cli['dry-run'], false);
+  const summaryJsonPath = (cli['summary-json'] ?? '').trim();
   const requestTimeoutMs = Number.parseInt(cli['request-timeout-ms'] ?? '120000', 10);
   const sourceName = (cli.source ?? 'USDA-NASS-BULK').trim() || 'USDA-NASS-BULK';
 
@@ -438,21 +440,29 @@ async function main() {
   await flushPending(options, batchState);
   await maybeRunMacroPass(options);
 
+  const summary = {
+    matched_rows: batchState.matchedRows,
+    sent_rows: batchState.sentRows,
+    sent_batches: batchState.sentBatches,
+    inserted: batchState.inserted,
+    skipped: batchState.skipped,
+    endpoint_errors: batchState.errorCount,
+    start_year: startYear,
+    end_year: endYear,
+    states,
+    source: sourceName,
+    include_crops: includeCrops,
+    include_economics: includeEconomics,
+    run_macro: runMacro,
+    dry_run: dryRun,
+  };
+
+  if (summaryJsonPath) {
+    await writeFile(summaryJsonPath, JSON.stringify(summary, null, 2), 'utf8');
+  }
+
   console.log('Bulk backfill completed.');
-  console.log(
-    JSON.stringify(
-      {
-        matched_rows: batchState.matchedRows,
-        sent_rows: batchState.sentRows,
-        sent_batches: batchState.sentBatches,
-        inserted: batchState.inserted,
-        skipped: batchState.skipped,
-        endpoint_errors: batchState.errorCount,
-      },
-      null,
-      2,
-    ),
-  );
+  console.log(JSON.stringify(summary, null, 2));
 }
 
 main().catch((error) => {

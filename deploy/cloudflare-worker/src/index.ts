@@ -160,6 +160,53 @@ function parseOptionalBoolean(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
+function parseOptionalInteger(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isNaN(parsed) ? undefined : parsed;
+}
+
+const INGEST_PROGRESS_STATUSES = ['pending', 'running', 'success', 'failed', 'skipped'] as const;
+type IngestProgressStatus = (typeof INGEST_PROGRESS_STATUSES)[number];
+
+interface IngestProgressRow {
+  source: string;
+  year: number;
+  state: string;
+  status: IngestProgressStatus;
+  rows_total: number;
+  inserted: number;
+  skipped: number;
+  attempts: number;
+  last_error: string | null;
+  meta_json: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+function parseStatesCsv(
+  rawStates: string | undefined,
+): { states: string[]; invalidStates: string[] } {
+  if (!rawStates) return { states: [], invalidStates: [] };
+  const states = Array.from(
+    new Set(
+      rawStates
+        .split(',')
+        .map((state) => state.trim().toUpperCase())
+        .filter(Boolean),
+    ),
+  );
+  const invalidStates = states.filter((state) => !/^[A-Z]{2}$/.test(state));
+  return { states, invalidStates };
+}
+
+function isIngestProgressStatus(value: unknown): value is IngestProgressStatus {
+  return (
+    typeof value === 'string' &&
+    (INGEST_PROGRESS_STATUSES as readonly string[]).includes(value)
+  );
+}
+
 type CacheEntry = {
   expiresAt: number;
   payload: unknown;
@@ -352,6 +399,18 @@ function hasValidIngestAdminToken(c: Context<{ Bindings: Bindings }>): boolean {
   const providedToken = (c.req.header('x-atlas-ingest-token') ?? '').trim();
   if (!providedToken) return false;
   return providedToken === configuredToken;
+}
+
+async function requireIngestAuthState(
+  c: Context<{ Bindings: Bindings }>,
+  db: D1Database,
+): Promise<{ authMode: 'ingest_admin_token' | 'session' } | Response> {
+  if (hasValidIngestAdminToken(c)) {
+    return { authMode: 'ingest_admin_token' };
+  }
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
+  return { authMode: 'session' };
 }
 
 function randomTokenHex(bytes = 32): string {
@@ -871,6 +930,44 @@ async function ensureAgCompositeIndexSchema(db: D1Database) {
     )
     .run();
   await db.prepare('CREATE INDEX IF NOT EXISTS ix_ag_composite_index_as_of ON ag_composite_index(as_of_date DESC)').run();
+}
+
+let ingestProgressSchemaReady = false;
+let ingestProgressSchemaPromise: Promise<void> | null = null;
+
+async function ensureIngestProgressSchema(db: D1Database) {
+  if (ingestProgressSchemaReady) return;
+  if (!ingestProgressSchemaPromise) {
+    ingestProgressSchemaPromise = (async () => {
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS ingest_progress (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             source TEXT NOT NULL,
+             year INTEGER NOT NULL,
+             state TEXT NOT NULL,
+             status TEXT NOT NULL,
+             rows_total INTEGER NOT NULL DEFAULT 0,
+             inserted INTEGER NOT NULL DEFAULT 0,
+             skipped INTEGER NOT NULL DEFAULT 0,
+             attempts INTEGER NOT NULL DEFAULT 0,
+             last_error TEXT,
+             meta_json TEXT,
+             created_at TEXT DEFAULT (datetime('now')),
+             updated_at TEXT DEFAULT (datetime('now')),
+             UNIQUE(source, year, state)
+           )`,
+        )
+        .run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_ingest_progress_source_year ON ingest_progress(source, year)').run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_ingest_progress_status ON ingest_progress(status)').run();
+      ingestProgressSchemaReady = true;
+    })().catch((error) => {
+      ingestProgressSchemaPromise = null;
+      throw error;
+    });
+  }
+  await ingestProgressSchemaPromise;
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -2565,13 +2662,266 @@ type BulkIngestRowPayload = {
   value?: number | string;
 };
 
+type IngestProgressUpsertPayload = {
+  source?: string;
+  year?: number | string;
+  state?: string;
+  status?: IngestProgressStatus | string;
+  rows_total?: number | string;
+  rows?: number | string;
+  inserted?: number | string;
+  skipped?: number | string;
+  increment_attempt?: boolean | string | number;
+  last_error?: string | null;
+  meta?: unknown;
+};
+
+app.get('/api/v1/ingest/progress', async (c) => {
+  const db = c.env.DB;
+  const ingestAuth = await requireIngestAuthState(c, db);
+  if (ingestAuth instanceof Response) return ingestAuth;
+  await ensureIngestProgressSchema(db);
+
+  const source = (c.req.query('source') ?? 'USDA-NASS-BULK').trim() || 'USDA-NASS-BULK';
+  const startYear = parseOptionalInteger(c.req.query('start_year'));
+  const endYear = parseOptionalInteger(c.req.query('end_year'));
+  const limitValue = parseOptionalInteger(c.req.query('limit'));
+  const limit = Math.min(Math.max(limitValue ?? 500, 1), 5000);
+  if (startYear != null && endYear != null && startYear > endYear) {
+    return c.json({ error: 'start_year must be less than or equal to end_year.' }, 400);
+  }
+
+  const { states, invalidStates } = parseStatesCsv(c.req.query('states'));
+  if (invalidStates.length) {
+    return c.json({ error: `Invalid states: ${invalidStates.join(', ')}` }, 400);
+  }
+
+  const statusesParam = c.req.query('statuses') ?? c.req.query('status') ?? '';
+  const requestedStatuses = statusesParam
+    .split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+  const invalidStatuses = requestedStatuses.filter((status) => !isIngestProgressStatus(status));
+  if (invalidStatuses.length) {
+    return c.json(
+      { error: `Invalid statuses: ${invalidStatuses.join(', ')}. Allowed: ${INGEST_PROGRESS_STATUSES.join(', ')}` },
+      400,
+    );
+  }
+
+  const whereClauses = ['source = ?'];
+  const bindings: Array<string | number> = [source];
+  if (startYear != null) {
+    whereClauses.push('year >= ?');
+    bindings.push(startYear);
+  }
+  if (endYear != null) {
+    whereClauses.push('year <= ?');
+    bindings.push(endYear);
+  }
+  if (states.length) {
+    whereClauses.push(`state IN (${states.map(() => '?').join(',')})`);
+    bindings.push(...states);
+  }
+  if (requestedStatuses.length) {
+    whereClauses.push(`status IN (${requestedStatuses.map(() => '?').join(',')})`);
+    bindings.push(...requestedStatuses);
+  }
+  bindings.push(limit);
+
+  const sql = `
+    SELECT source, year, state, status, rows_total, inserted, skipped, attempts, last_error, meta_json, created_at, updated_at
+    FROM ingest_progress
+    WHERE ${whereClauses.join(' AND ')}
+    ORDER BY year ASC, state ASC, updated_at DESC
+    LIMIT ?
+  `;
+  const rowsResult = await db
+    .prepare(sql)
+    .bind(...bindings)
+    .all<IngestProgressRow>();
+  const rows = rowsResult.results ?? [];
+
+  const byStatus: Record<IngestProgressStatus, number> = {
+    pending: 0,
+    running: 0,
+    success: 0,
+    failed: 0,
+    skipped: 0,
+  };
+  let totalRows = 0;
+  let totalInserted = 0;
+  let totalSkipped = 0;
+  for (const row of rows) {
+    byStatus[row.status] += 1;
+    totalRows += row.rows_total;
+    totalInserted += row.inserted;
+    totalSkipped += row.skipped;
+  }
+
+  return c.json({
+    source,
+    filters: {
+      start_year: startYear ?? null,
+      end_year: endYear ?? null,
+      states: states.length ? states : null,
+      statuses: requestedStatuses.length ? requestedStatuses : null,
+      limit,
+    },
+    summary: {
+      units: rows.length,
+      by_status: byStatus,
+      rows_total: totalRows,
+      inserted: totalInserted,
+      skipped: totalSkipped,
+    },
+    rows: rows.map((row) => ({
+      ...row,
+      meta: row.meta_json ? (() => {
+        try {
+          return JSON.parse(row.meta_json) as unknown;
+        } catch {
+          return row.meta_json;
+        }
+      })() : null,
+    })),
+  });
+});
+
+app.post('/api/v1/ingest/progress', async (c) => {
+  const db = c.env.DB;
+  const ingestAuth = await requireIngestAuthState(c, db);
+  if (ingestAuth instanceof Response) return ingestAuth;
+  await ensureIngestProgressSchema(db);
+
+  let payload: IngestProgressUpsertPayload;
+  try {
+    payload = await c.req.json<IngestProgressUpsertPayload>();
+  } catch {
+    return c.json({ error: 'Invalid JSON payload.' }, 400);
+  }
+
+  const source = String(payload.source ?? 'USDA-NASS-BULK').trim() || 'USDA-NASS-BULK';
+  const year = typeof payload.year === 'number' ? payload.year : Number.parseInt(String(payload.year ?? ''), 10);
+  const state = String(payload.state ?? '').trim().toUpperCase();
+  const rawStatus = String(payload.status ?? '').trim().toLowerCase();
+  if (source.length > 128) {
+    return c.json({ error: 'source must be 128 chars or fewer.' }, 400);
+  }
+  if (!Number.isFinite(year) || year < 1900 || year > 2200) {
+    return c.json({ error: 'year must be a valid 4-digit value.' }, 400);
+  }
+  if (!/^[A-Z]{2}$/.test(state)) {
+    return c.json({ error: 'state must be a 2-letter code.' }, 400);
+  }
+  if (!isIngestProgressStatus(rawStatus)) {
+    return c.json({ error: `status must be one of: ${INGEST_PROGRESS_STATUSES.join(', ')}` }, 400);
+  }
+
+  const rowsCandidate = payload.rows_total ?? payload.rows ?? 0;
+  const rowsTotal = Number.parseInt(String(rowsCandidate), 10);
+  const inserted = Number.parseInt(String(payload.inserted ?? 0), 10);
+  const skipped = Number.parseInt(String(payload.skipped ?? 0), 10);
+  if (!Number.isFinite(rowsTotal) || rowsTotal < 0) {
+    return c.json({ error: 'rows_total must be a non-negative integer.' }, 400);
+  }
+  if (!Number.isFinite(inserted) || inserted < 0) {
+    return c.json({ error: 'inserted must be a non-negative integer.' }, 400);
+  }
+  if (!Number.isFinite(skipped) || skipped < 0) {
+    return c.json({ error: 'skipped must be a non-negative integer.' }, 400);
+  }
+
+  const incrementAttemptRaw = payload.increment_attempt;
+  let incrementAttempt = false;
+  if (typeof incrementAttemptRaw === 'boolean') {
+    incrementAttempt = incrementAttemptRaw;
+  } else if (typeof incrementAttemptRaw === 'number') {
+    incrementAttempt = incrementAttemptRaw > 0;
+  } else if (typeof incrementAttemptRaw === 'string') {
+    const parsed = parseOptionalBoolean(incrementAttemptRaw);
+    if (parsed == null) {
+      return c.json({ error: 'increment_attempt must be true/false.' }, 400);
+    }
+    incrementAttempt = parsed;
+  }
+
+  const lastError = payload.last_error == null ? null : String(payload.last_error).slice(0, 2000);
+  let metaJson: string | null = null;
+  if (payload.meta != null) {
+    try {
+      metaJson = JSON.stringify(payload.meta);
+    } catch {
+      return c.json({ error: 'meta must be valid JSON-serializable content.' }, 400);
+    }
+    if (metaJson.length > 20000) {
+      return c.json({ error: 'meta payload is too large (max 20000 chars after serialization).' }, 400);
+    }
+  }
+
+  const attemptDelta = incrementAttempt ? 1 : 0;
+  await db
+    .prepare(
+      `INSERT INTO ingest_progress (
+         source, year, state, status, rows_total, inserted, skipped, attempts, last_error, meta_json, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(source, year, state) DO UPDATE SET
+         status = excluded.status,
+         rows_total = excluded.rows_total,
+         inserted = excluded.inserted,
+         skipped = excluded.skipped,
+         attempts = ingest_progress.attempts + ?,
+         last_error = excluded.last_error,
+         meta_json = excluded.meta_json,
+         updated_at = datetime('now')`,
+    )
+    .bind(
+      source,
+      year,
+      state,
+      rawStatus,
+      rowsTotal,
+      inserted,
+      skipped,
+      attemptDelta,
+      lastError,
+      metaJson,
+      attemptDelta,
+    )
+    .run();
+
+  const saved = await db
+    .prepare(
+      `SELECT source, year, state, status, rows_total, inserted, skipped, attempts, last_error, meta_json, created_at, updated_at
+       FROM ingest_progress
+       WHERE source = ? AND year = ? AND state = ?`,
+    )
+    .bind(source, year, state)
+    .first<IngestProgressRow>();
+
+  return c.json({
+    status: 'ok',
+    auth_mode: ingestAuth.authMode,
+    row: saved
+      ? {
+          ...saved,
+          meta: saved.meta_json ? (() => {
+            try {
+              return JSON.parse(saved.meta_json) as unknown;
+            } catch {
+              return saved.meta_json;
+            }
+          })() : null,
+        }
+      : null,
+  });
+});
+
 app.post('/api/v1/ingest/bulk', async (c) => {
   const db = c.env.DB;
-  const authMode = hasValidIngestAdminToken(c) ? 'ingest_admin_token' : 'session';
-  if (authMode === 'session') {
-    const auth = await requireAuthOrError(c, db);
-    if (auth instanceof Response) return auth;
-  }
+  const ingestAuth = await requireIngestAuthState(c, db);
+  if (ingestAuth instanceof Response) return ingestAuth;
+  const authMode = ingestAuth.authMode;
 
   let payload: { source?: string; rows?: BulkIngestRowPayload[] };
   try {
@@ -2651,11 +3001,9 @@ app.post('/api/v1/ingest/bulk', async (c) => {
 
 app.post('/api/v1/ingest', async (c) => {
   const db = c.env.DB;
-  const authMode = hasValidIngestAdminToken(c) ? 'ingest_admin_token' : 'session';
-  if (authMode === 'session') {
-    const auth = await requireAuthOrError(c, db);
-    if (auth instanceof Response) return auth;
-  }
+  const ingestAuth = await requireIngestAuthState(c, db);
+  if (ingestAuth instanceof Response) return ingestAuth;
+  const authMode = ingestAuth.authMode;
   const rawStartYear = c.req.query('start_year');
   const rawEndYear = c.req.query('end_year');
   const rawStates = c.req.query('states');

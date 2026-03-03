@@ -1,14 +1,14 @@
-name: Backfill NASS Bulk Baseline
+name: Atlas Backfill Orchestrator
 
 on:
   workflow_dispatch:
     inputs:
       start_year:
-        description: First year to ingest (YYYY)
+        description: First year to process (YYYY)
         required: true
         default: '2005'
       end_year:
-        description: Last year to ingest (YYYY)
+        description: Last year to process (YYYY)
         required: true
         default: '2026'
       states_csv:
@@ -19,35 +19,39 @@ on:
         description: Bulk rows per API batch (max 1000)
         required: true
         default: '500'
-      run_macro:
-        description: Run macro pass (FRED + ag index) after bulk rows
+      max_retries:
+        description: Max retries per year/state unit
         required: true
-        default: 'true'
+        default: '3'
       include_crops:
-        description: Process NASS crops bulk file
+        description: Include NASS crops bulk file
         required: true
         default: 'true'
       include_economics:
-        description: Process NASS economics bulk file
+        description: Include NASS economics bulk file
         required: true
         default: 'true'
+      run_macro:
+        description: Run one macro pass (FRED + ag index) at end
+        required: true
+        default: 'true'
+      resume:
+        description: Skip units already marked success in ingest_progress
+        required: true
+        default: 'true'
+      request_timeout_ms:
+        description: Timeout per API call in milliseconds
+        required: true
+        default: '120000'
       base_url:
         description: Atlas API base URL
         required: true
         default: 'https://atlas.altiratech.com'
-      crops_url:
-        description: Optional explicit crops URL (blank = auto-discover latest)
-        required: false
-        default: ''
-      economics_url:
-        description: Optional explicit economics URL (blank = auto-discover latest)
-        required: false
-        default: ''
 
 jobs:
-  backfill:
+  orchestrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 480
 
     steps:
       - uses: actions/checkout@v4
@@ -57,34 +61,35 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Run NASS bulk backfill
+      - name: Run backfill orchestrator
         working-directory: deploy/cloudflare-worker
         env:
           ATLAS_INGEST_ADMIN_TOKEN: ${{ secrets.ATLAS_INGEST_ADMIN_TOKEN }}
           ATLAS_CF_ACCESS_CLIENT_ID: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_ID }}
           ATLAS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_SECRET }}
-          NASS_CROPS_URL: ${{ inputs.crops_url }}
-          NASS_ECONOMICS_URL: ${{ inputs.economics_url }}
         run: |
           set -euo pipefail
-          SUMMARY_PATH="${RUNNER_TEMP}/atlas-bulk-summary.json"
+          SUMMARY_PATH="${RUNNER_TEMP}/atlas-backfill-summary.json"
           echo "SUMMARY_PATH=${SUMMARY_PATH}" >> "${GITHUB_ENV}"
-          node ./scripts/backfill-nass-bulk.mjs \
+          node ./scripts/backfill-orchestrator.mjs \
             --start-year "${{ inputs.start_year }}" \
             --end-year "${{ inputs.end_year }}" \
             --states "${{ inputs.states_csv }}" \
             --batch-size "${{ inputs.batch_size }}" \
-            --run-macro "${{ inputs.run_macro }}" \
+            --max-retries "${{ inputs.max_retries }}" \
             --include-crops "${{ inputs.include_crops }}" \
             --include-economics "${{ inputs.include_economics }}" \
+            --run-macro "${{ inputs.run_macro }}" \
+            --resume "${{ inputs.resume }}" \
+            --request-timeout-ms "${{ inputs.request_timeout_ms }}" \
             --base-url "${{ inputs.base_url }}" \
             --summary-json "${SUMMARY_PATH}"
 
-      - name: Upload bulk summary artifact
+      - name: Upload orchestrator summary artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: atlas-bulk-summary
+          name: atlas-backfill-summary
           path: ${{ env.SUMMARY_PATH }}
           if-no-files-found: ignore
 
@@ -92,7 +97,7 @@ jobs:
         if: always()
         run: |
           if [[ -f "${{ env.SUMMARY_PATH }}" ]]; then
-            echo "::notice::Bulk summary uploaded as artifact atlas-bulk-summary."
+            echo "::notice::Backfill summary written to step summary and uploaded as artifact atlas-backfill-summary."
           else
-            echo "::warning::Bulk summary JSON not found; check logs for details."
+            echo "::warning::Backfill summary JSON not found; check orchestrator logs for details."
           fi

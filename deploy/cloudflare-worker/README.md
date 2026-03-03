@@ -14,6 +14,7 @@ Cloudflare Workers deployment profile for Altira Atlas.
 - Production smoke checks: `./scripts/smoke-release.sh`
 - Top-20 backfill: `./scripts/backfill-top20.sh [start_year] [end_year] [chunk_size]`
 - Bulk NASS backfill (official file download): `node ./scripts/backfill-nass-bulk.mjs --start-year 2005 --end-year 2026`
+- Backfill orchestrator (retry + resume): `node ./scripts/backfill-orchestrator.mjs --start-year 2005 --end-year 2026 --resume true --max-retries 3`
 
 ## Production Backfill Setup
 1. Configure an ingest admin secret on the Worker (never commit this in `wrangler.toml`):
@@ -38,6 +39,25 @@ Use the dedicated bulk workflow to populate historical baseline from official US
 3. Optional explicit URLs can be supplied via workflow inputs (`crops_url`, `economics_url`).
 4. Bulk loader writes through `/api/v1/ingest/bulk` using existing auth headers (`ATLAS_INGEST_ADMIN_TOKEN` and optional Cloudflare Access service token headers).
 5. Keep `Backfill Top-20 Atlas Data` for targeted API-driven deltas and retries, not first-time historical baseline.
+
+## Backfill Orchestrator (Retry/Resume + Progress Ledger)
+Use the orchestrator workflow when you want resumable year/state execution with status tracking and workflow summaries.
+
+1. Trigger workflow: `Actions` -> `Atlas Backfill Orchestrator` -> `Run workflow`.
+2. The workflow runs each `year + state` as an independent unit using the bulk loader.
+3. Progress is persisted to `ingest_progress` in D1 (fields include `source`, `year`, `state`, `status`, `rows_total`, `inserted`, `skipped`, `attempts`, `last_error`).
+4. Resume mode (`resume=true`) skips units already marked `success`.
+5. Retries (`max_retries`) are enforced per unit, not per full run.
+6. Each run publishes:
+   - Job `GITHUB_STEP_SUMMARY` (success/failure totals and failed units table)
+   - JSON artifact: `atlas-backfill-summary`
+
+### Progress API
+- `GET /api/v1/ingest/progress?source=USDA-NASS-BULK&start_year=2005&end_year=2006&states=IA,IL`
+- `POST /api/v1/ingest/progress` (upsert one `source+year+state` record)
+- Same auth as ingest endpoints:
+  - `Authorization: Bearer <atlas_session_token>` or
+  - `X-Atlas-Ingest-Token: <INGEST_ADMIN_TOKEN>`
 
 ## Ingest Endpoint Auth Modes
 - Session mode (existing): `Authorization: Bearer <atlas_session_token>`
