@@ -5,11 +5,12 @@ set -euo pipefail
 # Usage:
 #   ATLAS_INGEST_ADMIN_TOKEN="..." ./scripts/backfill-top20.sh [start_year] [end_year] [chunk_size]
 #   ATLAS_BEARER_TOKEN="..." ./scripts/backfill-top20.sh [start_year] [end_year] [chunk_size]
+# Defaults to `chunk_size=1` for safer long-range backfills.
 
 BASE_URL="${ATLAS_BASE_URL:-https://atlas.altiratech.com}"
 START_YEAR="${1:-2005}"
 END_YEAR="${2:-$(date +%Y)}"
-CHUNK_SIZE="${3:-5}"
+CHUNK_SIZE="${3:-1}"
 tmp_body="$(mktemp)"
 
 cleanup() {

@@ -35,6 +35,31 @@ check_status() {
   echo "PASS ${method} ${path} -> ${code}"
 }
 
+check_status_any() {
+  local method="$1"
+  local path="$2"
+  local expected_csv="$3"
+  shift 3
+
+  local url="${BASE_URL}${path}"
+  local code
+  code="$(curl -sS --connect-timeout 8 --max-time 30 -o "$tmp_body" -w '%{http_code}' -X "$method" "$url" "$@")"
+
+  IFS=',' read -r -a expected_codes <<< "$expected_csv"
+  for expected in "${expected_codes[@]}"; do
+    if [[ "$code" == "$expected" ]]; then
+      echo "PASS ${method} ${path} -> ${code}"
+      return 0
+    fi
+  done
+
+  echo "FAIL ${method} ${path} expected one of [${expected_csv}] got=${code}"
+  echo "Body:"
+  cat "$tmp_body"
+  echo
+  exit 1
+}
+
 check_contains() {
   local path="$1"
   local expected_text="$2"
@@ -90,8 +115,8 @@ check_status "GET" "/api/v1/data/coverage?as_of=latest&state=ALL" "200"
 check_status "GET" "/api/v1/data-freshness" "200"
 check_status "GET" "/api/v1/ag-index" "200"
 
-# Auth-gated behavior in production
-check_status "POST" "/api/v1/auth/bootstrap" "401"
+# Auth-gated behavior in production (bootstrap can be 200 when anon sessions are intentionally enabled)
+check_status_any "POST" "/api/v1/auth/bootstrap" "200,401"
 check_status "POST" "/api/v1/watchlist" "401"
 check_status "POST" "/api/v1/ingest" "401"
 

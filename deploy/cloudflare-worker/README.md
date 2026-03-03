@@ -23,7 +23,8 @@ Cloudflare Workers deployment profile for Altira Atlas.
    - `ATLAS_CF_ACCESS_CLIENT_SECRET`
 4. Trigger workflow: `Actions` -> `Backfill Top-20 Atlas Data` -> `Run workflow`.
 5. Optional local operator run:
-   - `ATLAS_INGEST_ADMIN_TOKEN=\"<token>\" ATLAS_CF_ACCESS_CLIENT_ID=\"<id>\" ATLAS_CF_ACCESS_CLIENT_SECRET=\"<secret>\" ./scripts/backfill-top20.sh 2005 2026 5`
+   - `ATLAS_INGEST_ADMIN_TOKEN=\"<token>\" ATLAS_CF_ACCESS_CLIENT_ID=\"<id>\" ATLAS_CF_ACCESS_CLIENT_SECRET=\"<secret>\" ./scripts/backfill-top20.sh 2005 2026 1`
+6. Recommended default is `chunk_size=1` (year-by-year) to avoid long-run ingestion timeouts.
 
 ## Ingest Endpoint Auth Modes
 - Session mode (existing): `Authorization: Bearer <atlas_session_token>`

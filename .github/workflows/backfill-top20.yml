@@ -14,7 +14,7 @@ on:
       chunk_size:
         description: Years per ingest call
         required: true
-        default: '5'
+        default: '1'
       base_url:
         description: Atlas API base URL
         required: true
@@ -23,7 +23,7 @@ on:
 jobs:
   backfill:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
