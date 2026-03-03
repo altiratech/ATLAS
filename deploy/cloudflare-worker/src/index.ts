@@ -40,6 +40,7 @@ type Bindings = {
   DB: D1Database;
   FRED_API_KEY: SecretStoreSecret;
   NASS_API_KEY: SecretStoreSecret;
+  INGEST_ADMIN_TOKEN?: string;
   ASSETS: AssetFetcher;
   ENVIRONMENT?: string;
   CANONICAL_HOST?: string;
@@ -335,6 +336,14 @@ function extractBearerToken(c: Context<{ Bindings: Bindings }>): string | null {
   if (!authHeader.toLowerCase().startsWith('bearer ')) return null;
   const token = authHeader.slice(7).trim();
   return token || null;
+}
+
+function hasValidIngestAdminToken(c: Context<{ Bindings: Bindings }>): boolean {
+  const configuredToken = (c.env.INGEST_ADMIN_TOKEN ?? '').trim();
+  if (!configuredToken) return false;
+  const providedToken = (c.req.header('x-atlas-ingest-token') ?? '').trim();
+  if (!providedToken) return false;
+  return providedToken === configuredToken;
 }
 
 function randomTokenHex(bytes = 32): string {
@@ -2546,8 +2555,11 @@ app.get('/api/v1/debug/nass', async (c) => {
 
 app.post('/api/v1/ingest', async (c) => {
   const db = c.env.DB;
-  const auth = await requireAuthOrError(c, db);
-  if (auth instanceof Response) return auth;
+  const authMode = hasValidIngestAdminToken(c) ? 'ingest_admin_token' : 'session';
+  if (authMode === 'session') {
+    const auth = await requireAuthOrError(c, db);
+    if (auth instanceof Response) return auth;
+  }
   const rawStartYear = c.req.query('start_year');
   const rawEndYear = c.req.query('end_year');
   const startYear = parseOptionalYear(rawStartYear);
@@ -2577,7 +2589,10 @@ app.post('/api/v1/ingest', async (c) => {
     { DB: db, FRED_API_KEY: c.env.FRED_API_KEY, NASS_API_KEY: c.env.NASS_API_KEY },
     { startYear, endYear },
   );
-  return c.json(result);
+  return c.json({
+    ...result,
+    auth_mode: authMode,
+  });
 });
 
 // Freshness status

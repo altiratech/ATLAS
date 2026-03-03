@@ -77,6 +77,7 @@ check_status "GET" "/api/v1/ag-index" "200"
 # Auth-gated behavior in production
 check_status "POST" "/api/v1/auth/bootstrap" "401"
 check_status "POST" "/api/v1/watchlist" "401"
+check_status "POST" "/api/v1/ingest" "401"
 
 # Frontend shell sanity
 check_contains "/" "Altira Atlas"
