@@ -168,6 +168,9 @@ function parseOptionalInteger(value: string | undefined): number | undefined {
 
 const INGEST_PROGRESS_STATUSES = ['pending', 'running', 'success', 'failed', 'skipped'] as const;
 type IngestProgressStatus = (typeof INGEST_PROGRESS_STATUSES)[number];
+const MAX_SENSITIVITY_PARAMS = 5;
+const MAX_SENSITIVITY_VALUES_PER_PARAM = 25;
+const MAX_SENSITIVITY_TOTAL_POINTS = 100;
 
 interface IngestProgressRow {
   source: string;
@@ -1459,6 +1462,53 @@ app.post('/api/v1/run/scenario', async (c) => {
     scenario_sets?: { name?: string; overrides?: Record<string, any> }[];
   }>();
 
+  const normalizedVaryParams: Array<{ param: string; values: number[]; target_metric?: string }> = [];
+  if (Array.isArray(body.vary_params)) {
+    if (body.vary_params.length > MAX_SENSITIVITY_PARAMS) {
+      return c.json(
+        { error: `Too many sensitivity parameters. Maximum is ${MAX_SENSITIVITY_PARAMS}.` },
+        400,
+      );
+    }
+
+    let totalPoints = 0;
+    for (const varyParam of body.vary_params) {
+      const param = typeof varyParam?.param === 'string' ? varyParam.param.trim() : '';
+      if (!param) {
+        return c.json({ error: 'Each sensitivity parameter must include a non-empty "param".' }, 400);
+      }
+
+      const values = Array.isArray(varyParam?.values)
+        ? varyParam.values.map((value) => Number(value)).filter((value) => Number.isFinite(value))
+        : [];
+      if (!values.length) {
+        return c.json({ error: `Sensitivity parameter "${param}" must include at least one numeric value.` }, 400);
+      }
+      if (values.length > MAX_SENSITIVITY_VALUES_PER_PARAM) {
+        return c.json(
+          {
+            error: `Sensitivity parameter "${param}" exceeds max values (${MAX_SENSITIVITY_VALUES_PER_PARAM}).`,
+          },
+          400,
+        );
+      }
+
+      totalPoints += values.length;
+      if (totalPoints > MAX_SENSITIVITY_TOTAL_POINTS) {
+        return c.json(
+          { error: `Sensitivity request too large. Maximum total points is ${MAX_SENSITIVITY_TOTAL_POINTS}.` },
+          400,
+        );
+      }
+
+      const targetMetric = typeof varyParam?.target_metric === 'string' && varyParam.target_metric.trim()
+        ? varyParam.target_metric.trim()
+        : undefined;
+
+      normalizedVaryParams.push({ param, values, ...(targetMetric ? { target_metric: targetMetric } : {}) });
+    }
+  }
+
   const resolved = await resolveRequestAsOf(db, body.as_of ?? 'latest', null, [...CORE_MODEL_SERIES]);
   let assumptions = (await getAssumptions(db, body.assumption_set_id)) ?? {};
   if (body.overrides) assumptions = { ...assumptions, ...body.overrides };
@@ -1466,9 +1516,9 @@ app.post('/api/v1/run/scenario', async (c) => {
   const base = await computeCounty(db, body.geo_key, resolved.asOf, assumptions);
   const sensitivities: Record<string, any> = {};
 
-  if (body.vary_params) {
+  if (normalizedVaryParams.length) {
     const series = await loadSeriesForCounty(db, body.geo_key, resolved.asOf);
-    for (const vp of body.vary_params) {
+    for (const vp of normalizedVaryParams) {
       const ctx = createContext(body.geo_key, resolved.asOf, series, assumptions);
       const results = computeSensitivity(ctx, vp.param, vp.values, vp.target_metric ?? 'fair_value');
       sensitivities[vp.param] = results;

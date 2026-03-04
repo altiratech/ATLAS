@@ -380,14 +380,14 @@ function resolveOrder(): string[] {
   return resolved;
 }
 
+const METRIC_ORDER = resolveOrder();
+const METRIC_REGISTRY_BY_KEY = new Map(METRIC_REGISTRY.map((m) => [m.key, m]));
+
 // ── Main Compute ────────────────────────────────────────────────────
 
 export function computeAll(ctx: ComputeContext): ComputeContext {
-  const order = resolveOrder();
-  const registry = new Map(METRIC_REGISTRY.map((m) => [m.key, m]));
-
-  for (const key of order) {
-    const metric = registry.get(key)!;
+  for (const key of METRIC_ORDER) {
+    const metric = METRIC_REGISTRY_BY_KEY.get(key)!;
     try {
       const val = metric.compute(ctx);
       if (val != null) {
