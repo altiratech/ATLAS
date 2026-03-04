@@ -168,6 +168,59 @@ function yearChunks(startYear: number, endYear: number, chunkSize = 20): [number
   return chunks;
 }
 
+let dataPointUpsertReady = false;
+let dataPointUpsertPromise: Promise<void> | null = null;
+
+function asErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function createDataPointUniqueIndex(db: D1Database): Promise<void> {
+  await db
+    .prepare(
+      'CREATE UNIQUE INDEX IF NOT EXISTS ux_data_points_series_geo_date ON data_points(series_id, geo_key, as_of_date)',
+    )
+    .run();
+}
+
+async function removeDuplicateDataPoints(db: D1Database): Promise<void> {
+  await db
+    .prepare(
+      `DELETE FROM data_points
+       WHERE id IN (
+         SELECT older.id
+         FROM data_points AS older
+         JOIN data_points AS newer
+           ON newer.series_id = older.series_id
+          AND newer.geo_key = older.geo_key
+          AND newer.as_of_date = older.as_of_date
+          AND newer.id > older.id
+       )`,
+    )
+    .run();
+}
+
+async function ensureDataPointUpsertReady(db: D1Database): Promise<void> {
+  if (dataPointUpsertReady) return;
+  if (!dataPointUpsertPromise) {
+    dataPointUpsertPromise = (async () => {
+      try {
+        await createDataPointUniqueIndex(db);
+      } catch (error) {
+        const message = asErrorMessage(error).toLowerCase();
+        // If duplicates already exist, clean and retry index creation once.
+        if (!message.includes('unique') && !message.includes('constraint')) {
+          throw error;
+        }
+        await removeDuplicateDataPoints(db);
+        await createDataPointUniqueIndex(db);
+      }
+      dataPointUpsertReady = true;
+    })();
+  }
+  await dataPointUpsertPromise;
+}
+
 async function ensureDataSource(
   db: D1Database,
   sourceName: string,
@@ -259,25 +312,18 @@ async function upsertDataPoint(
   asOfDate: string,
   value: number,
 ): Promise<boolean> {
-  const existing = await db
-    .prepare('SELECT id, value FROM data_points WHERE series_id = ? AND geo_key = ? AND as_of_date = ?')
-    .bind(seriesId, geoKey, asOfDate)
-    .first<{ id: number; value: number }>();
-
-  if (existing) {
-    if (Math.abs(existing.value - value) < 0.001) return false;
-    await db
-      .prepare('UPDATE data_points SET value = ? WHERE id = ?')
-      .bind(value, existing.id)
-      .run();
-    return true;
-  }
-
-  await db
-    .prepare('INSERT INTO data_points (series_id, geo_key, as_of_date, value) VALUES (?, ?, ?, ?)')
+  const write = await db
+    .prepare(
+      `INSERT INTO data_points (series_id, geo_key, as_of_date, value)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(series_id, geo_key, as_of_date)
+       DO UPDATE SET value = excluded.value
+       WHERE ABS(COALESCE(data_points.value, 0) - COALESCE(excluded.value, 0)) >= 0.001`,
+    )
     .bind(seriesId, geoKey, asOfDate, value)
     .run();
-  return true;
+  if ((write.meta?.changes ?? 0) > 0) return true;
+  return false;
 }
 
 async function ingestNass(
@@ -591,6 +637,7 @@ export async function ingestBulkDataPoints(
     return result;
   }
 
+  await ensureDataPointUpsertReady(rawEnv.DB);
   const catalog = await ensureSeriesCatalog(rawEnv.DB);
   for (const row of rows) {
     const value = Number(row.value);
@@ -662,6 +709,7 @@ export async function runIngestion(
     NASS_API_KEY: nassKey,
   };
 
+  await ensureDataPointUpsertReady(env.DB);
   const catalog = await ensureSeriesCatalog(env.DB);
 
   const emptyResult = (source: string): IngestResult => ({

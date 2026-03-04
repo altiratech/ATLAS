@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS data_points (
   quality_json TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_dp_series_geo_date ON data_points(series_id, geo_key, as_of_date);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_data_points_series_geo_date ON data_points(series_id, geo_key, as_of_date);
 
 -- ── Facilities / Access ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS poi_facilities (
