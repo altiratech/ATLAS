@@ -35,7 +35,9 @@ Out of scope for this sprint:
 - full marketplace/deal room execution,
 - investor syndicate mechanics,
 - farm-operations integrations,
-- real-time streaming market microstructure.
+- real-time streaming market microstructure,
+- full PDF report generation pipeline,
+- production email-notification infrastructure.
 
 ## 3) Data Foundation Standard (Non-Negotiable)
 
@@ -81,12 +83,17 @@ Build:
 - research workspace upgrades: explicit thesis template, risk flags, catalyst dates,
 - scenario pack compare mode (best/base/worst in one view),
 - sensitivity output quality upgrade (plain-language interpretation + key driver ranking),
-- decision memo generator (structured Markdown export first, PDF optional second),
+- decision memo generator (structured Markdown/in-app output only in sprint),
 - saved screen + research linkage (open scenario from selected screen result set).
+
+Stretch only (if Week 1/2 locked items are stable):
+- benchmark composite expansion on dashboard (no county-overlay dependency),
+- in-app alert center (no email sending),
+- composable screener phase A (registry + dynamic UI on existing ag metrics).
 
 Acceptance:
 - a user can go from county discovery to saved thesis to scenario output in one pass,
-- one-click memo export exists with assumptions and model outputs embedded,
+- one-click Markdown/in-app memo output exists with assumptions and model outputs embedded,
 - workflow is coherent without external spreadsheets.
 
 ### Week 3 (2026-03-16 to 2026-03-22): Product Readiness for Live Usage

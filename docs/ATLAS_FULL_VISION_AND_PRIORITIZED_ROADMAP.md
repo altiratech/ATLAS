@@ -116,7 +116,33 @@ Tools-first, marketplace later (per D-018). No agtech startup pipeline — this 
 3. **Charts below, stats above** — current dashboard layout stays. Charting section sits in a dedicated area below the existing stat cards.
 4. **Keyboard-first** — Cmd+K command palette, vim-like navigation, power-user shortcuts.
 5. **No fluff** — every pixel earns its place. Institutional users want density, not whitespace.
-6. **Asset-class tabs, not separate apps** — a single interface with switchable context (Farmland | Data Centers | Energy | Timberland), not multiple products.
+6. **Composable metrics, not asset-class silos** — the screener, dashboard, and watchlist draw from a universal metric pool grouped by domain (Land & Valuation, Crop & Agriculture, Energy & Power, Infrastructure, Environmental & Climate, Water & Carbon). Users toggle metrics on/off to compose their view rather than switching between rigid asset-class tabs. Saved presets provide quick defaults ("Farmland Fundamentals," "Solar Siting," "Data Center Screening") without locking users in.
+7. **Model subtabs for structurally different engines** — the Scenario Lab uses asset-class subtabs (Farmland Valuation, Solar/Wind Project, Data Center Site, Custom) because each model has different inputs, calculations, and outputs. The model subtab is the one place where asset-class context is explicit.
+8. **Cross-asset county intelligence** — a county detail page shows all available metrics across domains. If data exists for farmland, solar, and data center suitability, all three appear as sections/tabs on the same county page. This is where the platform's unique value is most visible.
+
+### UI Architecture: Composable Metric System (D-057)
+
+The platform uses a **universal metric registry** rather than asset-class-specific views. Every metric in the system is registered with metadata: name, domain group, unit type, z-score availability, data coverage status by geography, and sort behavior.
+
+**Screener:** Users compose screens by toggling metrics from the registry. The filter builder and results table dynamically render only the selected metrics. A farmland-focused user toggles on cap rate, cash rent, crop yields. A solar-siting user toggles on solar irradiance, interconnection queue, land value. A cross-asset user toggles on metrics from multiple domains simultaneously — finding counties where cap rates are high AND solar irradiance is strong.
+
+**Dashboard:** Configurable headline cards. Default layout ships with current ag metrics (median cap rate, fair value, cash rent, ag composite index). Users can add/remove cards from the metric registry. Saved dashboard layouts persist per user.
+
+**Saved Views / Presets:** Named metric configurations that users can save, share, and reload. Ship with built-in presets: "Farmland Fundamentals" (cap rate, cash rent, yields, fair value), "Solar Siting" (irradiance, interconnection, land cost, flood risk), "Data Center Screening" (power cost, fiber proximity, water availability, cooling degree days). Presets serve the orienting function of subtabs without the rigidity.
+
+**Metric Availability Indicators:** Each metric in the toggle panel shows coverage status — available (data populated for selected geography), partial (some coverage gaps), or coming soon (data pipeline not yet built). This replaces "Coming Soon" subtabs with granular per-metric signals.
+
+**Cross-Asset Overlap Flags:** When a user has metrics from multiple domains active, surface interesting intersections: "12 counties in your screen have cap rates >3% AND solar irradiance >5.0 kWh/m²/day." This is the insight no competitor offers.
+
+**Scenario Lab:** Uses model-type subtabs because the underlying calculations are structurally different:
+- *Farmland Valuation* — DCF based on cash rent, yield expectations, commodity prices, discount rate
+- *Solar/Wind Project* — NPV with irradiance/capacity factor, PPA rate, construction cost, degradation, ITC/PTC
+- *Data Center Site* — site scoring with power availability, fiber density, water access; lease revenue projection based on MW capacity
+- *Custom/Generic* — user-defined assumption sets on arbitrary metrics from the registry
+
+Each model subtab has its own input form, sensitivity matrix, and memo export template, but all share the underlying DAG compute engine.
+
+**County Detail Page:** Asset-class-agnostic. Shows all available data for a county organized by domain sections. A county in Iowa might show Farmland metrics, Solar potential, and Data Center suitability — all on the same page. This is where the "same county valued three ways" insight lives.
 
 ---
 
@@ -160,8 +186,9 @@ Effort: ~1 day. Backend change to query max(year) per series.
 **1.5 — Agriculture Composite Index Tracker**
 Score: 5 × 4 = 20
 UX: Gives users a "how is agriculture doing right now?" signal — the kind of headline number that keeps people coming back daily.
-Build: Pull daily closes for 3-4 ETFs (DBA - agriculture commodities, MOO - agribusiness equities, CROP - grains, WEAT - wheat) via free Yahoo Finance / yfinance. Compute a simple equal-weight composite. Display as a prominent card on the dashboard with z-score gauge showing where the composite sits relative to its 3-year history. Add sparkline.
-Effort: ~2 days. Free data via yfinance, simple composite math, one new dashboard card + one new API endpoint.
+Build: Pull daily closes for 3-4 ETFs (DBA - agriculture commodities, MOO - agribusiness equities, CROP - grains, WEAT - wheat) via free Yahoo chart endpoints (or equivalent free EOD source). Compute a simple equal-weight composite. Display as a prominent card on the dashboard with z-score gauge showing where the composite sits relative to its 3-year history. Add sparkline.
+Effort: ~2 days. Free EOD data + simple composite math + one new dashboard card + one new API endpoint.
+Competitive note: FarmTogether and AcreTrader both reference NCREIF Farmland Index (1,023 properties, $16.1B AUM) for institutional benchmarking. NCREIF data is paywalled, but ETF-based proxies deliver 80% of benchmarking value at zero data cost. This is the gateway — expand to multi-asset benchmarks in 2.7.
 
 ---
 
@@ -205,6 +232,20 @@ UX: Users can export a structured research memo (Markdown → download) with cou
 Build: Backend endpoint that assembles county data + scenario results + research workspace notes into a structured Markdown document. Frontend: "Export Memo" button on county detail and research workspace.
 Effort: ~2 days. Data assembly + Markdown templating.
 
+**2.7 — Benchmark Index Expansion (Multi-Asset Proxies) (D-059)**
+Score: 4 × 4 = 16
+UX: Institutional investors benchmark everything against an index. Extends the Ag Composite (1.5) to include data center REIT benchmarks (EQIX, DLR), farmland proxy (FPI), infrastructure funds (PAVE, IFRA), and a broad land/real assets composite. Adds a "vs. Benchmark" overlay on county performance — users see whether a county's cap rate trajectory is outpacing or lagging the national index.
+Build: (1) Extend existing ETF ingest to pull EQIX, DLR, FPI, PAVE, IFRA daily closes alongside existing ag ETFs. (2) Compute sector-specific composites (ag, data center REIT, infrastructure). (3) Add "vs. benchmark" toggle on county detail charts — overlay the relevant sector index as a dashed line against county-level metrics. (4) Dashboard: add a "Market Pulse" section showing all composites with z-score gauges.
+Effort: **Phase A (release): ~1-2 days** for additional composite cards and history. **Phase B (post-release): ~2-3 days** for county-level benchmark overlays + cross-asset mapping logic.
+Competitive edge: No land platform provides benchmark context. CoStar users get market-level benchmarks for CRE; farmland/land investors get nothing comparable. This fills the gap.
+
+**2.8 — Saved Search Alerts & Watchlist Notifications (D-059)**
+Score: 4 × 4 = 16
+UX: Converts Atlas from a research tool into a daily workflow tool. Users define alert criteria ("notify me when cap rates in Story County cross 3.5%" or "alert when new NASS data lands for my watchlist counties") and receive email notifications when conditions are met. This is the #1 lock-in feature across CoStar, LandGate, and Bloomberg — saved alerts keep users returning.
+Build: (1) D1 schema: `saved_alerts` table (filter config as JSON, threshold conditions, last_run_hash, email, frequency, enabled). (2) Scheduled Worker (Cloudflare Cron Trigger, daily or weekly cadence): runs each alert's filter against current data, compares result hash to last run, sends email if diff detected. (3) Alert types: threshold breach (metric crosses a value), data refresh (new data available for tracked geography), watchlist change (any metric on a watchlisted county moves >X%). (4) Email delivery via Cloudflare Email Workers or Resend API. (5) Frontend: "Create Alert" button on screener results and watchlist, alert management panel in Settings.
+Effort: **Phase A (release): ~1-2 days** for in-app alert rules + dashboard alert center (no email). **Phase B (post-release): ~4-6 days** for email delivery, verification, unsubscribe/compliance, and reliability controls.
+Competitive edge: CoStar's stickiest feature is alerts, not data. LandGate sends opportunity notifications. No land analytics platform aimed at institutional investors offers this. Low effort, high retention.
+
 ---
 
 ### Tier 3: Ship Weeks 2-3 (Score 8-12)
@@ -223,7 +264,21 @@ UX: Sensitivity analysis gets plain-language interpretation ("A 1% increase in d
 Build: Post-process sensitivity matrix to generate ranked driver impact list and natural language summary. Frontend: add interpretation panel below the sensitivity grid.
 Effort: ~2 days. Math is simple; copy/template work.
 
-**3.3 — Saved Screen + Research Linkage**
+**3.3 — Metric Registry + Composable Screener Rework (D-057)**
+Score: 4 × 3 = 12
+UX: Transforms the screener from a hardcoded farmland filter set to a composable metric builder. Users toggle metrics on/off from a domain-grouped pool. Results table and filter inputs render dynamically. Foundation for all future asset-class data integration — every new data source just registers its metrics; no new views needed.
+Build: (1) Backend: create `/api/v1/metrics/registry` endpoint returning available metrics with metadata (key, display name, domain group, unit, z-score support, coverage status by state/county). (2) Refactor screener API from fixed filter params to accept arbitrary metric key filters (e.g., `?filter=implied_cap_rate:min:2.0,solar_irradiance:min:5.0`). (3) Frontend: replace hardcoded filter state variables with dynamic metric toggle panel grouped by domain. Results table columns generated from selected metrics. (4) Add saved view persistence — name + metric selection + filter values saved per user. (5) Ship 1-2 built-in presets ("Farmland Fundamentals" with current ag metrics as default).
+Effort: ~3-4 days. Heaviest lift is the frontend refactor from fixed to dynamic state management. Backend registry is straightforward (metadata table or config). API refactor is moderate — existing filter logic becomes a loop over registered metrics rather than explicit param parsing.
+Dependencies: Builds on 1.2 (z-scores) and 2.3 (z-score filters). Should be implemented before any non-ag data integration to avoid building a second hardcoded screener.
+
+**3.4 — Branded Export Suite: PDF Reports + CSV/XLSX (D-059)**
+Score: 4 × 3 = 12
+UX: Institutional investors don't make decisions in a browser — they make decisions in committee meetings with printed decks and emailed memos. The ability to export a branded county analysis as PDF, download screener results as CSV/XLSX, and generate scenario memos as formatted documents is a genuine workflow requirement. LandGate sells property reports as PDFs. CoStar exports are a core feature. Green Street and MSCI deliver static PDF research. Atlas needs this to be taken seriously by institutional users.
+Build: (1) **CSV/XLSX export** (ship first, trivial): "Download Results" button on screener and watchlist. Server-side or client-side CSV generation from current result set. (2) **Branded PDF county report**: HTML template with Altira branding (dark theme, logo, date) → PDF via Puppeteer in a Cloudflare Browser Rendering Worker or a lightweight HTML-to-PDF library. Content: county summary stats, z-score badges, key charts (cap rate trend, land value trend), scenario results if available, data coverage notes. (3) **Scenario memo PDF**: Extends 2.6 Decision Memo Export from Markdown download to formatted PDF with sensitivity tables, assumption sets, and z-score context. (4) **Watchlist summary PDF**: One-pager showing all watchlisted counties with key metrics and alert status.
+Effort: **Release cut:** CSV/XLSX only (~1 day). **Post-release:** PDF pipeline (~4-7 days) once rendering/runtime constraints are validated in production.
+Competitive edge: Fills the "last mile" gap. Users currently have no way to share Atlas analysis outside the browser. This converts Atlas from a personal research tool to a team/committee tool.
+
+**3.5 — Saved Screen + Research Linkage**
 Score: 3 × 3 = 9
 UX: Users can go from screener results → open scenario for selected counties → save to research workspace in one flow.
 Build: Add "Open in Scenario Lab" and "Add to Research" actions on screener result rows. Wire navigation between views with context preservation.
@@ -247,11 +302,13 @@ UX: Completes the margin picture — users see both revenue (commodity prices) a
 Build: Ingest USDA-ERS input cost data (fertilizer prices by type, seed costs, fuel). Margin calculator tool.
 Effort: ~1 week. USDA-ERS data is free but requires custom parsing.
 
-**4.3 — Interactive Maps (County Choropleth)**
+**4.3 — Interactive Maps (County Choropleth) (D-059)**
 Score: 4 × 2 = 8
 UX: Maps are visually compelling and help users identify geographic patterns instantly. Becomes critical when multiple land types are layered (farmland value + solar irradiance + data center activity in one view).
-Build: Mapbox GL JS or Deck.gl choropleth layer showing any metric by county. Color-coded by z-score (red = expensive, green = cheap).
-Effort: ~1-2 weeks. Requires GeoJSON county boundaries + map rendering integration.
+Build: Mapbox GL JS or Deck.gl choropleth layer showing any metric by county. Color-coded by z-score (red = expensive, green = cheap). Screener-driven: map highlights counties matching current filter criteria. Click-to-drill: clicking a county opens the county detail page.
+Effort: ~1-2 weeks. Requires GeoJSON county boundaries (free from Census TIGER/Line) + map rendering integration.
+Competitive edge: AcreValue's parcel-level map is their #1 user acquisition channel — it's the free gateway that hooks users. Atlas's county choropleth serves the same function but at a different scale: institutional users care about market-level patterns, not individual parcels. The map is a visualization layer on the screener (filter → highlight → drill), not the entry point (browse → click → research). This preserves the terminal identity while delivering the spatial context users clearly want. Parcel-level drill-down is Tier 5 (5.5) and depends on Regrid licensing economics.
+Data: Free Census TIGER/Line county boundaries (~3,200 counties). No licensing cost. Parcel boundaries (Regrid) are $500+/mo and deferred.
 
 **4.4 — Published Ag Index Page (Public-Facing)**
 Score: 3 × 2 = 6
@@ -332,15 +389,35 @@ Effort: ~6-12 months. Platform infrastructure + legal/compliance partnership.
 
 ## Part 3: Implementation Phases (Time-Bound)
 
+### Release Cut (Target: 2026-03-22)
+
+**Locked for release (must ship):**
+- 1.1, 1.2, 1.3, 1.4, 1.5
+- 2.1, 2.2, 2.3, 2.5
+- 3.1, 3.2
+- 2.6 as Markdown/in-app output only (no PDF dependency)
+- 3.3 Phase A: metric registry + composable UI scaffolding on existing agriculture metric set
+
+**Stretch for release (ship only if locked items are complete and stable):**
+- 2.7 Phase A: benchmark composites on dashboard (no county overlay)
+- 2.8 Phase A: in-app alerts center (no email sending)
+- CSV export from 3.4
+
+**Explicitly deferred post-release:**
+- 2.8 email notification delivery
+- full 3.4 PDF report generation
+- full cross-domain composable filters for non-ag "coming soon" metrics
+
 ### Phase 0: This Week (Mar 2-8) — "Make It Real"
 Ship: 1.1, 1.2, 1.3, 1.4, 1.5
 Goal: Dashboard has charts. Every metric has a z-score badge. Data covers 20 states. Ag index exists.
 User test: "Open the dashboard and within 5 seconds understand whether farmland is cheap or expensive right now."
 
 ### Phase 1: Weeks 2-3 (Mar 9-22) — "Make It Useful"
-Ship: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.2, 3.3
-Goal: Full research workflow (discover → analyze → model → export memo). News feed live.
-User test: "Start from the screener, find an interesting county, run 3 scenarios, save a thesis, export a decision memo — all without leaving the app."
+Ship (locked): 2.1, 2.2, 2.3, 2.5, 2.6 (Markdown/in-app), 3.1, 3.2, 3.3 (Phase A)
+Ship (stretch): 2.4, 2.7 (Phase A), 2.8 (Phase A), CSV from 3.4
+Goal: End-to-end research workflow that is reliable, explainable, and defensible for analyst use under real data constraints.
+User test: "Start from the screener, find an interesting county, run 3 scenarios, save a thesis, and generate a decision-ready writeup without leaving the app."
 
 ### Phase 2: Month 2 (Mar 23 - Apr 22) — "Make It Indispensable"
 Ship: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
@@ -364,7 +441,7 @@ User test: "Ask a natural language question spanning multiple land types, get a 
 ### Free / Phase 1 ($0/month) — Agriculture Foundation
 - USDA NASS API — crop production, acreage, yields, cash rents, land values
 - FRED API — commodity prices, treasury rates, farm input costs
-- Yahoo Finance (yfinance) — ETF closes for composite index (DBA, MOO, CROP, WEAT)
+- Yahoo Finance chart endpoints (or equivalent free EOD source) — ETF closes for composite index (DBA, MOO, CROP, WEAT)
 - AgFunderNews RSS — deal flow headlines
 - USDA ERS reports — farm economics context
 - NOAA API — weather/climate data
@@ -409,6 +486,44 @@ These are resolved. Don't re-litigate.
 | Asset-class expansion | Farmland first, then data centers, then energy, then timberland. | D-051 |
 | Dropped modules | AgTech Research & Intelligence, Farm Operations Dashboard. | D-051 |
 | Deal flow scope | Real estate and land-based investment only. No agtech startups. | D-051 |
+| Screener/Dashboard UX | Composable metric pool with domain grouping, not rigid asset-class subtabs. Users toggle metrics on/off. Saved presets for quick defaults. | D-057 |
+| Model UX | Scenario Lab uses model-type subtabs (Farmland, Solar/Wind, Data Center, Custom) because models are structurally different. Only place with explicit asset-class context. | D-057 |
+| County detail | Asset-class-agnostic. All available data shown by domain section. Cross-asset view is the platform's unique value. | D-057 |
+| Metric registry | Backend maintains universal registry of metrics with metadata (domain, unit, z-score support, coverage). Screener/dashboard render dynamically from registry. | D-057 |
+| Pricing / GTM | Transparent, published pricing. No opaque "call for quote" model. Free tier for exploration; paid tier for saved views, alerts, and exports. CoStar's opaque pricing is a top competitor complaint — Atlas exploits this. | D-059 |
+| Alerts & retention | Saved search alerts on a cron (daily/weekly). Converts research tool into daily workflow tool. Modeled on CoStar's stickiest feature. | D-059 |
+| Export / distribution | Branded PDF reports, CSV/XLSX downloads, scenario memos. Institutional users share analysis in committees, not browsers. | D-059 |
+| Benchmarking | Multi-asset benchmark indices via ETF proxies (ag, data center REIT, infrastructure). "vs. Benchmark" overlay on county metrics. No competitor offers this for land. | D-059 |
+| Map as visualization layer | County choropleth driven by screener filters, not a browse-first map. Terminal identity preserved. Parcel-level deferred to Tier 5 (Regrid). | D-059 |
+
+---
+
+## Part 6: Competitive Positioning Summary (D-059)
+
+### What No Competitor Does (Atlas Unique)
+- **Cross-asset county intelligence** — same county valued as farmland, solar site, data center campus. No platform offers this unified view.
+- **Historical distributional context (z-scores)** on every metric — no competitor shows where a data point sits relative to its own history.
+- **Investment-grade analytics on land** — Scenario Lab with DCF/NPV models by asset class. LandGate finds sites; Atlas evaluates investments.
+- **Composable metric screening** across domains — "cap rates > 3% AND solar irradiance > 5.0" is impossible on any existing platform.
+
+### What Competitors Do Well That Atlas Must Match
+- **Saved alerts** (CoStar, LandGate) — #1 retention driver. Added as 2.8.
+- **Benchmark indices** (FarmTogether/AcreTrader reference NCREIF) — institutional expectation. Added as 2.7.
+- **PDF/export** (LandGate reports, CoStar analytics, Green Street research) — committee workflow requirement. Added as 3.4.
+- **Map visualization** (AcreValue's #1 acquisition channel) — added competitive context to 4.3.
+
+### What Competitors Do That Atlas Should NOT Copy
+- **Owner contact CRM** (CamoAg, LandGate) — sales tool, not research tool. Wrong user.
+- **Lease management / farm ops** (CamoAg) — dropped in D-051. Low-revenue segment.
+- **Crowdfunding marketplace** (AcreTrader, FarmTogether) — securities platform, not analytics. Per D-018/D-019.
+
+### Competitor Landscape Reference
+- **CoStar** ($40B market cap): CRE monopoly. No raw land coverage. Opaque pricing ($10K-$100K+/seat). Atlas's pricing transparency is a deliberate counter-positioning.
+- **CamoAg**: Closest ag competitor. Sales/marketing intelligence for agribusinesses, not investment analytics. Enterprise AVM launched Jan 2025. Targets farm managers and brokerages, not institutional investors.
+- **AcreValue**: Parcel-level farmland map + AVM. Limited to ~8 Midwestern states. AVM accuracy 12-56% error vs. appraisals. Consumer UX, not institutional.
+- **LandGate**: Closest cross-asset competitor. Energy siting (solar, wind, data centers) + property reports. Developer-focused, not investor-focused. Doesn't connect siting data to financial returns.
+- **Regrid/ATTOM**: Data infrastructure layers. Inputs to other products, not end-user research tools.
+- **FarmTogether/AcreTrader**: Crowdfunding platforms. Use data internally for deal underwriting but don't provide analytical tools to outside users.
 
 ---
 
