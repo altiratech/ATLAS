@@ -12,6 +12,11 @@ const DEFAULT_STATES = [
 ];
 
 const DATASETS_URL = 'https://www.nass.usda.gov/datasets/';
+const DATASET_DISCOVERY_URLS = [
+  'https://www.nass.usda.gov/datasets/',
+  'https://www.nass.usda.gov/datasets',
+  'https://data.nass.usda.gov/datasets/',
+];
 const STATE_SHORT_DESC = new Map([
   ['RENT, CASH, CROPLAND - EXPENSE, MEASURED IN $ / ACRE', 'cash_rent'],
   ['AG LAND, INCL BUILDINGS - ASSET VALUE, MEASURED IN $ / ACRE', 'land_value'],
@@ -79,32 +84,51 @@ function parseStates(value) {
 }
 
 async function discoverLatestNassBulkUrls() {
-  const response = await fetch(DATASETS_URL);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${DATASETS_URL}: HTTP ${response.status}`);
-  }
-  const html = await response.text();
-
-  const findLatest = (kind) => {
-    const re = new RegExp(`href=["']([^"']*quick_stats\\/qs\\.${kind}_(\\d{8})\\.txt\\.gz)["']`, 'gi');
+  const findLatestFilename = (text, kind) => {
+    const re = new RegExp(`qs\\.${kind}_(\\d{8})\\.txt\\.gz`, 'gi');
     const hits = [];
-    let match = re.exec(html);
+    let match = re.exec(text);
     while (match) {
       hits.push({
-        url: new URL(match[1], DATASETS_URL).toString(),
-        stamp: match[2],
+        filename: match[0],
+        stamp: match[1],
       });
-      match = re.exec(html);
+      match = re.exec(text);
     }
     if (!hits.length) return null;
     hits.sort((a, b) => b.stamp.localeCompare(a.stamp));
-    return hits[0].url;
+    return hits[0].filename;
   };
 
-  const cropsUrl = findLatest('crops');
-  const economicsUrl = findLatest('economics');
+  let cropsUrl = null;
+  let economicsUrl = null;
+  const visited = [];
+
+  for (const candidateUrl of DATASET_DISCOVERY_URLS) {
+    visited.push(candidateUrl);
+    let response;
+    try {
+      response = await fetch(candidateUrl);
+    } catch {
+      continue;
+    }
+    if (!response.ok) {
+      continue;
+    }
+    const text = await response.text();
+    const cropsFile = findLatestFilename(text, 'crops');
+    const economicsFile = findLatestFilename(text, 'economics');
+    if (cropsFile && !cropsUrl) {
+      cropsUrl = new URL(cropsFile, candidateUrl).toString();
+    }
+    if (economicsFile && !economicsUrl) {
+      economicsUrl = new URL(economicsFile, candidateUrl).toString();
+    }
+    if (cropsUrl && economicsUrl) break;
+  }
+
   if (!cropsUrl && !economicsUrl) {
-    throw new Error('Could not discover NASS bulk URLs from datasets page.');
+    throw new Error(`Could not discover NASS bulk URLs from datasets pages: ${visited.join(', ')}`);
   }
   return { cropsUrl, economicsUrl };
 }
