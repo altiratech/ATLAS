@@ -90,7 +90,7 @@ jobs:
       - name: Import staged SQL into D1
         working-directory: deploy/cloudflare-worker
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_IMPORT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
           npx wrangler d1 execute farmland-terminal-db --remote --file "${SQL_PATH}"
