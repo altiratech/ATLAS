@@ -90,9 +90,11 @@ jobs:
       - name: Import staged SQL into D1
         working-directory: deploy/cloudflare-worker
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_D1_IMPORT_TOKEN || secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_D1_IMPORT_TOKEN: ${{ secrets.CLOUDFLARE_D1_IMPORT_TOKEN }}
         run: |
           set -euo pipefail
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_D1_IMPORT_TOKEN:-${CLOUDFLARE_DEPLOY_TOKEN}}"
           npx wrangler d1 execute farmland-terminal-db --remote --file "${SQL_PATH}"
 
       - name: Run macro refresh for FRED and ag index
