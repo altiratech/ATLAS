@@ -3184,14 +3184,15 @@ app.get('/api/v1/data-freshness', async (c) => {
 app.get('/api/v1/data/coverage', async (c) => {
   const db = c.env.DB;
   const state = c.req.query('state');
+  const normalizedState = state && state.toUpperCase() !== 'ALL' ? state.toUpperCase() : null;
   const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const requiredSeriesParam = c.req.query('required_series');
   const requiredSeries = requiredSeriesParam
     ? requiredSeriesParam.split(',').map((item) => item.trim()).filter(Boolean)
     : [...CORE_MODEL_SERIES];
 
-  const resolved = await resolveRequestAsOf(db, requestedAsOf, state ?? null, requiredSeries);
-  const counties = await getAllCounties(db, state && state !== 'ALL' ? state.toUpperCase() : undefined);
+  const resolved = await resolveRequestAsOf(db, requestedAsOf, normalizedState, requiredSeries);
+  const counties = await getAllCounties(db, normalizedState ?? undefined);
 
   const placeholders = requiredSeries.map(() => '?').join(',');
   const rows = requiredSeries.length
