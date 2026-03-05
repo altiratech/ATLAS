@@ -3,7 +3,7 @@
 import { Readable } from 'node:stream';
 import { createGunzip } from 'node:zlib';
 import readline from 'node:readline';
-import { writeFile } from 'node:fs/promises';
+import { appendFile, stat, writeFile } from 'node:fs/promises';
 
 const DEFAULT_BASE_URL = 'https://atlas.altiratech.com';
 const DEFAULT_STATES = [
@@ -34,6 +34,26 @@ const COUNTY_RULES = [
   { seriesKey: 'soybean_yield', commodity: 'SOYBEANS', statCat: 'YIELD' },
   { seriesKey: 'wheat_yield', commodity: 'WHEAT', statCat: 'YIELD' },
 ];
+const SQL_SOURCE_DEFINITIONS = [
+  {
+    name: 'USDA-NASS',
+    url: 'https://quickstats.nass.usda.gov/',
+    cadence: 'annual',
+  },
+];
+const SQL_SERIES_DEFINITIONS = [
+  { seriesKey: 'cash_rent', geoLevel: 'county', frequency: 'annual', unit: '$/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'cash_rent', geoLevel: 'state', frequency: 'annual', unit: '$/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'land_value', geoLevel: 'state', frequency: 'annual', unit: '$/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'corn_yield', geoLevel: 'county', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'corn_yield', geoLevel: 'state', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'soybean_yield', geoLevel: 'county', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'soybean_yield', geoLevel: 'state', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'wheat_yield', geoLevel: 'county', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'wheat_yield', geoLevel: 'state', frequency: 'annual', unit: 'bu/acre', sourceName: 'USDA-NASS' },
+  { seriesKey: 'corn_price', geoLevel: 'national', frequency: 'annual', unit: '$/bu', sourceName: 'USDA-NASS' },
+];
+const SQL_DEFAULT_MODE = 'api';
 
 function normalize(value) {
   return (value ?? '').trim().toUpperCase();
@@ -81,6 +101,98 @@ function parseStates(value) {
     }
   }
   return states;
+}
+
+function parseMode(value) {
+  const normalized = String(value ?? SQL_DEFAULT_MODE).trim().toLowerCase();
+  if (normalized === 'api' || normalized === 'sql') return normalized;
+  throw new Error(`Unsupported mode "${value}". Use "api" or "sql".`);
+}
+
+function escapeSqlString(value) {
+  return `'${String(value ?? '').replace(/'/g, "''")}'`;
+}
+
+function formatSqlNumber(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new Error(`Cannot serialize non-finite numeric value to SQL: ${value}`);
+  }
+  return String(numeric);
+}
+
+function buildSqlPreamble(sourceName) {
+  const lines = [
+    'BEGIN;',
+    'CREATE TEMP TABLE temp_bulk_points (series_key TEXT NOT NULL, geo_level TEXT NOT NULL, geo_key TEXT NOT NULL, as_of_date TEXT NOT NULL, value REAL NOT NULL);',
+    'CREATE TEMP TABLE temp_bulk_counties (fips TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, state_name TEXT);',
+  ];
+
+  for (const source of SQL_SOURCE_DEFINITIONS) {
+    lines.push(
+      `INSERT INTO data_sources (name, url, cadence)
+       VALUES (${escapeSqlString(source.name)}, ${escapeSqlString(source.url)}, ${escapeSqlString(source.cadence)})
+       ON CONFLICT(name) DO UPDATE SET url = excluded.url, cadence = excluded.cadence;`,
+    );
+  }
+
+  for (const series of SQL_SERIES_DEFINITIONS) {
+    lines.push(
+      `INSERT INTO data_series (series_key, geo_level, frequency, unit, source_id)
+       SELECT ${escapeSqlString(series.seriesKey)}, ${escapeSqlString(series.geoLevel)}, ${escapeSqlString(series.frequency)}, ${escapeSqlString(series.unit)}, ds.id
+       FROM data_sources ds
+       WHERE ds.name = ${escapeSqlString(series.sourceName)}
+       ON CONFLICT(series_key, geo_level)
+       DO UPDATE SET
+         frequency = excluded.frequency,
+         unit = excluded.unit,
+         source_id = excluded.source_id;`,
+    );
+  }
+
+  lines.push(`-- Bulk load source: ${sourceName}`);
+  return `${lines.join('\n')}\n`;
+}
+
+function buildSqlTail(sourceName, matchedRows) {
+  return [
+    `INSERT INTO geo_county (fips, name, state, state_name)
+     SELECT fips, name, state, state_name
+     FROM temp_bulk_counties
+     WHERE 1 = 1
+     ON CONFLICT(fips)
+     DO UPDATE SET
+       name = excluded.name,
+       state = excluded.state,
+       state_name = COALESCE(excluded.state_name, geo_county.state_name);`,
+    `INSERT INTO data_points (series_id, geo_key, as_of_date, value)
+     SELECT ds.id, tbp.geo_key, tbp.as_of_date, tbp.value
+     FROM temp_bulk_points tbp
+     JOIN data_series ds
+       ON ds.series_key = tbp.series_key
+      AND ds.geo_level = tbp.geo_level
+     WHERE 1 = 1
+     ON CONFLICT(series_id, geo_key, as_of_date)
+     DO UPDATE SET value = excluded.value
+     WHERE ABS(COALESCE(data_points.value, 0) - COALESCE(excluded.value, 0)) >= 0.001;`,
+    `INSERT INTO data_freshness (source_name, last_updated, record_count, notes)
+     VALUES (
+       ${escapeSqlString(sourceName)},
+       datetime('now'),
+       ${formatSqlNumber(matchedRows)},
+       json_object('mode', 'sql_import', 'matched_rows', ${formatSqlNumber(matchedRows)}, 'generated_at', datetime('now'))
+     );`,
+    'DROP TABLE temp_bulk_counties;',
+    'DROP TABLE temp_bulk_points;',
+    'COMMIT;',
+    '',
+  ].join('\n');
+}
+
+function buildSqlValuesInsert(tableName, columns, rows, mapRow) {
+  if (!rows.length) return '';
+  const values = rows.map((row) => `(${mapRow(row)})`).join(',\n');
+  return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES\n${values};\n`;
 }
 
 async function discoverLatestNassBulkUrls() {
@@ -207,6 +319,9 @@ function mapCountyRow(columns, idx, allowedStates, startYear, endYear) {
     geo_key: geoKey,
     as_of_date: String(year),
     value,
+    county_name: valueAt(columns, idx, 'county_name').trim() || null,
+    state_name: valueAt(columns, idx, 'state_name').trim() || null,
+    state_alpha: state,
   };
 }
 
@@ -317,6 +432,14 @@ async function processBulkFile(
 
     batchState.matchedRows += matchedRows.length;
     for (const row of matchedRows) {
+      if (row.geo_level === 'county' && row.county_name) {
+        batchState.counties.set(row.geo_key, {
+          fips: row.geo_key,
+          name: row.county_name,
+          state: row.state_alpha,
+          state_name: row.state_name,
+        });
+      }
       batchState.pending.push(row);
       if (batchState.pending.length >= options.batchSize) {
         await flushPending(options, batchState);
@@ -339,23 +462,67 @@ async function flushPending(options, batchState) {
     return;
   }
 
+  batchState.sentBatches += 1;
+  batchState.sentRows += rows.length;
+  if (options.mode === 'sql') {
+    await appendFile(
+      options.sqlFile,
+      buildSqlValuesInsert(
+        'temp_bulk_points',
+        ['series_key', 'geo_level', 'geo_key', 'as_of_date', 'value'],
+        rows,
+        (row) => [
+          escapeSqlString(row.series_key),
+          escapeSqlString(row.geo_level),
+          escapeSqlString(row.geo_key),
+          escapeSqlString(row.as_of_date),
+          formatSqlNumber(row.value),
+        ].join(', '),
+      ),
+      'utf8',
+    );
+    return;
+  }
+
   const payload = {
     source: options.sourceName,
     rows,
   };
-
   const result = await postJson(
     `${options.baseUrl}/api/v1/ingest/bulk`,
     options.httpHeaders,
     payload,
     options.requestTimeoutMs,
   );
-  batchState.sentBatches += 1;
-  batchState.sentRows += rows.length;
   batchState.inserted += Number(result.inserted ?? 0);
   batchState.skipped += Number(result.skipped ?? 0);
   const errors = Array.isArray(result.errors) ? result.errors : [];
   batchState.errorCount += errors.length;
+}
+
+async function finalizeSqlFile(options, batchState) {
+  if (options.mode !== 'sql' || options.dryRun) return;
+
+  const countyRows = Array.from(batchState.counties.values()).sort((a, b) => a.fips.localeCompare(b.fips));
+  if (countyRows.length) {
+    await appendFile(
+      options.sqlFile,
+      buildSqlValuesInsert(
+        'temp_bulk_counties',
+        ['fips', 'name', 'state', 'state_name'],
+        countyRows,
+        (row) => [
+          escapeSqlString(row.fips),
+          escapeSqlString(row.name),
+          escapeSqlString(row.state),
+          row.state_name ? escapeSqlString(row.state_name) : 'NULL',
+        ].join(', '),
+      ),
+      'utf8',
+    );
+  }
+
+  await appendFile(options.sqlFile, buildSqlTail(options.sourceName, batchState.matchedRows), 'utf8');
 }
 
 async function maybeRunMacroPass(options) {
@@ -383,45 +550,54 @@ async function main() {
     throw new Error('batch-size must be between 1 and 1000.');
   }
 
+  const mode = parseMode(cli.mode ?? process.env.ATLAS_BACKFILL_MODE);
   const baseUrl = (cli['base-url'] ?? process.env.ATLAS_BASE_URL ?? DEFAULT_BASE_URL).replace(/\/+$/, '');
   const states = parseStates(cli.states ?? process.env.ATLAS_BACKFILL_STATES);
   const stateSet = new Set(states);
-
-  const ingestAdminToken = process.env.ATLAS_INGEST_ADMIN_TOKEN?.trim();
-  const bearerToken = process.env.ATLAS_BEARER_TOKEN?.trim();
-  if (!ingestAdminToken && !bearerToken) {
-    throw new Error('Set ATLAS_INGEST_ADMIN_TOKEN or ATLAS_BEARER_TOKEN.');
-  }
-
-  const accessClientId = process.env.ATLAS_CF_ACCESS_CLIENT_ID?.trim() ?? '';
-  const accessClientSecret = process.env.ATLAS_CF_ACCESS_CLIENT_SECRET?.trim() ?? '';
-  if ((accessClientId && !accessClientSecret) || (!accessClientId && accessClientSecret)) {
-    throw new Error('Set both ATLAS_CF_ACCESS_CLIENT_ID and ATLAS_CF_ACCESS_CLIENT_SECRET, or neither.');
-  }
-
-  const headers = {
-    'Content-Type': 'application/json',
-  };
-  if (ingestAdminToken) headers['X-Atlas-Ingest-Token'] = ingestAdminToken;
-  if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`;
-  if (accessClientId && accessClientSecret) {
-    headers['CF-Access-Client-Id'] = accessClientId;
-    headers['CF-Access-Client-Secret'] = accessClientSecret;
-  }
 
   const includeCrops = parseBool(cli['include-crops'], true);
   const includeEconomics = parseBool(cli['include-economics'], true);
   const runMacro = parseBool(cli['run-macro'], true);
   const dryRun = parseBool(cli['dry-run'], false);
   const summaryJsonPath = (cli['summary-json'] ?? '').trim();
+  const sqlFile = (cli['sql-file'] ?? process.env.ATLAS_BACKFILL_SQL_FILE ?? '').trim();
   const requestTimeoutMs = Number.parseInt(cli['request-timeout-ms'] ?? '120000', 10);
   const sourceName = (cli.source ?? 'USDA-NASS-BULK').trim() || 'USDA-NASS-BULK';
 
-  const discovered = await discoverLatestNassBulkUrls();
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  if (mode === 'api') {
+    const ingestAdminToken = process.env.ATLAS_INGEST_ADMIN_TOKEN?.trim();
+    const bearerToken = process.env.ATLAS_BEARER_TOKEN?.trim();
+    if (!ingestAdminToken && !bearerToken) {
+      throw new Error('Set ATLAS_INGEST_ADMIN_TOKEN or ATLAS_BEARER_TOKEN for api mode.');
+    }
+
+    const accessClientId = process.env.ATLAS_CF_ACCESS_CLIENT_ID?.trim() ?? '';
+    const accessClientSecret = process.env.ATLAS_CF_ACCESS_CLIENT_SECRET?.trim() ?? '';
+    if ((accessClientId && !accessClientSecret) || (!accessClientId && accessClientSecret)) {
+      throw new Error('Set both ATLAS_CF_ACCESS_CLIENT_ID and ATLAS_CF_ACCESS_CLIENT_SECRET, or neither.');
+    }
+    if (ingestAdminToken) headers['X-Atlas-Ingest-Token'] = ingestAdminToken;
+    if (bearerToken) headers.Authorization = `Bearer ${bearerToken}`;
+    if (accessClientId && accessClientSecret) {
+      headers['CF-Access-Client-Id'] = accessClientId;
+      headers['CF-Access-Client-Secret'] = accessClientSecret;
+    }
+  } else if (!dryRun && !sqlFile) {
+    throw new Error('Set --sql-file when mode=sql.');
+  }
+
+  let discovered = { cropsUrl: null, economicsUrl: null };
+  if (includeCrops || includeEconomics) {
+    discovered = await discoverLatestNassBulkUrls();
+  }
   const cropsUrl = cli['crops-url'] || process.env.NASS_CROPS_URL || discovered.cropsUrl;
   const economicsUrl = cli['economics-url'] || process.env.NASS_ECONOMICS_URL || discovered.economicsUrl;
 
   console.log(`Bulk backfill target: ${baseUrl}`);
+  console.log(`Mode: ${mode}`);
   console.log(`Year range: ${startYear}-${endYear}`);
   console.log(`States (${states.length}): ${states.join(',')}`);
   console.log(`Batch size: ${batchSize}`);
@@ -430,6 +606,9 @@ async function main() {
   console.log(`Include economics file: ${includeEconomics}`);
   console.log(`Run macro pass: ${runMacro}`);
   console.log(`Dry run: ${dryRun}`);
+  if (mode === 'sql' && sqlFile) {
+    console.log(`SQL output: ${sqlFile}`);
+  }
 
   const batchState = {
     pending: [],
@@ -439,8 +618,10 @@ async function main() {
     inserted: 0,
     skipped: 0,
     errorCount: 0,
+    counties: new Map(),
   };
   const options = {
+    mode,
     baseUrl,
     startYear,
     endYear,
@@ -451,7 +632,12 @@ async function main() {
     dryRun,
     requestTimeoutMs,
     httpHeaders: headers,
+    sqlFile,
   };
+
+  if (mode === 'sql' && !dryRun) {
+    await writeFile(sqlFile, buildSqlPreamble(sourceName), 'utf8');
+  }
 
   if (includeEconomics) {
     if (!economicsUrl) throw new Error('Could not resolve economics bulk URL.');
@@ -462,15 +648,20 @@ async function main() {
     await processBulkFile(cropsUrl, 'crops', options, batchState);
   }
   await flushPending(options, batchState);
-  await maybeRunMacroPass(options);
+  await finalizeSqlFile(options, batchState);
+  if (mode === 'api') {
+    await maybeRunMacroPass(options);
+  }
 
   const summary = {
+    mode,
     matched_rows: batchState.matchedRows,
     sent_rows: batchState.sentRows,
     sent_batches: batchState.sentBatches,
     inserted: batchState.inserted,
     skipped: batchState.skipped,
     endpoint_errors: batchState.errorCount,
+    counties_staged: batchState.counties.size,
     start_year: startYear,
     end_year: endYear,
     states,
@@ -479,7 +670,13 @@ async function main() {
     include_economics: includeEconomics,
     run_macro: runMacro,
     dry_run: dryRun,
+    sql_file: mode === 'sql' ? sqlFile || null : null,
   };
+
+  if (mode === 'sql' && !dryRun && sqlFile) {
+    const fileStats = await stat(sqlFile);
+    summary.sql_bytes = fileStats.size;
+  }
 
   if (summaryJsonPath) {
     await writeFile(summaryJsonPath, JSON.stringify(summary, null, 2), 'utf8');

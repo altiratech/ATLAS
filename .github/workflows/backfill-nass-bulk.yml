@@ -16,7 +16,7 @@ on:
         required: true
         default: 'IA,IL,IN,NE,KS,MN,OH,WI,MO,SD,ND,TX,CA,WA,OR,ID,MT,CO,MI,PA'
       batch_size:
-        description: Bulk rows per API batch (max 1000)
+        description: Rows per staged SQL insert statement (max 1000)
         required: true
         default: '500'
       run_macro:
@@ -56,29 +56,62 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: deploy/cloudflare-worker/package-lock.json
 
-      - name: Run NASS bulk backfill
+      - name: Install worker dependencies
+        working-directory: deploy/cloudflare-worker
+        run: npm ci
+
+      - name: Generate staged SQL from NASS bulk files
         working-directory: deploy/cloudflare-worker
         env:
-          ATLAS_INGEST_ADMIN_TOKEN: ${{ secrets.ATLAS_INGEST_ADMIN_TOKEN }}
-          ATLAS_CF_ACCESS_CLIENT_ID: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_ID }}
-          ATLAS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_SECRET }}
           NASS_CROPS_URL: ${{ inputs.crops_url }}
           NASS_ECONOMICS_URL: ${{ inputs.economics_url }}
         run: |
           set -euo pipefail
+          SQL_PATH="${RUNNER_TEMP}/atlas-bulk-import.sql"
           SUMMARY_PATH="${RUNNER_TEMP}/atlas-bulk-summary.json"
+          echo "SQL_PATH=${SQL_PATH}" >> "${GITHUB_ENV}"
           echo "SUMMARY_PATH=${SUMMARY_PATH}" >> "${GITHUB_ENV}"
           node ./scripts/backfill-nass-bulk.mjs \
+            --mode sql \
             --start-year "${{ inputs.start_year }}" \
             --end-year "${{ inputs.end_year }}" \
             --states "${{ inputs.states_csv }}" \
             --batch-size "${{ inputs.batch_size }}" \
-            --run-macro "${{ inputs.run_macro }}" \
+            --run-macro false \
             --include-crops "${{ inputs.include_crops }}" \
             --include-economics "${{ inputs.include_economics }}" \
             --base-url "${{ inputs.base_url }}" \
+            --sql-file "${SQL_PATH}" \
             --summary-json "${SUMMARY_PATH}"
+
+      - name: Import staged SQL into D1
+        working-directory: deploy/cloudflare-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx wrangler d1 execute farmland-terminal-db --remote --file "${SQL_PATH}"
+
+      - name: Run macro refresh for FRED and ag index
+        if: ${{ inputs.run_macro == 'true' }}
+        env:
+          ATLAS_INGEST_ADMIN_TOKEN: ${{ secrets.ATLAS_INGEST_ADMIN_TOKEN }}
+          ATLAS_CF_ACCESS_CLIENT_ID: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_ID }}
+          ATLAS_CF_ACCESS_CLIENT_SECRET: ${{ secrets.ATLAS_CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          headers=(-H "Content-Type: application/json" -H "X-Atlas-Ingest-Token: ${ATLAS_INGEST_ADMIN_TOKEN}")
+          if [[ -n "${ATLAS_CF_ACCESS_CLIENT_ID}" && -n "${ATLAS_CF_ACCESS_CLIENT_SECRET}" ]]; then
+            headers+=(-H "CF-Access-Client-Id: ${ATLAS_CF_ACCESS_CLIENT_ID}" -H "CF-Access-Client-Secret: ${ATLAS_CF_ACCESS_CLIENT_SECRET}")
+          fi
+          curl --fail --silent --show-error \
+            -X POST \
+            "${{ inputs.base_url }}/api/v1/ingest?start_year=${{ inputs.start_year }}&end_year=${{ inputs.end_year }}&include_nass=0&include_fred=1&include_ag_index=1" \
+            "${headers[@]}" \
+            -d '{}'
 
       - name: Upload bulk summary artifact
         if: always()

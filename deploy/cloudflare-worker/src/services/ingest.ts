@@ -5,7 +5,7 @@
  * then upserts into D1. Designed for scheduled runs plus manual backfills.
  */
 
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, D1PreparedStatement } from '@cloudflare/workers-types';
 
 interface SecretStoreSecret {
   get(): Promise<string>;
@@ -155,6 +155,7 @@ const AG_INDEX_TICKERS = ['DBA', 'MOO', 'CROP', 'WEAT'] as const;
 const NASS_TIMEOUT_MS = 25_000;
 const FRED_TIMEOUT_MS = 20_000;
 const YAHOO_TIMEOUT_MS = 20_000;
+const DATA_POINT_BATCH_SIZE = 500;
 
 function seriesCatalogKey(seriesKey: string, geoLevel: string): string {
   return `${seriesKey}:${geoLevel}`;
@@ -305,14 +306,14 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
   }
 }
 
-async function upsertDataPoint(
+function buildDataPointUpsertStatement(
   db: D1Database,
   seriesId: number,
   geoKey: string,
   asOfDate: string,
   value: number,
-): Promise<boolean> {
-  const write = await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO data_points (series_id, geo_key, as_of_date, value)
        VALUES (?, ?, ?, ?)
@@ -320,10 +321,26 @@ async function upsertDataPoint(
        DO UPDATE SET value = excluded.value
        WHERE ABS(COALESCE(data_points.value, 0) - COALESCE(excluded.value, 0)) >= 0.001`,
     )
-    .bind(seriesId, geoKey, asOfDate, value)
-    .run();
-  if ((write.meta?.changes ?? 0) > 0) return true;
-  return false;
+    .bind(seriesId, geoKey, asOfDate, value);
+}
+
+async function executeDataPointStatements(
+  db: D1Database,
+  statements: D1PreparedStatement[],
+): Promise<{ inserted: number; skipped: number }> {
+  let inserted = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < statements.length; i += DATA_POINT_BATCH_SIZE) {
+    const batch = statements.slice(i, i + DATA_POINT_BATCH_SIZE);
+    const writes = await db.batch(batch);
+    for (const write of writes) {
+      if ((write.meta?.changes ?? 0) > 0) inserted += 1;
+      else skipped += 1;
+    }
+  }
+
+  return { inserted, skipped };
 }
 
 async function ingestNass(
@@ -359,13 +376,17 @@ async function ingestNass(
               ...series.countyExtra,
             });
 
+            const statements: D1PreparedStatement[] = [];
             for (const row of countyData) {
               const value = Number.parseFloat((row.Value ?? '').replace(/,/g, ''));
               if (Number.isNaN(value)) continue;
               const fips = `${row.state_fips_code}${row.county_code}`;
-              const changed = await upsertDataPoint(env.DB, countySeriesId, fips, row.year, value);
-              if (changed) result.inserted += 1;
-              else result.skipped += 1;
+              statements.push(buildDataPointUpsertStatement(env.DB, countySeriesId, fips, row.year, value));
+            }
+            if (statements.length) {
+              const counts = await executeDataPointStatements(env.DB, statements);
+              result.inserted += counts.inserted;
+              result.skipped += counts.skipped;
             }
           } catch (error: any) {
             result.errors.push(`${series.seriesKey}/${state}/county/${chunkStart}-${chunkEnd}: ${error.message}`);
@@ -384,12 +405,16 @@ async function ingestNass(
             year__LE: String(endYear),
           });
 
+          const statements: D1PreparedStatement[] = [];
           for (const row of stateData) {
             const value = Number.parseFloat((row.Value ?? '').replace(/,/g, ''));
             if (Number.isNaN(value)) continue;
-            const changed = await upsertDataPoint(env.DB, stateSeriesId, row.state_alpha, row.year, value);
-            if (changed) result.inserted += 1;
-            else result.skipped += 1;
+            statements.push(buildDataPointUpsertStatement(env.DB, stateSeriesId, row.state_alpha, row.year, value));
+          }
+          if (statements.length) {
+            const counts = await executeDataPointStatements(env.DB, statements);
+            result.inserted += counts.inserted;
+            result.skipped += counts.skipped;
           }
         } catch (error: any) {
           result.errors.push(`${series.seriesKey}/${state}/state: ${error.message}`);
@@ -466,10 +491,13 @@ async function ingestFred(
   if (treasurySeriesId) {
     try {
       const rows = await fetchFredAnnualAvg(env.FRED_API_KEY, 'DGS10', startYear, endYear);
-      for (const row of rows) {
-        const changed = await upsertDataPoint(env.DB, treasurySeriesId, 'US', row.year, row.value);
-        if (changed) result.inserted += 1;
-        else result.skipped += 1;
+      const statements = rows.map((row) =>
+        buildDataPointUpsertStatement(env.DB, treasurySeriesId, 'US', row.year, row.value)
+      );
+      if (statements.length) {
+        const counts = await executeDataPointStatements(env.DB, statements);
+        result.inserted += counts.inserted;
+        result.skipped += counts.skipped;
       }
     } catch (error: any) {
       result.errors.push(`treasury_10y: ${error.message}`);
@@ -480,10 +508,13 @@ async function ingestFred(
   if (cornPriceSeriesId) {
     try {
       const rows = await fetchNassCornPrice(env.NASS_API_KEY, startYear, endYear);
-      for (const row of rows) {
-        const changed = await upsertDataPoint(env.DB, cornPriceSeriesId, 'US', row.year, row.value);
-        if (changed) result.inserted += 1;
-        else result.skipped += 1;
+      const statements = rows.map((row) =>
+        buildDataPointUpsertStatement(env.DB, cornPriceSeriesId, 'US', row.year, row.value)
+      );
+      if (statements.length) {
+        const counts = await executeDataPointStatements(env.DB, statements);
+        result.inserted += counts.inserted;
+        result.skipped += counts.skipped;
       }
     } catch (error: any) {
       result.errors.push(`corn_price: ${error.message}`);
@@ -639,6 +670,7 @@ export async function ingestBulkDataPoints(
 
   await ensureDataPointUpsertReady(rawEnv.DB);
   const catalog = await ensureSeriesCatalog(rawEnv.DB);
+  const statements: D1PreparedStatement[] = [];
   for (const row of rows) {
     const value = Number(row.value);
     if (!Number.isFinite(value)) {
@@ -655,14 +687,18 @@ export async function ingestBulkDataPoints(
     }
 
     try {
-      const changed = await upsertDataPoint(rawEnv.DB, seriesId, row.geoKey, row.asOfDate, value);
-      if (changed) result.inserted += 1;
-      else result.skipped += 1;
+      statements.push(buildDataPointUpsertStatement(rawEnv.DB, seriesId, row.geoKey, row.asOfDate, value));
     } catch (error: any) {
       result.errors.push(
         `write_error/${row.seriesKey}/${row.geoLevel}/${row.geoKey}/${row.asOfDate}: ${error.message}`,
       );
     }
+  }
+
+  if (statements.length) {
+    const counts = await executeDataPointStatements(rawEnv.DB, statements);
+    result.inserted += counts.inserted;
+    result.skipped += counts.skipped;
   }
 
   await logFreshness(rawEnv.DB, source, result);
