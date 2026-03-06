@@ -122,10 +122,7 @@ function formatSqlNumber(value) {
 }
 
 function buildSqlPreamble(sourceName) {
-  const lines = [
-    'CREATE TEMP TABLE temp_bulk_points (series_key TEXT NOT NULL, geo_level TEXT NOT NULL, geo_key TEXT NOT NULL, as_of_date TEXT NOT NULL, value REAL NOT NULL);',
-    'CREATE TEMP TABLE temp_bulk_counties (fips TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, state_name TEXT);',
-  ];
+  const lines = [];
 
   for (const source of SQL_SOURCE_DEFINITIONS) {
     lines.push(
@@ -155,25 +152,6 @@ function buildSqlPreamble(sourceName) {
 
 function buildSqlTail(sourceName, matchedRows) {
   return [
-    `INSERT INTO geo_county (fips, name, state, state_name)
-     SELECT fips, name, state, state_name
-     FROM temp_bulk_counties
-     WHERE 1 = 1
-     ON CONFLICT(fips)
-     DO UPDATE SET
-       name = excluded.name,
-       state = excluded.state,
-       state_name = COALESCE(excluded.state_name, geo_county.state_name);`,
-    `INSERT INTO data_points (series_id, geo_key, as_of_date, value)
-     SELECT ds.id, tbp.geo_key, tbp.as_of_date, tbp.value
-     FROM temp_bulk_points tbp
-     JOIN data_series ds
-       ON ds.series_key = tbp.series_key
-      AND ds.geo_level = tbp.geo_level
-     WHERE 1 = 1
-     ON CONFLICT(series_id, geo_key, as_of_date)
-     DO UPDATE SET value = excluded.value
-     WHERE ABS(COALESCE(data_points.value, 0) - COALESCE(excluded.value, 0)) >= 0.001;`,
     `INSERT INTO data_freshness (source_name, last_updated, record_count, notes)
      VALUES (
        ${escapeSqlString(sourceName)},
@@ -181,8 +159,6 @@ function buildSqlTail(sourceName, matchedRows) {
        ${formatSqlNumber(matchedRows)},
        json_object('mode', 'sql_import', 'matched_rows', ${formatSqlNumber(matchedRows)}, 'generated_at', datetime('now'))
      );`,
-    'DROP TABLE temp_bulk_counties;',
-    'DROP TABLE temp_bulk_points;',
     '',
   ].join('\n');
 }
@@ -191,6 +167,77 @@ function buildSqlValuesInsert(tableName, columns, rows, mapRow) {
   if (!rows.length) return '';
   const values = rows.map((row) => `(${mapRow(row)})`).join(',\n');
   return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES\n${values};\n`;
+}
+
+function buildSqlCountyUpserts(rows) {
+  if (!rows.length) return '';
+  const values = rows
+    .map((row) => `(${[
+      escapeSqlString(row.fips),
+      escapeSqlString(row.name),
+      escapeSqlString(row.state),
+      row.state_name ? escapeSqlString(row.state_name) : 'NULL',
+    ].join(', ')})`)
+    .join(',\n');
+  return `INSERT INTO geo_county (fips, name, state, state_name)
+VALUES
+${values}
+ON CONFLICT(fips)
+DO UPDATE SET
+  name = excluded.name,
+  state = excluded.state,
+  state_name = COALESCE(excluded.state_name, geo_county.state_name);\n`;
+}
+
+function buildSqlDataPointUpserts(rows) {
+  if (!rows.length) return '';
+
+  const grouped = new Map();
+  for (const row of rows) {
+    const key = `${row.series_key}|${row.geo_level}`;
+    const group = grouped.get(key);
+    if (group) {
+      group.rows.push(row);
+      continue;
+    }
+    grouped.set(key, {
+      seriesKey: row.series_key,
+      geoLevel: row.geo_level,
+      rows: [row],
+    });
+  }
+
+  const statements = [];
+  for (const group of grouped.values()) {
+    const batchSelect = group.rows
+      .map((row, index) => {
+        const prefix = index === 0 ? 'SELECT' : 'UNION ALL SELECT';
+        const geoKey = escapeSqlString(row.geo_key);
+        const asOfDate = escapeSqlString(row.as_of_date);
+        const value = formatSqlNumber(row.value);
+        if (index === 0) {
+          return `${prefix} ${geoKey} AS geo_key, ${asOfDate} AS as_of_date, ${value} AS value`;
+        }
+        return `${prefix} ${geoKey}, ${asOfDate}, ${value}`;
+      })
+      .join('\n');
+
+    statements.push(
+      `INSERT INTO data_points (series_id, geo_key, as_of_date, value)
+SELECT ds.id, batch.geo_key, batch.as_of_date, batch.value
+FROM data_series ds
+CROSS JOIN (
+${batchSelect}
+) AS batch
+WHERE ds.series_key = ${escapeSqlString(group.seriesKey)}
+  AND ds.geo_level = ${escapeSqlString(group.geoLevel)}
+ON CONFLICT(series_id, geo_key, as_of_date)
+DO UPDATE SET value = excluded.value
+WHERE ABS(COALESCE(data_points.value, 0) - COALESCE(excluded.value, 0)) >= 0.001;`,
+    );
+  }
+
+  return `${statements.join('\n')}\n`;
 }
 
 async function discoverLatestNassBulkUrls() {
@@ -463,22 +510,7 @@ async function flushPending(options, batchState) {
   batchState.sentBatches += 1;
   batchState.sentRows += rows.length;
   if (options.mode === 'sql') {
-    await appendFile(
-      options.sqlFile,
-      buildSqlValuesInsert(
-        'temp_bulk_points',
-        ['series_key', 'geo_level', 'geo_key', 'as_of_date', 'value'],
-        rows,
-        (row) => [
-          escapeSqlString(row.series_key),
-          escapeSqlString(row.geo_level),
-          escapeSqlString(row.geo_key),
-          escapeSqlString(row.as_of_date),
-          formatSqlNumber(row.value),
-        ].join(', '),
-      ),
-      'utf8',
-    );
+    await appendFile(options.sqlFile, buildSqlDataPointUpserts(rows), 'utf8');
     return;
   }
 
@@ -503,21 +535,7 @@ async function finalizeSqlFile(options, batchState) {
 
   const countyRows = Array.from(batchState.counties.values()).sort((a, b) => a.fips.localeCompare(b.fips));
   if (countyRows.length) {
-    await appendFile(
-      options.sqlFile,
-      buildSqlValuesInsert(
-        'temp_bulk_counties',
-        ['fips', 'name', 'state', 'state_name'],
-        countyRows,
-        (row) => [
-          escapeSqlString(row.fips),
-          escapeSqlString(row.name),
-          escapeSqlString(row.state),
-          row.state_name ? escapeSqlString(row.state_name) : 'NULL',
-        ].join(', '),
-      ),
-      'utf8',
-    );
+    await appendFile(options.sqlFile, buildSqlCountyUpserts(countyRows), 'utf8');
   }
 
   await appendFile(options.sqlFile, buildSqlTail(options.sourceName, batchState.matchedRows), 'utf8');
