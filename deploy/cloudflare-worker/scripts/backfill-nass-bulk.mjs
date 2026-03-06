@@ -123,7 +123,6 @@ function formatSqlNumber(value) {
 
 function buildSqlPreamble(sourceName) {
   const lines = [
-    'BEGIN;',
     'CREATE TEMP TABLE temp_bulk_points (series_key TEXT NOT NULL, geo_level TEXT NOT NULL, geo_key TEXT NOT NULL, as_of_date TEXT NOT NULL, value REAL NOT NULL);',
     'CREATE TEMP TABLE temp_bulk_counties (fips TEXT PRIMARY KEY, name TEXT NOT NULL, state TEXT NOT NULL, state_name TEXT);',
   ];
@@ -184,7 +183,6 @@ function buildSqlTail(sourceName, matchedRows) {
      );`,
     'DROP TABLE temp_bulk_counties;',
     'DROP TABLE temp_bulk_points;',
-    'COMMIT;',
     '',
   ].join('\n');
 }
