@@ -54,7 +54,7 @@ const SQL_SERIES_DEFINITIONS = [
   { seriesKey: 'corn_price', geoLevel: 'national', frequency: 'annual', unit: '$/bu', sourceName: 'USDA-NASS' },
 ];
 const SQL_DEFAULT_MODE = 'api';
-const SQL_COMPOUND_SELECT_CHUNK_SIZE = 200;
+const SQL_VALUES_INSERT_CHUNK_SIZE = 250;
 
 function normalize(value) {
   return (value ?? '').trim().toUpperCase();
@@ -210,30 +210,21 @@ function buildSqlDataPointUpserts(rows) {
 
   const statements = [];
   for (const group of grouped.values()) {
-    for (let offset = 0; offset < group.rows.length; offset += SQL_COMPOUND_SELECT_CHUNK_SIZE) {
-      const chunk = group.rows.slice(offset, offset + SQL_COMPOUND_SELECT_CHUNK_SIZE);
-      const batchSelect = chunk
-        .map((row, index) => {
-          const prefix = index === 0 ? 'SELECT' : 'UNION ALL SELECT';
-          const geoKey = escapeSqlString(row.geo_key);
-          const asOfDate = escapeSqlString(row.as_of_date);
-          const value = formatSqlNumber(row.value);
-          if (index === 0) {
-            return `${prefix} ${geoKey} AS geo_key, ${asOfDate} AS as_of_date, ${value} AS value`;
-          }
-          return `${prefix} ${geoKey}, ${asOfDate}, ${value}`;
-        })
-        .join('\n');
-
+    const seriesIdExpr = `(SELECT id FROM data_series WHERE series_key = ${escapeSqlString(group.seriesKey)} AND geo_level = ${escapeSqlString(group.geoLevel)})`;
+    for (let offset = 0; offset < group.rows.length; offset += SQL_VALUES_INSERT_CHUNK_SIZE) {
+      const chunk = group.rows.slice(offset, offset + SQL_VALUES_INSERT_CHUNK_SIZE);
+      const values = chunk
+        .map((row) => `(${[
+          seriesIdExpr,
+          escapeSqlString(row.geo_key),
+          escapeSqlString(row.as_of_date),
+          formatSqlNumber(row.value),
+        ].join(', ')})`)
+        .join(',\n');
       statements.push(
         `INSERT INTO data_points (series_id, geo_key, as_of_date, value)
-SELECT ds.id, batch.geo_key, batch.as_of_date, batch.value
-FROM data_series ds
-CROSS JOIN (
-${batchSelect}
-) AS batch
-WHERE ds.series_key = ${escapeSqlString(group.seriesKey)}
-  AND ds.geo_level = ${escapeSqlString(group.geoLevel)}
+VALUES
+${values}
 ON CONFLICT(series_id, geo_key, as_of_date)
 DO UPDATE SET value = excluded.value
 WHERE ABS(COALESCE(data_points.value, 0) - COALESCE(excluded.value, 0)) >= 0.001;`,
