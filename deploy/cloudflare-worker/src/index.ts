@@ -21,6 +21,7 @@ import {
   getAccessScore,
   getAllCounties,
   getCounty,
+  loadCountySeriesWindow,
 } from './db/queries';
 import { runIngestion, ingestBulkDataPoints, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
 import { resolveAsOf } from './services/asof';
@@ -129,6 +130,42 @@ async function computeCounty(
     fallbacks: ctx.fallbacks,
     access_details: accessData?.distances ?? {},
     access_density: accessData?.density ?? {},
+  };
+}
+
+function computeCountyFromSeries(
+  county: {
+    fips: string;
+    name: string;
+    state: string;
+    centroid_lat: number | null;
+    centroid_lon: number | null;
+  },
+  asOf: string,
+  series: SeriesData,
+  assumptions: Assumptions,
+  accessScore?: number | null,
+) {
+  const hydratedSeries = { ...series };
+  if (accessScore != null) {
+    hydratedSeries['computed.access_score'] = accessScore;
+  }
+
+  const ctx = createContext(county.fips, asOf, hydratedSeries, assumptions);
+  computeAll(ctx);
+
+  return {
+    geo_key: county.fips,
+    county_name: county.name,
+    state: county.state,
+    lat: county.centroid_lat ?? null,
+    lon: county.centroid_lon ?? null,
+    as_of: asOf,
+    metrics: Object.fromEntries(
+      Object.entries(ctx.metrics).map(([k, v]) => [k, v != null ? Math.round(v * 10000) / 10000 : null]),
+    ),
+    explains: ctx.explains,
+    fallbacks: ctx.fallbacks,
   };
 }
 
@@ -1340,6 +1377,17 @@ app.get('/api/v1/screener', async (c) => {
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
   const resolved = await resolveRequestAsOf(db, requestedAsOf, state ?? null, [...CORE_MODEL_SERIES]);
   const zMetrics = ['implied_cap_rate', 'fair_value', 'cash_rent'];
+  const resolvedYear = Number.parseInt(resolved.asOf, 10);
+  if (Number.isNaN(resolvedYear)) {
+    return c.json({
+      count: 0,
+      as_of: resolved.asOf,
+      as_of_meta: resolved.meta,
+      filters: [],
+      z_filters: {},
+      results: [],
+    });
+  }
 
   let filters: { metric: string; op: string; value: number }[] = [];
   if (screenId) {
@@ -1368,20 +1416,55 @@ app.get('/api/v1/screener', async (c) => {
     }
   }
 
-  const countiesResult = await getAllCounties(db, state?.toUpperCase());
+  const windowStartYear = Math.max(1950, resolvedYear - Math.max(1, windowYears) + 1);
+  const window = await loadCountySeriesWindow(db, windowStartYear, resolvedYear, state?.toUpperCase());
   const results: any[] = [];
 
-  for (const co of countiesResult.results as any[]) {
-    const data = await computeCounty(db, co.fips, resolved.asOf, assumptions);
-    const m = data.metrics;
-    const zscores = await computeMetricZscoresForCounty(
-      db,
-      co.fips,
-      resolved.asOf,
-      assumptions,
-      zMetrics,
-      windowYears,
+  for (const county of window.counties) {
+    const yearSeries = window.seriesByCountyYear.get(county.fips);
+    if (!yearSeries) continue;
+
+    const metricHistory: Record<string, number[]> = Object.fromEntries(
+      zMetrics.map((metric) => [metric, []]),
     );
+    let data: ReturnType<typeof computeCountyFromSeries> | null = null;
+
+    for (const year of window.years) {
+      const series = yearSeries.get(year);
+      if (!series) continue;
+      const computed = computeCountyFromSeries(
+        county,
+        year,
+        series,
+        assumptions,
+        year === resolved.asOf ? (window.accessByCounty.get(county.fips) ?? null) : null,
+      );
+      for (const metric of zMetrics) {
+        const value = computed.metrics[metric];
+        if (typeof value === 'number' && Number.isFinite(value)) {
+          metricHistory[metric].push(value);
+        }
+      }
+      if (year === resolved.asOf) {
+        data = computed;
+      }
+    }
+
+    if (!data) continue;
+    const m = data.metrics;
+    const zscores = Object.fromEntries(
+      zMetrics.map((metric) => {
+        const currentValue = (m[metric] ?? null) as number | null;
+        const stats = computeZScoreStats(currentValue, metricHistory[metric] ?? [], window.years);
+        return [
+          metric,
+          {
+            ...stats,
+            band: zscoreBand(stats.zscore),
+          },
+        ];
+      }),
+    ) as MetricZScoreMap;
 
     let passes = true;
     for (const f of filters) {
@@ -1417,9 +1500,9 @@ app.get('/api/v1/screener', async (c) => {
 
     if (passes) {
       results.push({
-        fips: co.fips,
-        county: co.name,
-        state: co.state,
+        fips: county.fips,
+        county: county.name,
+        state: county.state,
         zscores,
         metrics: Object.fromEntries(
           Object.entries(m).map(([k, v]) => [k, v != null ? Math.round((v as number) * 100) / 100 : null]),
@@ -1748,11 +1831,43 @@ app.get('/api/v1/dashboard', async (c) => {
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
   const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
+  const resolvedYear = Number.parseInt(resolved.asOf, 10);
+  const chartEndYear = Number.isNaN(resolvedYear) ? new Date().getUTCFullYear() : resolvedYear;
+  const chartStartYear = Math.max(2000, chartEndYear - 9);
+  const window = await loadCountySeriesWindow(db, chartStartYear, chartEndYear);
+  const yearlyMetrics = new Map<string, { caps: number[]; fair: number[]; rent: number[] }>();
+  for (const year of window.years) {
+    yearlyMetrics.set(year, { caps: [], fair: [], rent: [] });
+  }
 
-  const countiesResult = await getAllCounties(db);
-  const allData = await Promise.all(
-    (countiesResult.results as any[]).map((co) => computeCounty(db, co.fips, resolved.asOf, assumptions)),
-  );
+  const allData: Array<ReturnType<typeof computeCountyFromSeries>> = [];
+  for (const county of window.counties) {
+    const yearSeries = window.seriesByCountyYear.get(county.fips);
+    if (!yearSeries) continue;
+    for (const year of window.years) {
+      const series = yearSeries.get(year);
+      if (!series) continue;
+      const computed = computeCountyFromSeries(
+        county,
+        year,
+        series,
+        assumptions,
+        year === resolved.asOf ? (window.accessByCounty.get(county.fips) ?? null) : null,
+      );
+      const bucket = yearlyMetrics.get(year);
+      if (bucket) {
+        const cap = computed.metrics.implied_cap_rate;
+        const fair = computed.metrics.fair_value;
+        const rent = computed.metrics.cash_rent;
+        if (typeof cap === 'number' && Number.isFinite(cap)) bucket.caps.push(cap);
+        if (typeof fair === 'number' && Number.isFinite(fair)) bucket.fair.push(fair);
+        if (typeof rent === 'number' && Number.isFinite(rent)) bucket.rent.push(rent);
+      }
+      if (year === resolved.asOf) {
+        allData.push(computed);
+      }
+    }
+  }
 
   const caps = allData.map((d) => d.metrics.implied_cap_rate).filter((v): v is number => v != null);
   const fvs = allData.map((d) => d.metrics.fair_value).filter((v): v is number => v != null);
@@ -1792,8 +1907,8 @@ app.get('/api/v1/dashboard', async (c) => {
   }
   const stateSummary: Record<string, any> = {};
   for (const [st, items] of Object.entries(stateData)) {
-    const cList = items.map((i) => i.implied_cap_rate ?? 0);
-    const vList = items.map((i) => i.benchmark_value ?? 0);
+    const cList = items.map((i) => i.implied_cap_rate).filter((value: unknown): value is number => typeof value === 'number');
+    const vList = items.map((i) => i.benchmark_value).filter((value: unknown): value is number => typeof value === 'number');
     stateSummary[st] = {
       count: items.length,
       avg_cap: cList.length ? Math.round((cList.reduce((a, b) => a + b, 0) / cList.length) * 100) / 100 : 0,
@@ -1806,9 +1921,6 @@ app.get('/api/v1/dashboard', async (c) => {
       ? (allData[0].metrics.required_return ?? 0) - (assumptions.risk_premium ?? 2.0)
       : 0;
 
-  const resolvedYear = Number.parseInt(resolved.asOf, 10);
-  const chartEndYear = Number.isNaN(resolvedYear) ? new Date().getUTCFullYear() : resolvedYear;
-  const chartStartYear = Math.max(2000, chartEndYear - 9);
   const chartRows: Array<{
     year: string;
     cap_rate_median: number | null;
@@ -1817,22 +1929,24 @@ app.get('/api/v1/dashboard', async (c) => {
     treasury_10y: number | null;
   }> = [];
 
-  for (let year = chartStartYear; year <= chartEndYear; year += 1) {
-    const yearRows = await Promise.all(
-      (countiesResult.results as any[]).map((co) => computeCounty(db, co.fips, String(year), assumptions)),
-    );
-    const yearCaps = yearRows.map((row) => row.metrics.implied_cap_rate).filter((value): value is number => value != null);
-    const yearFair = yearRows.map((row) => row.metrics.fair_value).filter((value): value is number => value != null);
-    const yearRent = yearRows.map((row) => row.metrics.cash_rent).filter((value): value is number => value != null);
-    const yearTreasury =
-      yearRows.length > 0
-        ? ((yearRows[0].metrics.required_return ?? 0) - (assumptions.risk_premium ?? 2.0))
-        : null;
+  for (const year of window.years) {
+    const yearSeries = yearlyMetrics.get(year) ?? { caps: [], fair: [], rent: [] };
+    const firstCounty = window.counties.find((county) => window.seriesByCountyYear.get(county.fips)?.get(year));
+    const yearTreasury = firstCounty
+      ? (() => {
+          const series = window.seriesByCountyYear.get(firstCounty.fips)?.get(year);
+          if (!series) return null;
+          const computed = computeCountyFromSeries(firstCounty, year, series, assumptions, null);
+          return (computed.metrics.required_return ?? null) != null
+            ? ((computed.metrics.required_return ?? 0) - (assumptions.risk_premium ?? 2.0))
+            : null;
+        })()
+      : null;
     chartRows.push({
-      year: String(year),
-      cap_rate_median: (stats(yearCaps).median as number | undefined) ?? null,
-      fair_value_median: (stats(yearFair).median as number | undefined) ?? null,
-      cash_rent_median: (stats(yearRent).median as number | undefined) ?? null,
+      year,
+      cap_rate_median: (stats(yearSeries.caps).median as number | undefined) ?? null,
+      fair_value_median: (stats(yearSeries.fair).median as number | undefined) ?? null,
+      cash_rent_median: (stats(yearSeries.rent).median as number | undefined) ?? null,
       treasury_10y: yearTreasury != null ? Math.round(yearTreasury * 10000) / 10000 : null,
     });
   }
@@ -1848,7 +1962,7 @@ app.get('/api/v1/dashboard', async (c) => {
   const payload = {
     as_of: resolved.asOf,
     as_of_meta: resolved.meta,
-    county_count: countiesResult.results.length,
+    county_count: window.counties.length,
     summary: {
       implied_cap_rate: stats(caps),
       fair_value: stats(fvs),

@@ -149,6 +149,162 @@ export async function getCounty(db: D1Database, fips: string) {
   return db.prepare('SELECT * FROM geo_county WHERE fips = ?').bind(fips).first();
 }
 
+export interface CountySeriesMeta {
+  fips: string;
+  name: string;
+  state: string;
+  centroid_lat: number | null;
+  centroid_lon: number | null;
+}
+
+export interface CountySeriesWindow {
+  counties: CountySeriesMeta[];
+  years: string[];
+  seriesByCountyYear: Map<string, Map<string, SeriesData>>;
+  accessByCounty: Map<string, number | null>;
+}
+
+function ensureCountyYearSeries(
+  seriesByCountyYear: Map<string, Map<string, SeriesData>>,
+  geoKey: string,
+  year: string,
+): SeriesData {
+  let byYear = seriesByCountyYear.get(geoKey);
+  if (!byYear) {
+    byYear = new Map<string, SeriesData>();
+    seriesByCountyYear.set(geoKey, byYear);
+  }
+  let series = byYear.get(year);
+  if (!series) {
+    series = {};
+    byYear.set(year, series);
+  }
+  return series;
+}
+
+export async function loadCountySeriesWindow(
+  db: D1Database,
+  startYear: number,
+  endYear: number,
+  state?: string,
+): Promise<CountySeriesWindow> {
+  const countiesResult = await getAllCounties(db, state);
+  const counties = (countiesResult.results ?? []) as unknown as CountySeriesMeta[];
+  const years: string[] = [];
+  for (let year = startYear; year <= endYear; year += 1) {
+    years.push(String(year));
+  }
+
+  const seriesByCountyYear = new Map<string, Map<string, SeriesData>>();
+  const accessByCounty = new Map<string, number | null>();
+
+  if (!counties.length) {
+    return { counties: [], years, seriesByCountyYear, accessByCounty };
+  }
+
+  const yearStart = Math.min(startYear, endYear);
+  const yearEnd = Math.max(startYear, endYear);
+  const stateClause = state ? 'AND gc.state = ?' : '';
+  const stateBindings = state ? [state] : [];
+
+  const countySeries = await db
+    .prepare(
+      `SELECT gc.fips, dp.as_of_date, ds.series_key, dp.value
+       FROM geo_county gc
+       JOIN data_points dp ON dp.geo_key = gc.fips
+       JOIN data_series ds ON ds.id = dp.series_id
+       WHERE ds.series_key IN ('cash_rent', 'corn_yield')
+         AND CAST(dp.as_of_date AS INTEGER) BETWEEN ? AND ?
+         ${stateClause}`,
+    )
+    .bind(yearStart, yearEnd, ...stateBindings)
+    .all<{ fips: string; as_of_date: string; series_key: string; value: number }>();
+
+  for (const row of countySeries.results ?? []) {
+    const series = ensureCountyYearSeries(seriesByCountyYear, row.fips, row.as_of_date);
+    series[row.series_key] = row.value;
+  }
+
+  const stateLandValues = await db
+    .prepare(
+      `SELECT gc.fips, dp.as_of_date, dp.value
+       FROM geo_county gc
+       JOIN data_points dp ON dp.geo_key = gc.state
+       JOIN data_series ds ON ds.id = dp.series_id
+       WHERE ds.series_key = 'land_value'
+         AND CAST(dp.as_of_date AS INTEGER) BETWEEN ? AND ?
+         ${stateClause}`,
+    )
+    .bind(yearStart, yearEnd, ...stateBindings)
+    .all<{ fips: string; as_of_date: string; value: number }>();
+
+  for (const row of stateLandValues.results ?? []) {
+    const series = ensureCountyYearSeries(seriesByCountyYear, row.fips, row.as_of_date);
+    series.land_value = row.value;
+  }
+
+  const nationalSeries = await db
+    .prepare(
+      `SELECT dp.as_of_date, ds.series_key, dp.value
+       FROM data_points dp
+       JOIN data_series ds ON ds.id = dp.series_id
+       WHERE dp.geo_key = 'US'
+         AND ds.series_key IN ('treasury_10y', 'corn_price')
+         AND CAST(dp.as_of_date AS INTEGER) BETWEEN ? AND ?
+       ORDER BY CAST(dp.as_of_date AS INTEGER) ASC`,
+    )
+    .bind(yearStart, yearEnd)
+    .all<{ as_of_date: string; series_key: string; value: number }>();
+
+  const nationalByYear = new Map<string, SeriesData>();
+  for (const row of nationalSeries.results ?? []) {
+    const series = nationalByYear.get(row.as_of_date) ?? {};
+    series[row.series_key] = row.value;
+    nationalByYear.set(row.as_of_date, series);
+  }
+
+  for (const county of counties) {
+    for (const year of years) {
+      const national = nationalByYear.get(year);
+      if (!national) continue;
+      const series = ensureCountyYearSeries(seriesByCountyYear, county.fips, year);
+      for (const [seriesKey, value] of Object.entries(national)) {
+        if (!(seriesKey in series)) {
+          series[seriesKey] = value;
+        }
+      }
+    }
+  }
+
+  const latestAccess = await db
+    .prepare(
+      `SELECT gc.fips, gam.access_score
+       FROM geo_county gc
+       LEFT JOIN geo_access_metrics gam
+         ON gam.geo_key = gc.fips
+        AND gam.as_of_date = (
+          SELECT MAX(g2.as_of_date)
+          FROM geo_access_metrics g2
+          WHERE g2.geo_key = gc.fips
+        )
+       WHERE 1 = 1
+         ${stateClause}`,
+    )
+    .bind(...stateBindings)
+    .all<{ fips: string; access_score: number | null }>();
+
+  for (const row of latestAccess.results ?? []) {
+    accessByCounty.set(row.fips, row.access_score ?? null);
+  }
+
+  return {
+    counties,
+    years,
+    seriesByCountyYear,
+    accessByCounty,
+  };
+}
+
 // ── Timeseries ──────────────────────────────────────────────────────
 
 export async function getTimeseries(
