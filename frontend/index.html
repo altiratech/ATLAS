@@ -473,6 +473,7 @@ const $p = (n) => n != null ? (Number(n)*100).toFixed(2) + '%' : 'N/A';
 const $pct = (n) => n != null ? Number(n).toFixed(2) + '%' : 'N/A';
 const $chg = (n) => n != null ? (n > 0 ? '+' : '') + Number(n).toFixed(1) + '%' : '--';
 const $z = (n) => n != null ? Number(n).toFixed(2) + 'σ' : 'N/A';
+const $x = (n) => n != null ? Number(n).toFixed(2) + 'x' : 'N/A';
 
 function toast(msg, type='info') { return {id: Date.now()+Math.random(), msg, type, dur: 3000}; }
 const parseTags = (raw) => raw.split(',').map(t => t.trim()).filter(Boolean);
@@ -1691,6 +1692,8 @@ function CountyPage({addToast, params, nav}) {
             <tr><td>Operating Cost Ratio</td><td className="n">{$pct(m.operating_cost_ratio)}</td><td style={{fontSize:'.8rem'}}>Cost as % of rent</td></tr>
             <tr><td>NOI per Acre</td><td className="n">{$$(m.noi_per_acre)}</td><td style={{fontSize:'.8rem'}}>Net operating income</td></tr>
             <tr><td>Benchmark Value ($/ac)</td><td className="n">{$$(m.benchmark_value)}</td><td style={{fontSize:'.8rem'}}>{data.benchmark_method_detail || `USDA NASS land value • ${sourceText(data.input_lineage?.land_value)}`}</td></tr>
+            <tr><td>Yield Basis vs State</td><td className="n">{$x(m.yield_basis_ratio)}</td><td style={{fontSize:'.8rem'}}>{data.yield_productivity_detail || 'No county yield basis available'}</td></tr>
+            <tr><td>Yield Productivity Factor</td><td className="n">{$x(m.yield_productivity_factor)}</td><td style={{fontSize:'.8rem'}}>Applied inside fair value model when county yield basis exists</td></tr>
             <tr><td>Implied Cap Rate</td><td className="n">{$pct(m.implied_cap_rate)}</td><td style={{fontSize:'.8rem'}}>NOI / Land Value</td></tr>
             <tr><td>Required Return</td><td className="n">{$pct(m.required_return)}</td><td style={{fontSize:'.8rem'}}>10Y + risk premium</td></tr>
             <tr><td>Fair Value (Gordon)</td><td className="n">{$$(m.fair_value)}</td><td style={{fontSize:'.8rem'}}>NOI(1+g)/(r-g)</td></tr>

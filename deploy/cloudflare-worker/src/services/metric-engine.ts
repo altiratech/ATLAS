@@ -113,6 +113,26 @@ export const METRIC_REGISTRY: MetricDef[] = [
     dependencies: [],
     compute: (ctx) => ctx.series.benchmark_value_proxy ?? ctx.series.land_value ?? null,
   },
+  {
+    key: 'yield_basis_ratio',
+    label: 'Yield Basis vs State',
+    unit: 'x',
+    category: 'productivity',
+    description: 'Average county crop yield relative to state yield for available crops',
+    formula: 'yield_basis_ratio = mean(county crop yield / state crop yield)',
+    dependencies: [],
+    compute: (ctx) => ctx.series.yield_basis_ratio ?? null,
+  },
+  {
+    key: 'yield_productivity_factor',
+    label: 'Yield Productivity Factor',
+    unit: 'x',
+    category: 'productivity',
+    description: 'Damped county productivity adjustment derived from yield basis',
+    formula: 'yield_productivity_factor = clamp(1 + 0.5 × (yield_basis_ratio - 1), 0.85, 1.15)',
+    dependencies: ['yield_basis_ratio'],
+    compute: (ctx) => ctx.series.yield_productivity_factor ?? null,
+  },
   // 3) Owner-Paid Costs
   {
     key: 'owner_costs',
@@ -213,9 +233,9 @@ export const METRIC_REGISTRY: MetricDef[] = [
     label: 'Fair Value (GGM)',
     unit: '$/acre',
     category: 'valuation',
-    description: 'Gordon Growth Model: NOI×(1+g) / (r - g) with guardrails',
-    formula: 'fair_value = noi × (1+g) / (r - g); clamp if r ≤ g',
-    dependencies: ['noi_per_acre', 'required_return'],
+    description: 'Gordon Growth Model with county productivity adjustment',
+    formula: 'fair_value = noi × (1+g) × productivity_factor / (r - g); clamp if r ≤ g',
+    dependencies: ['noi_per_acre', 'required_return', 'yield_productivity_factor'],
     compute: (ctx) => {
       const noi = ctx.metrics.noi_per_acre;
       const r = ctx.metrics.required_return;
@@ -224,7 +244,8 @@ export const METRIC_REGISTRY: MetricDef[] = [
       const rDec = r / 100;
       const g = getAssumption(ctx, 'long_run_growth', 0.025);
       const rentShock = getAssumption(ctx, 'near_term_rent_shock', 0.0);
-      const noiAdj = noi * (1 + rentShock) * (1 + g);
+      const productivityFactor = ctx.series.yield_productivity_factor ?? 1;
+      const noiAdj = noi * (1 + rentShock) * (1 + g) * productivityFactor;
       let spread = rDec - g;
 
       if (spread <= 0.005) {

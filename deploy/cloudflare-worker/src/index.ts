@@ -108,8 +108,15 @@ async function computeCounty(
   const snapshot = await loadSeriesForCounty(db, geoKey, asOf);
   const series = { ...snapshot.series };
   const benchmarkMethod = deriveBenchmarkMethod(snapshot.lineage, snapshot.levels);
+  const yieldProductivity = deriveYieldProductivity(snapshot.levels);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     series.benchmark_value_proxy = benchmarkMethod.benchmarkProxyValue;
+  }
+  if (yieldProductivity.factor != null) {
+    series.yield_productivity_factor = yieldProductivity.factor;
+  }
+  if (yieldProductivity.ratio != null) {
+    series.yield_basis_ratio = yieldProductivity.ratio;
   }
 
   // Inject access score into series if available
@@ -133,6 +140,15 @@ async function computeCounty(
       },
     };
   }
+  if (yieldProductivity.factor != null || yieldProductivity.ratio != null) {
+    ctx.explains.yield_productivity_factor = {
+      ...(ctx.explains.yield_productivity_factor ?? {}),
+      warning: yieldProductivity.detail,
+      dependencies: {
+        yield_basis_ratio: yieldProductivity.ratio ?? 0,
+      },
+    };
+  }
 
   const county = await getCounty(db, geoKey);
 
@@ -152,6 +168,9 @@ async function computeCounty(
     benchmark_method: benchmarkMethod.method,
     benchmark_method_detail: benchmarkMethod.detail,
     benchmark_proxy_ratio: benchmarkMethod.benchmarkProxyRatio,
+    yield_basis_ratio: yieldProductivity.ratio,
+    yield_productivity_factor: yieldProductivity.factor,
+    yield_productivity_detail: yieldProductivity.detail,
     source_quality: sourceQuality.label,
     source_quality_score: sourceQuality.score,
     source_quality_detail: benchmarkMethod.detail,
@@ -177,8 +196,15 @@ function computeCountyFromSeries(
 ) {
   const hydratedSeries = { ...series };
   const benchmarkMethod = deriveBenchmarkMethod(lineage, levels);
+  const yieldProductivity = deriveYieldProductivity(levels);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     hydratedSeries.benchmark_value_proxy = benchmarkMethod.benchmarkProxyValue;
+  }
+  if (yieldProductivity.factor != null) {
+    hydratedSeries.yield_productivity_factor = yieldProductivity.factor;
+  }
+  if (yieldProductivity.ratio != null) {
+    hydratedSeries.yield_basis_ratio = yieldProductivity.ratio;
   }
   if (accessScore != null) {
     hydratedSeries['computed.access_score'] = accessScore;
@@ -199,6 +225,15 @@ function computeCountyFromSeries(
       },
     };
   }
+  if (yieldProductivity.factor != null || yieldProductivity.ratio != null) {
+    ctx.explains.yield_productivity_factor = {
+      ...(ctx.explains.yield_productivity_factor ?? {}),
+      warning: yieldProductivity.detail,
+      dependencies: {
+        yield_basis_ratio: yieldProductivity.ratio ?? 0,
+      },
+    };
+  }
 
   return {
     geo_key: county.fips,
@@ -216,6 +251,9 @@ function computeCountyFromSeries(
     benchmark_method: benchmarkMethod.method,
     benchmark_method_detail: benchmarkMethod.detail,
     benchmark_proxy_ratio: benchmarkMethod.benchmarkProxyRatio,
+    yield_basis_ratio: yieldProductivity.ratio,
+    yield_productivity_factor: yieldProductivity.factor,
+    yield_productivity_detail: yieldProductivity.detail,
     source_quality: sourceQuality.label,
     source_quality_score: sourceQuality.score,
     source_quality_detail: benchmarkMethod.detail,
@@ -335,6 +373,57 @@ function getSourceQuality(method: BenchmarkMethod) {
     default:
       return { label: 'unknown' as SourceQualityLabel, score: -1 };
   }
+}
+
+function deriveYieldProductivity(levels?: SeriesLevels | null) {
+  const cropKeys: Array<{ key: keyof SeriesData; label: string }> = [
+    { key: 'corn_yield', label: 'corn' },
+    { key: 'soybean_yield', label: 'soybean' },
+    { key: 'wheat_yield', label: 'wheat' },
+  ];
+
+  const ratios = cropKeys
+    .map(({ key, label }) => {
+      const countyValue = levels?.county[key];
+      const stateValue = levels?.state[key];
+      if (
+        typeof countyValue !== 'number'
+        || !Number.isFinite(countyValue)
+        || countyValue <= 0
+        || typeof stateValue !== 'number'
+        || !Number.isFinite(stateValue)
+        || stateValue <= 0
+      ) {
+        return null;
+      }
+      return {
+        key,
+        label,
+        countyValue,
+        stateValue,
+        ratio: countyValue / stateValue,
+      };
+    })
+    .filter((value): value is { key: keyof SeriesData; label: string; countyValue: number; stateValue: number; ratio: number } => value != null);
+
+  if (!ratios.length) {
+    return {
+      ratio: null,
+      factor: null,
+      detail: 'No county yield basis available for productivity adjustment',
+      crops: [] as string[],
+    };
+  }
+
+  const ratio = ratios.reduce((sum, item) => sum + item.ratio, 0) / ratios.length;
+  const factor = Math.max(0.85, Math.min(1.15, 1 + ((ratio - 1) * 0.5)));
+  const cropLabels = ratios.map((item) => item.label);
+  return {
+    ratio: roundNullable(ratio, 4),
+    factor: roundNullable(factor, 4),
+    detail: `County productivity factor derived from ${cropLabels.join('/')} yield versus state average`,
+    crops: cropLabels,
+  };
 }
 
 function clusterMoverRows<T extends {
