@@ -485,6 +485,25 @@ function zBand(stats) {
   return {label:`NORMAL ${$z(z)}`, className:'badge-a'};
 }
 
+function sourceBand(sourceQuality) {
+  switch (sourceQuality) {
+    case 'county': return {label:'COUNTY', className:'badge-g'};
+    case 'mixed': return {label:'MIXED', className:'badge-a'};
+    case 'state': return {label:'STATE', className:'badge-b'};
+    case 'national': return {label:'NATIONAL', className:'badge-r'};
+    default: return {label:'UNKNOWN', className:'badge-a'};
+  }
+}
+
+function sourceText(level) {
+  switch (level) {
+    case 'county': return 'county source';
+    case 'state': return 'state fallback';
+    case 'national': return 'national fallback';
+    default: return 'source unavailable';
+  }
+}
+
 function readAuthToken() {
   try {
     return window.localStorage.getItem(AUTH_TOKEN_KEY) || '';
@@ -1321,14 +1340,18 @@ function Dashboard({addToast, nav}) {
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
         <div>
           <h3 style={{fontSize:'1rem'}}>Top Value Opportunities</h3>
-          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>Ranked by positive fair value spread versus benchmark land value</div>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>County-backed rows are prioritized; identical fallback-driven clusters are collapsed.</div>
         </div>
-        <span className="badge badge-b">{movers.length} ranked counties</span>
+        <span className="badge badge-b">{movers.length} ranked clusters</span>
       </div>
       <STable
         cols={[
-          {key:'county',label:'County'},
+          {key:'county',label:'County',fmt:(_,r)=><span>{r.county}{r.duplicate_count > 1 ? ` x${r.duplicate_count}` : ''}</span>},
           {key:'state',label:'ST'},
+          {key:'source_quality',label:'Data',fmt:v=>{
+            const badge = sourceBand(v);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
           {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
           {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
           {key:'spread_pct',label:'Spread',num:true,fmt:v=><span className={v>0?'pos':'neg'}>{$chg(v)}</span>},
@@ -1471,12 +1494,17 @@ function Screener({addToast, nav}) {
         <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>
           COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
         </span>
+        <span className="badge badge-a">COUNTY-BACKED ROWS PREFERRED</span>
         {(results.as_of_meta.warnings || []).map(w => <span key={w} className="badge badge-r">{w}</span>)}
       </div>}
       <STable
         cols={[
           {key:'county',label:'County'},
           {key:'state',label:'ST'},
+          {key:'source_quality',label:'Data',fmt:v=>{
+            const badge = sourceBand(v);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
           {key:'_cash_rent',label:'Cash Rent',num:true,fmt:(_,r)=>$$(r.metrics?.cash_rent)},
           {key:'_bv',label:'Land Value',num:true,fmt:(_,r)=>$$(r.metrics?.benchmark_value)},
           {key:'_noi',label:'NOI/ac',num:true,fmt:(_,r)=>$$(r.metrics?.noi_per_acre)},
@@ -1637,6 +1665,11 @@ function CountyPage({addToast, params, nav}) {
       </div>
     </div>
     <div className="sg">
+      <div className="sc">
+        <div className="sc-l">Data Quality</div>
+        <div className="sc-v" style={{fontSize:'.95rem'}}>{sourceBand(data.source_quality).label}</div>
+        <div className="sc-c">{data.source_quality_detail || 'Valuation input lineage unavailable'}</div>
+      </div>
       <div className="sc"><div className="sc-l">NOI / Acre</div><div className="sc-v">{$$(m.noi_per_acre)}</div></div>
       <div className="sc"><div className="sc-l">Rent Multiple</div><div className="sc-v">{$(m.rent_multiple,1)}x</div></div>
       <div className="sc"><div className="sc-l">DSCR</div><div className="sc-v">{$(m.dscr,2)}</div></div>
@@ -1653,10 +1686,10 @@ function CountyPage({addToast, params, nav}) {
         <div className="tc"><table>
           <thead><tr><th>Metric</th><th>Value</th><th>Notes</th></tr></thead>
           <tbody>
-            <tr><td>Cash Rent ($/ac)</td><td className="n">{$$(m.cash_rent)}</td><td style={{fontSize:'.8rem'}}>USDA NASS county-level</td></tr>
+            <tr><td>Cash Rent ($/ac)</td><td className="n">{$$(m.cash_rent)}</td><td style={{fontSize:'.8rem'}}>USDA NASS • {sourceText(data.input_lineage?.cash_rent)}</td></tr>
             <tr><td>Operating Cost Ratio</td><td className="n">{$pct(m.operating_cost_ratio)}</td><td style={{fontSize:'.8rem'}}>Cost as % of rent</td></tr>
             <tr><td>NOI per Acre</td><td className="n">{$$(m.noi_per_acre)}</td><td style={{fontSize:'.8rem'}}>Net operating income</td></tr>
-            <tr><td>Benchmark Value ($/ac)</td><td className="n">{$$(m.benchmark_value)}</td><td style={{fontSize:'.8rem'}}>USDA NASS land value</td></tr>
+            <tr><td>Benchmark Value ($/ac)</td><td className="n">{$$(m.benchmark_value)}</td><td style={{fontSize:'.8rem'}}>USDA NASS land value • {sourceText(data.input_lineage?.land_value)}</td></tr>
             <tr><td>Implied Cap Rate</td><td className="n">{$pct(m.implied_cap_rate)}</td><td style={{fontSize:'.8rem'}}>NOI / Land Value</td></tr>
             <tr><td>Required Return</td><td className="n">{$pct(m.required_return)}</td><td style={{fontSize:'.8rem'}}>10Y + risk premium</td></tr>
             <tr><td>Fair Value (Gordon)</td><td className="n">{$$(m.fair_value)}</td><td style={{fontSize:'.8rem'}}>NOI(1+g)/(r-g)</td></tr>

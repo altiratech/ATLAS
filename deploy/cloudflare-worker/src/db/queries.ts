@@ -6,6 +6,14 @@ import type { D1Database } from '@cloudflare/workers-types';
 import type { SeriesData, Assumptions } from '../services/metric-engine';
 import { filterAnalyticCountyRows, isAnalyticCountyRow } from '../services/county-scope';
 
+export type SeriesLineageLevel = 'county' | 'state' | 'national';
+export type SeriesLineage = Record<string, SeriesLineageLevel>;
+
+export interface SeriesSnapshot {
+  series: SeriesData;
+  lineage: SeriesLineage;
+}
+
 function parseJsonSafe<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
   try {
@@ -21,7 +29,7 @@ export async function loadSeriesForCounty(
   db: D1Database,
   geoKey: string,
   asOf: string,
-): Promise<SeriesData> {
+): Promise<SeriesSnapshot> {
   // Get county state for fallback
   const county = await db
     .prepare('SELECT state FROM geo_county WHERE fips = ?')
@@ -41,8 +49,10 @@ export async function loadSeriesForCounty(
     .all<{ series_key: string; value: number }>();
 
   const result: SeriesData = {};
+  const lineage: SeriesLineage = {};
   for (const r of countyRows.results) {
     result[r.series_key] = r.value;
+    lineage[r.series_key] = 'county';
   }
 
   // State fallback
@@ -59,6 +69,7 @@ export async function loadSeriesForCounty(
     for (const r of stateRows.results) {
       if (!(r.series_key in result)) {
         result[r.series_key] = r.value;
+        lineage[r.series_key] = 'state';
       }
     }
   }
@@ -76,10 +87,11 @@ export async function loadSeriesForCounty(
   for (const r of natRows.results) {
     if (!(r.series_key in result)) {
       result[r.series_key] = r.value;
+      lineage[r.series_key] = 'national';
     }
   }
 
-  return result;
+  return { series: result, lineage };
 }
 
 // ── Assumptions Loading ─────────────────────────────────────────────
@@ -171,6 +183,7 @@ export interface CountySeriesWindow {
   counties: CountySeriesMeta[];
   years: string[];
   seriesByCountyYear: Map<string, Map<string, SeriesData>>;
+  lineageByCountyYear: Map<string, Map<string, SeriesLineage>>;
   accessByCounty: Map<string, number | null>;
 }
 
@@ -192,6 +205,24 @@ function ensureCountyYearSeries(
   return series;
 }
 
+function ensureCountyYearLineage(
+  lineageByCountyYear: Map<string, Map<string, SeriesLineage>>,
+  geoKey: string,
+  year: string,
+): SeriesLineage {
+  let byYear = lineageByCountyYear.get(geoKey);
+  if (!byYear) {
+    byYear = new Map<string, SeriesLineage>();
+    lineageByCountyYear.set(geoKey, byYear);
+  }
+  let lineage = byYear.get(year);
+  if (!lineage) {
+    lineage = {};
+    byYear.set(year, lineage);
+  }
+  return lineage;
+}
+
 export async function loadCountySeriesWindow(
   db: D1Database,
   startYear: number,
@@ -206,10 +237,11 @@ export async function loadCountySeriesWindow(
   }
 
   const seriesByCountyYear = new Map<string, Map<string, SeriesData>>();
+  const lineageByCountyYear = new Map<string, Map<string, SeriesLineage>>();
   const accessByCounty = new Map<string, number | null>();
 
   if (!counties.length) {
-    return { counties: [], years, seriesByCountyYear, accessByCounty };
+    return { counties: [], years, seriesByCountyYear, lineageByCountyYear, accessByCounty };
   }
 
   const yearStart = Math.min(startYear, endYear);
@@ -234,7 +266,9 @@ export async function loadCountySeriesWindow(
 
   for (const row of countySeries.results ?? []) {
     const series = ensureCountyYearSeries(seriesByCountyYear, row.fips, row.as_of_date);
+    const lineage = ensureCountyYearLineage(lineageByCountyYear, row.fips, row.as_of_date);
     series[row.series_key] = row.value;
+    lineage[row.series_key] = 'county';
   }
 
   const stateSeries = await db
@@ -252,8 +286,10 @@ export async function loadCountySeriesWindow(
 
   for (const row of stateSeries.results ?? []) {
     const series = ensureCountyYearSeries(seriesByCountyYear, row.fips, row.as_of_date);
+    const lineage = ensureCountyYearLineage(lineageByCountyYear, row.fips, row.as_of_date);
     if (!(row.series_key in series)) {
       series[row.series_key] = row.value;
+      lineage[row.series_key] = 'state';
     }
   }
 
@@ -282,9 +318,11 @@ export async function loadCountySeriesWindow(
       const national = nationalByYear.get(year);
       if (!national) continue;
       const series = ensureCountyYearSeries(seriesByCountyYear, county.fips, year);
+      const lineage = ensureCountyYearLineage(lineageByCountyYear, county.fips, year);
       for (const [seriesKey, value] of Object.entries(national)) {
         if (!(seriesKey in series)) {
           series[seriesKey] = value;
+          lineage[seriesKey] = 'national';
         }
       }
     }
@@ -315,6 +353,7 @@ export async function loadCountySeriesWindow(
     counties,
     years,
     seriesByCountyYear,
+    lineageByCountyYear,
     accessByCounty,
   };
 }
