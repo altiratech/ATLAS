@@ -23,7 +23,7 @@ import {
   getCounty,
   loadCountySeriesWindow,
 } from './db/queries';
-import type { SeriesLineage, SeriesLevels } from './db/queries';
+import type { SeriesLineage, SeriesLevels, SeriesLevelYears } from './db/queries';
 import { runIngestion, ingestBulkDataPoints, refreshAgCompositeIndex, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
@@ -108,7 +108,7 @@ async function computeCounty(
   const snapshot = await loadSeriesForCounty(db, geoKey, asOf);
   const series = { ...snapshot.series };
   const benchmarkMethod = deriveBenchmarkMethod(snapshot.lineage, snapshot.levels);
-  const yieldProductivity = deriveYieldProductivity(snapshot.levels);
+  const yieldProductivity = deriveYieldProductivity(snapshot.levels, snapshot.levelYears, asOf);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     series.benchmark_value_proxy = benchmarkMethod.benchmarkProxyValue;
   }
@@ -194,10 +194,11 @@ function computeCountyFromSeries(
   accessScore?: number | null,
   lineage?: SeriesLineage,
   levels?: SeriesLevels,
+  levelYears?: SeriesLevelYears,
 ) {
   const hydratedSeries = { ...series };
   const benchmarkMethod = deriveBenchmarkMethod(lineage, levels);
-  const yieldProductivity = deriveYieldProductivity(levels);
+  const yieldProductivity = deriveYieldProductivity(levels, levelYears, asOf);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     hydratedSeries.benchmark_value_proxy = benchmarkMethod.benchmarkProxyValue;
   }
@@ -389,7 +390,7 @@ function getSourceQuality(method: BenchmarkMethod) {
   }
 }
 
-function deriveYieldProductivity(levels?: SeriesLevels | null) {
+function deriveYieldProductivity(levels?: SeriesLevels | null, levelYears?: SeriesLevelYears | null, asOfYear?: string) {
   const cropKeys: Array<{ key: keyof SeriesData; label: string }> = [
     { key: 'corn_yield', label: 'corn' },
     { key: 'soybean_yield', label: 'soybean' },
@@ -416,9 +417,10 @@ function deriveYieldProductivity(levels?: SeriesLevels | null) {
         countyValue,
         stateValue,
         ratio: countyValue / stateValue,
+        basisYear: levelYears?.county[key] ?? levelYears?.state[key] ?? null,
       };
     })
-    .filter((value): value is { key: keyof SeriesData; label: string; countyValue: number; stateValue: number; ratio: number } => value != null);
+    .filter((value): value is { key: keyof SeriesData; label: string; countyValue: number; stateValue: number; ratio: number; basisYear: string | null } => value != null);
 
   if (!ratios.length) {
     return {
@@ -432,10 +434,18 @@ function deriveYieldProductivity(levels?: SeriesLevels | null) {
   const ratio = ratios.reduce((sum, item) => sum + item.ratio, 0) / ratios.length;
   const factor = Math.max(0.85, Math.min(1.15, 1 + ((ratio - 1) * 0.5)));
   const cropLabels = ratios.map((item) => item.label);
+  const staleBasisYears = Array.from(new Set(
+    ratios
+      .map((item) => item.basisYear)
+      .filter((year): year is string => !!year && !!asOfYear && year !== asOfYear),
+  )).sort();
+  const detailSuffix = staleBasisYears.length
+    ? `; latest county/state yield basis carried forward from ${staleBasisYears.join(', ')}`
+    : '';
   return {
     ratio: roundNullable(ratio, 4),
     factor: roundNullable(factor, 4),
-    detail: `County productivity factor derived from ${cropLabels.join('/')} yield versus state average`,
+    detail: `County productivity factor derived from ${cropLabels.join('/')} yield versus state average${detailSuffix}`,
     crops: cropLabels,
   };
 }
@@ -1736,6 +1746,7 @@ app.get('/api/v1/screener', async (c) => {
     const yearSeries = window.seriesByCountyYear.get(county.fips);
     const yearLineage = window.lineageByCountyYear.get(county.fips);
     const yearLevels = window.levelsByCountyYear.get(county.fips);
+    const yearLevelYears = window.levelYearsByCountyYear.get(county.fips);
     if (!yearSeries) continue;
 
     const metricHistory: Record<string, number[]> = Object.fromEntries(
@@ -1756,6 +1767,7 @@ app.get('/api/v1/screener', async (c) => {
         year === resolved.asOf ? (window.accessByCounty.get(county.fips) ?? null) : null,
         lineage,
         levels,
+        yearLevelYears?.get(year),
       );
       for (const metric of zMetrics) {
         const value = computed.metrics[metric];
@@ -2177,6 +2189,7 @@ app.get('/api/v1/dashboard', async (c) => {
     const yearSeries = window.seriesByCountyYear.get(county.fips);
     const yearLineage = window.lineageByCountyYear.get(county.fips);
     const yearLevels = window.levelsByCountyYear.get(county.fips);
+    const yearLevelYears = window.levelYearsByCountyYear.get(county.fips);
     if (!yearSeries) continue;
     for (const year of window.years) {
       const series = yearSeries.get(year);
@@ -2191,6 +2204,7 @@ app.get('/api/v1/dashboard', async (c) => {
         year === resolved.asOf ? (window.accessByCounty.get(county.fips) ?? null) : null,
         lineage,
         levels,
+        yearLevelYears?.get(year),
       );
       const bucket = yearlyMetrics.get(year);
       if (bucket) {
@@ -2314,8 +2328,9 @@ app.get('/api/v1/dashboard', async (c) => {
           const series = window.seriesByCountyYear.get(firstCounty.fips)?.get(year);
           const lineage = window.lineageByCountyYear.get(firstCounty.fips)?.get(year);
           const levels = window.levelsByCountyYear.get(firstCounty.fips)?.get(year);
+          const levelYears = window.levelYearsByCountyYear.get(firstCounty.fips)?.get(year);
           if (!series) return null;
-          const computed = computeCountyFromSeries(firstCounty, year, series, assumptions, null, lineage, levels);
+          const computed = computeCountyFromSeries(firstCounty, year, series, assumptions, null, lineage, levels, levelYears);
           return (computed.metrics.required_return ?? null) != null
             ? ((computed.metrics.required_return ?? 0) - (assumptions.risk_premium ?? 2.0))
             : null;
