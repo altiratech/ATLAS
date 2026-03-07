@@ -344,6 +344,7 @@ function clusterMoverRows<T extends {
   fair_value: number;
   implied_cap: number | null;
   noi: number | null;
+  benchmark_method?: string | null;
   source_quality: SourceQualityLabel;
   source_quality_score: number;
   fips: string;
@@ -352,15 +353,23 @@ function clusterMoverRows<T extends {
   const clustered = new Map<string, T & { duplicate_count: number; cluster_county_names: string[] }>();
 
   for (const row of rows) {
-    const clusterKey = [
-      row.state,
-      row.spread_pct,
-      row.benchmark_value,
-      row.fair_value,
-      row.implied_cap ?? 'na',
-      row.noi ?? 'na',
-      row.source_quality,
-    ].join('|');
+    const clusterKey = row.benchmark_method === 'rent_multiple_proxy'
+      ? [
+          row.state,
+          row.spread_pct,
+          row.source_quality,
+          row.benchmark_method,
+        ].join('|')
+      : [
+          row.state,
+          row.spread_pct,
+          row.benchmark_value,
+          row.fair_value,
+          row.implied_cap ?? 'na',
+          row.noi ?? 'na',
+          row.source_quality,
+          row.benchmark_method ?? 'na',
+        ].join('|');
     const existing = clustered.get(clusterKey);
     if (!existing) {
       clustered.set(clusterKey, {
@@ -1710,6 +1719,9 @@ app.get('/api/v1/screener', async (c) => {
         state: county.state,
         zscores,
         input_lineage: data.input_lineage,
+        benchmark_method: data.benchmark_method,
+        benchmark_method_detail: data.benchmark_method_detail,
+        benchmark_proxy_ratio: data.benchmark_proxy_ratio,
         source_quality: data.source_quality,
         source_quality_score: data.source_quality_score,
         source_quality_detail: data.source_quality_detail,
@@ -2112,6 +2124,9 @@ app.get('/api/v1/dashboard', async (c) => {
         implied_cap: roundNullable(d.metrics.implied_cap_rate),
         access_score: roundNullable(d.metrics.access_score, 1),
         noi: roundNullable(d.metrics.noi_per_acre, 0),
+        benchmark_method: d.benchmark_method,
+        benchmark_method_detail: d.benchmark_method_detail,
+        benchmark_proxy_ratio: d.benchmark_proxy_ratio,
         input_lineage: d.input_lineage,
         source_quality: d.source_quality,
         source_quality_score: d.source_quality_score,
