@@ -23,7 +23,7 @@ import {
   getCounty,
   loadCountySeriesWindow,
 } from './db/queries';
-import { runIngestion, ingestBulkDataPoints, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
+import { runIngestion, ingestBulkDataPoints, refreshAgCompositeIndex, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
 import { filterAnalyticCountyRows } from './services/county-scope';
@@ -2047,25 +2047,39 @@ app.get('/api/v1/ag-index', async (c) => {
   if (cached) return c.json(cached);
 
   await ensureAgCompositeIndexSchema(db);
-  const rows = await db
-    .prepare(
-      `SELECT as_of_date, value, component_json, zscore
-       FROM ag_composite_index
-       ORDER BY as_of_date DESC
-       LIMIT 900`,
-    )
-    .all<{
-      as_of_date: string;
-      value: number;
-      component_json: string;
-      zscore: number | null;
-    }>();
+  const loadRows = () =>
+    db
+      .prepare(
+        `SELECT as_of_date, value, component_json, zscore
+         FROM ag_composite_index
+         ORDER BY as_of_date DESC
+         LIMIT 900`,
+      )
+      .all<{
+        as_of_date: string;
+        value: number;
+        component_json: string;
+        zscore: number | null;
+      }>();
+
+  let rows = await loadRows();
+  let refreshErrors: string[] = [];
+  if (!rows.results.length) {
+    try {
+      const refresh = await refreshAgCompositeIndex(db);
+      refreshErrors = refresh.errors;
+      rows = await loadRows();
+    } catch (error: any) {
+      refreshErrors = [error?.message ?? 'Unknown ag-index refresh error'];
+    }
+  }
 
   if (!rows.results.length) {
     const emptyPayload = {
       latest: null,
       history: [],
       message: 'Ag composite index has not been ingested yet.',
+      refresh_errors: refreshErrors,
     };
     cacheSet(cacheKey, emptyPayload, 120_000);
     return c.json(emptyPayload);

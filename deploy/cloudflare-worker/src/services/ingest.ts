@@ -152,6 +152,12 @@ export const NASS_SERIES_KEYS = NASS_SERIES.map((series) => series.seriesKey) as
 const NASS_BASE = 'https://quickstats.nass.usda.gov/api/api_GET/';
 const FRED_BASE = 'https://api.stlouisfed.org/fred/series/observations';
 const AG_INDEX_TICKERS = ['DBA', 'MOO', 'CROP', 'WEAT'] as const;
+const STOOQ_SYMBOLS: Record<(typeof AG_INDEX_TICKERS)[number], string> = {
+  DBA: 'dba.us',
+  MOO: 'moo.us',
+  CROP: 'crop.us',
+  WEAT: 'weat.us',
+};
 const NASS_TIMEOUT_MS = 25_000;
 const FRED_TIMEOUT_MS = 20_000;
 const YAHOO_TIMEOUT_MS = 20_000;
@@ -291,11 +297,11 @@ async function fetchNass(apiKey: string, params: Record<string, string>): Promis
   return payload.data ?? [];
 }
 
-async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+async function fetchWithTimeout(url: string, timeoutMs: number, init?: RequestInit): Promise<Response> {
   const controller = new AbortController();
   const timerId = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(url, { signal: controller.signal });
+    return await fetch(url, { ...(init ?? {}), signal: controller.signal });
   } catch (error: any) {
     if (error?.name === 'AbortError') {
       throw new Error(`Request timed out after ${timeoutMs}ms`);
@@ -542,7 +548,12 @@ async function ensureAgCompositeIndexTable(db: D1Database): Promise<void> {
 
 async function fetchYahooDailyClose(symbol: string, range = '3y'): Promise<Array<{ date: string; close: number }>> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1d`;
-  const response = await fetchWithTimeout(url, YAHOO_TIMEOUT_MS);
+  const response = await fetchWithTimeout(url, YAHOO_TIMEOUT_MS, {
+    headers: {
+      accept: 'application/json',
+      'user-agent': 'AltiraAtlas/1.0 (+https://atlas.altiratech.com)',
+    },
+  });
   if (!response.ok) {
     throw new Error(`Yahoo Finance ${symbol} ${response.status}: ${await response.text()}`);
   }
@@ -558,6 +569,57 @@ async function fetchYahooDailyClose(symbol: string, range = '3y'): Promise<Array
     rows.push({ date, close });
   }
   return rows;
+}
+
+async function fetchStooqDailyClose(symbol: (typeof AG_INDEX_TICKERS)[number]): Promise<Array<{ date: string; close: number }>> {
+  const stooqSymbol = STOOQ_SYMBOLS[symbol];
+  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(stooqSymbol)}&i=d`;
+  const response = await fetchWithTimeout(url, YAHOO_TIMEOUT_MS, {
+    headers: {
+      accept: 'text/csv,*/*',
+      'user-agent': 'AltiraAtlas/1.0 (+https://atlas.altiratech.com)',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Stooq ${symbol} ${response.status}: ${await response.text()}`);
+  }
+
+  const csv = await response.text();
+  const lines = csv.trim().split(/\r?\n/);
+  if (lines.length <= 1) {
+    throw new Error(`Stooq ${symbol}: no rows returned`);
+  }
+
+  const rows: Array<{ date: string; close: number }> = [];
+  for (const line of lines.slice(1)) {
+    const [date, , , , close] = line.split(',');
+    if (!date || !close || close === 'N/D') continue;
+    const value = Number(close);
+    if (!Number.isFinite(value)) continue;
+    rows.push({ date, close: value });
+  }
+
+  if (!rows.length) {
+    throw new Error(`Stooq ${symbol}: no valid close prices parsed`);
+  }
+  return rows;
+}
+
+async function fetchAgIndexDailyClose(symbol: (typeof AG_INDEX_TICKERS)[number]): Promise<Array<{ date: string; close: number }>> {
+  const errors: string[] = [];
+  try {
+    return await fetchYahooDailyClose(symbol, '3y');
+  } catch (error: any) {
+    errors.push(`Yahoo: ${asErrorMessage(error)}`);
+  }
+
+  try {
+    return await fetchStooqDailyClose(symbol);
+  } catch (error: any) {
+    errors.push(`Stooq: ${asErrorMessage(error)}`);
+  }
+
+  throw new Error(errors.join(' | '));
 }
 
 function computeZscore(value: number, series: number[]): number {
@@ -576,7 +638,7 @@ async function ingestAgCompositeIndex(db: D1Database): Promise<IngestResult> {
   const histories = await Promise.all(
     AG_INDEX_TICKERS.map(async (ticker) => {
       try {
-        const rows = await fetchYahooDailyClose(ticker, '3y');
+        const rows = await fetchAgIndexDailyClose(ticker);
         return { ticker, rows };
       } catch (error: any) {
         result.errors.push(`${ticker}: ${error.message}`);
@@ -630,6 +692,10 @@ async function ingestAgCompositeIndex(db: D1Database): Promise<IngestResult> {
   }
 
   return result;
+}
+
+export async function refreshAgCompositeIndex(db: D1Database): Promise<IngestResult> {
+  return ingestAgCompositeIndex(db);
 }
 
 async function logFreshness(db: D1Database, source: string, ingestResult: IngestResult): Promise<void> {
