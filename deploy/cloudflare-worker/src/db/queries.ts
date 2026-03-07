@@ -4,6 +4,7 @@
  */
 import type { D1Database } from '@cloudflare/workers-types';
 import type { SeriesData, Assumptions } from '../services/metric-engine';
+import { filterAnalyticCountyRows, isAnalyticCountyRow } from '../services/county-scope';
 
 function parseJsonSafe<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -137,16 +138,25 @@ export async function getAccessScore(
 
 export async function getAllCounties(db: D1Database, state?: string) {
   if (state) {
-    return db
+    const rows = await db
       .prepare('SELECT * FROM geo_county WHERE state = ? ORDER BY name')
       .bind(state)
       .all();
+    return {
+      ...rows,
+      results: filterAnalyticCountyRows((rows.results ?? []) as Array<Record<string, unknown>>),
+    };
   }
-  return db.prepare('SELECT * FROM geo_county ORDER BY state, name').all();
+  const rows = await db.prepare('SELECT * FROM geo_county ORDER BY state, name').all();
+  return {
+    ...rows,
+    results: filterAnalyticCountyRows((rows.results ?? []) as Array<Record<string, unknown>>),
+  };
 }
 
 export async function getCounty(db: D1Database, fips: string) {
-  return db.prepare('SELECT * FROM geo_county WHERE fips = ?').bind(fips).first();
+  const county = await db.prepare('SELECT * FROM geo_county WHERE fips = ?').bind(fips).first<any>();
+  return county && isAnalyticCountyRow(county) ? county : null;
 }
 
 export interface CountySeriesMeta {

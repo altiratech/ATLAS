@@ -26,6 +26,7 @@ import {
 import { runIngestion, ingestBulkDataPoints, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
+import { filterAnalyticCountyRows } from './services/county-scope';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -181,6 +182,19 @@ function stats(arr: number[]) {
     p25: Math.round(arr[Math.floor(n / 4)] * 100) / 100,
     p75: Math.round(arr[Math.floor((3 * n) / 4)] * 100) / 100,
   };
+}
+
+function hasModeledCoreMetrics(metrics: Record<string, number | null | undefined>) {
+  return ['cash_rent', 'implied_cap_rate', 'fair_value'].some((key) => {
+    const value = metrics[key];
+    return typeof value === 'number' && Number.isFinite(value);
+  });
+}
+
+function roundNullable(value: number | null | undefined, decimals = 2) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }
 
 function parseOptionalYear(value: string | undefined): number | undefined {
@@ -1284,7 +1298,7 @@ app.get('/api/v1/search', async (c) => {
     state: string;
     state_name: string | null;
   }>();
-  for (const co of counties.results) {
+  for (const co of filterAnalyticCountyRows(counties.results ?? [])) {
     let score = 0;
     if (co.name.toLowerCase().includes(q)) score = 100;
     else if (co.state.toLowerCase().includes(q) || (co.state_name ?? '').toLowerCase().includes(q)) score = 60;
@@ -1452,6 +1466,7 @@ app.get('/api/v1/screener', async (c) => {
 
     if (!data) continue;
     const m = data.metrics;
+    if (!hasModeledCoreMetrics(m)) continue;
     const zscores = Object.fromEntries(
       zMetrics.map((metric) => {
         const currentValue = (m[metric] ?? null) as number | null;
@@ -1864,7 +1879,9 @@ app.get('/api/v1/dashboard', async (c) => {
         if (typeof rent === 'number' && Number.isFinite(rent)) bucket.rent.push(rent);
       }
       if (year === resolved.asOf) {
-        allData.push(computed);
+        if (hasModeledCoreMetrics(computed.metrics)) {
+          allData.push(computed);
+        }
       }
     }
   }
@@ -1889,9 +1906,9 @@ app.get('/api/v1/dashboard', async (c) => {
         fair_value: Math.round(fv),
         benchmark_value: Math.round(bv),
         spread_pct: Math.round(spread * 10) / 10,
-        implied_cap: Math.round((d.metrics.implied_cap_rate ?? 0) * 100) / 100,
-        access_score: Math.round((d.metrics.access_score ?? 0) * 10) / 10,
-        noi: Math.round(d.metrics.noi_per_acre ?? 0),
+        implied_cap: roundNullable(d.metrics.implied_cap_rate),
+        access_score: roundNullable(d.metrics.access_score, 1),
+        noi: roundNullable(d.metrics.noi_per_acre, 0),
       });
     }
   }
@@ -2733,9 +2750,7 @@ app.get('/api/v1/export/screener', async (c) => {
   const assumptionSetId = c.req.query('assumption_set_id');
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
 
-  const countiesResult = await db
-    .prepare('SELECT * FROM geo_county ORDER BY state, name')
-    .all<any>();
+  const countiesResult = await getAllCounties(db);
 
   const headers = [
     'FIPS',
@@ -2754,7 +2769,7 @@ app.get('/api/v1/export/screener', async (c) => {
   ];
 
   let csv = headers.join(',') + '\n';
-  for (const co of countiesResult.results) {
+  for (const co of countiesResult.results as any[]) {
     const data = await computeCounty(db, co.fips, resolved.asOf, assumptions);
     const m = data.metrics;
     csv +=
@@ -2762,16 +2777,16 @@ app.get('/api/v1/export/screener', async (c) => {
         co.fips,
         `"${co.name}"`,
         co.state,
-        Math.round(((m.cash_rent as number) ?? 0) * 100) / 100,
-        Math.round((m.benchmark_value as number) ?? 0),
-        Math.round(((m.noi_per_acre as number) ?? 0) * 100) / 100,
-        Math.round(((m.implied_cap_rate as number) ?? 0) * 100) / 100,
-        Math.round(((m.rent_multiple as number) ?? 0) * 10) / 10,
-        Math.round((m.fair_value as number) ?? 0),
-        Math.round((m.cap_spread_to_10y as number) ?? 0),
-        Math.round(((m.access_score as number) ?? 0) * 10) / 10,
-        Math.round(((m.dscr as number) ?? 0) * 100) / 100,
-        Math.round(((m.payback_period as number) ?? 0) * 10) / 10,
+        roundNullable(m.cash_rent) ?? '',
+        roundNullable(m.benchmark_value, 0) ?? '',
+        roundNullable(m.noi_per_acre) ?? '',
+        roundNullable(m.implied_cap_rate) ?? '',
+        roundNullable(m.rent_multiple, 1) ?? '',
+        roundNullable(m.fair_value, 0) ?? '',
+        roundNullable(m.cap_spread_to_10y, 0) ?? '',
+        roundNullable(m.access_score, 1) ?? '',
+        roundNullable(m.dscr) ?? '',
+        roundNullable(m.payback_period, 1) ?? '',
       ].join(',') + '\n';
   }
 

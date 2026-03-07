@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import { filterAnalyticCountyRows } from './county-scope';
 
 export interface AsOfResolveOptions {
   requestedAsOf?: string | null;
@@ -45,6 +46,7 @@ const HIGH_COVERAGE_THRESHOLD = 0.7;
 interface CountyRow {
   fips: string;
   state: string;
+  name?: string | null;
 }
 
 function clampPct(value: number): number {
@@ -64,15 +66,15 @@ async function loadCounties(db: D1Database, state?: string | null): Promise<Coun
   const normalized = (state ?? '').trim().toUpperCase();
   if (normalized) {
     const rows = await db
-      .prepare('SELECT fips, state FROM geo_county WHERE state = ? ORDER BY fips')
+      .prepare('SELECT fips, state, name FROM geo_county WHERE state = ? ORDER BY fips')
       .bind(normalized)
       .all<CountyRow>();
-    return rows.results;
+    return filterAnalyticCountyRows(rows.results ?? []);
   }
   const rows = await db
-    .prepare('SELECT fips, state FROM geo_county ORDER BY fips')
+    .prepare('SELECT fips, state, name FROM geo_county ORDER BY fips')
     .all<CountyRow>();
-  return rows.results;
+  return filterAnalyticCountyRows(rows.results ?? []);
 }
 
 async function listCandidateYears(db: D1Database, requiredSeries: string[]): Promise<string[]> {
