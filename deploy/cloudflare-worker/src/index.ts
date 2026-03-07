@@ -1912,7 +1912,19 @@ app.get('/api/v1/dashboard', async (c) => {
       });
     }
   }
-  movers.sort((a, b) => Math.abs(b.spread_pct) - Math.abs(a.spread_pct));
+  const positiveSpread = movers
+    .filter((row) => row.spread_pct > 0)
+    .sort((a, b) => b.spread_pct - a.spread_pct);
+  const closestToFair = movers
+    .filter((row) => row.spread_pct <= 0)
+    .sort((a, b) => b.spread_pct - a.spread_pct);
+  const overvalued = movers
+    .filter((row) => row.spread_pct < 0)
+    .sort((a, b) => a.spread_pct - b.spread_pct);
+  const rankedMovers = [
+    ...positiveSpread.slice(0, 15),
+    ...closestToFair.slice(0, Math.max(0, 15 - positiveSpread.length)),
+  ].slice(0, 15);
 
   // State summary
   const stateData: Record<string, any[]> = {};
@@ -1975,6 +1987,17 @@ app.get('/api/v1/dashboard', async (c) => {
   const capSummaryStats = computeZScoreStats((stats(caps).median as number | null) ?? null, capSeries, chartYears);
   const fairSummaryStats = computeZScoreStats((stats(fvs).median as number | null) ?? null, fairSeries, chartYears);
   const rentSummaryStats = computeZScoreStats((stats(rents).median as number | null) ?? null, rentSeries, chartYears);
+  const capRateDistribution = [
+    { label: '<1.5%', min: 0, max: 1.5 },
+    { label: '1.5-2%', min: 1.5, max: 2 },
+    { label: '2-2.5%', min: 2, max: 2.5 },
+    { label: '2.5-3%', min: 2.5, max: 3 },
+    { label: '3-4%', min: 3, max: 4 },
+    { label: '>4%', min: 4, max: Number.POSITIVE_INFINITY },
+  ].map((bucket) => ({
+    label: bucket.label,
+    value: caps.filter((cap) => cap >= bucket.min && cap < bucket.max).length,
+  }));
 
   const payload = {
     as_of: resolved.asOf,
@@ -2007,8 +2030,10 @@ app.get('/api/v1/dashboard', async (c) => {
       cash_rent_median_by_year: chartRows.map((row) => ({ year: row.year, value: row.cash_rent_median })),
       treasury_10y_by_year: chartRows.map((row) => ({ year: row.year, value: row.treasury_10y })),
     },
+    cap_rate_distribution: capRateDistribution,
     treasury_10y: treasury10y,
-    top_movers: movers.slice(0, 15),
+    top_movers: rankedMovers,
+    top_overvalued: overvalued.slice(0, 15),
     state_summary: stateSummary,
   };
   cacheSet(cacheKey, payload, 60_000);

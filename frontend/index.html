@@ -1242,13 +1242,7 @@ function Dashboard({addToast, nav}) {
   const warnings = coverage?.warnings || [];
   const charts = data.charts || {};
 
-  // Cap rate distribution buckets
-  const capBuckets = [];
-  if (movers.length > 0) {
-    const caps = movers.map(m => m.implied_cap).filter(c => c > 0);
-    const ranges = [[0,1.5,'<1.5%'],[1.5,2,'1.5-2%'],[2,2.5,'2-2.5%'],[2.5,3,'2.5-3%'],[3,4,'3-4%'],[4,100,'>4%']];
-    ranges.forEach(([lo,hi,lbl]) => capBuckets.push({label:lbl, value:caps.filter(c=>c>=lo&&c<hi).length}));
-  }
+  const capBuckets = data.cap_rate_distribution || [];
 
   return <div>
     <div className="card" style={{marginBottom:'1rem',padding:'.65rem .75rem'}}>
@@ -1325,8 +1319,11 @@ function Dashboard({addToast, nav}) {
 
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
-        <h3 style={{fontSize:'1rem'}}>Top Movers by Fair Value Spread</h3>
-        <span className="badge badge-b">{movers.length} counties</span>
+        <div>
+          <h3 style={{fontSize:'1rem'}}>Top Value Opportunities</h3>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>Ranked by positive fair value spread versus benchmark land value</div>
+        </div>
+        <span className="badge badge-b">{movers.length} ranked counties</span>
       </div>
       <STable
         cols={[
@@ -1485,6 +1482,10 @@ function Screener({addToast, nav}) {
           {key:'_noi',label:'NOI/ac',num:true,fmt:(_,r)=>$$(r.metrics?.noi_per_acre)},
           {key:'_cap',label:'Cap Rate',num:true,fmt:(_,r)=>$pct(r.metrics?.implied_cap_rate)},
           {key:'_fv',label:'Fair Value',num:true,fmt:(_,r)=>$$(r.metrics?.fair_value)},
+          {key:'_spread',label:'Spread',num:true,fmt:(_,r)=> {
+            const v = r._spread;
+            return v == null ? '--' : <span className={v>0?'pos':'neg'}>{$chg(v)}</span>;
+          }},
           {key:'_rm',label:'Rent Mult',num:true,fmt:(_,r)=>$(r.metrics?.rent_multiple,1)},
           {key:'_access',label:'Access',num:true,fmt:(_,r)=>$(r.metrics?.access_score,1)},
           {key:'_zcap',label:'Cap Z',num:true,fmt:(_,r)=> {
@@ -1500,7 +1501,14 @@ function Screener({addToast, nav}) {
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
         ]}
-        rows={(results.results||[]).map(r=>({...r, _cash_rent:r.metrics?.cash_rent, _bv:r.metrics?.benchmark_value, _cap:r.metrics?.implied_cap_rate, _fv:r.metrics?.fair_value, _rm:r.metrics?.rent_multiple, _noi:r.metrics?.noi_per_acre, _access:r.metrics?.access_score, _zcap:r.zscores?.implied_cap_rate?.zscore, _zfv:r.zscores?.fair_value?.zscore, _zrent:r.zscores?.cash_rent?.zscore}))}
+        rows={(results.results||[]).map(r=>{
+          const fair = r.metrics?.fair_value;
+          const benchmark = r.metrics?.benchmark_value;
+          const spread = (fair != null && benchmark != null && benchmark > 0)
+            ? ((fair - benchmark) / benchmark) * 100
+            : null;
+          return {...r, _cash_rent:r.metrics?.cash_rent, _bv:benchmark, _cap:r.metrics?.implied_cap_rate, _fv:fair, _spread:spread, _rm:r.metrics?.rent_multiple, _noi:r.metrics?.noi_per_acre, _access:r.metrics?.access_score, _zcap:r.zscores?.implied_cap_rate?.zscore, _zfv:r.zscores?.fair_value?.zscore, _zrent:r.zscores?.cash_rent?.zscore};
+        })}
         onRow={r => nav(PG.COUNTY, {fips:r.fips})}
       />
     </div>}
