@@ -216,6 +216,8 @@ export async function loadCountySeriesWindow(
   const yearEnd = Math.max(startYear, endYear);
   const stateClause = state ? 'AND gc.state = ?' : '';
   const stateBindings = state ? [state] : [];
+  const localRegionalSeriesKeys = ['cash_rent', 'corn_yield', 'land_value'];
+  const localRegionalPlaceholders = localRegionalSeriesKeys.map(() => '?').join(',');
 
   const countySeries = await db
     .prepare(
@@ -223,11 +225,11 @@ export async function loadCountySeriesWindow(
        FROM geo_county gc
        JOIN data_points dp ON dp.geo_key = gc.fips
        JOIN data_series ds ON ds.id = dp.series_id
-       WHERE ds.series_key IN ('cash_rent', 'corn_yield')
+       WHERE ds.series_key IN (${localRegionalPlaceholders})
          AND CAST(dp.as_of_date AS INTEGER) BETWEEN ? AND ?
          ${stateClause}`,
     )
-    .bind(yearStart, yearEnd, ...stateBindings)
+    .bind(...localRegionalSeriesKeys, yearStart, yearEnd, ...stateBindings)
     .all<{ fips: string; as_of_date: string; series_key: string; value: number }>();
 
   for (const row of countySeries.results ?? []) {
@@ -235,22 +237,24 @@ export async function loadCountySeriesWindow(
     series[row.series_key] = row.value;
   }
 
-  const stateLandValues = await db
+  const stateSeries = await db
     .prepare(
-      `SELECT gc.fips, dp.as_of_date, dp.value
+      `SELECT gc.fips, dp.as_of_date, ds.series_key, dp.value
        FROM geo_county gc
        JOIN data_points dp ON dp.geo_key = gc.state
        JOIN data_series ds ON ds.id = dp.series_id
-       WHERE ds.series_key = 'land_value'
+       WHERE ds.series_key IN (${localRegionalPlaceholders})
          AND CAST(dp.as_of_date AS INTEGER) BETWEEN ? AND ?
          ${stateClause}`,
     )
-    .bind(yearStart, yearEnd, ...stateBindings)
-    .all<{ fips: string; as_of_date: string; value: number }>();
+    .bind(...localRegionalSeriesKeys, yearStart, yearEnd, ...stateBindings)
+    .all<{ fips: string; as_of_date: string; series_key: string; value: number }>();
 
-  for (const row of stateLandValues.results ?? []) {
+  for (const row of stateSeries.results ?? []) {
     const series = ensureCountyYearSeries(seriesByCountyYear, row.fips, row.as_of_date);
-    series.land_value = row.value;
+    if (!(row.series_key in series)) {
+      series[row.series_key] = row.value;
+    }
   }
 
   const nationalSeries = await db
@@ -259,7 +263,7 @@ export async function loadCountySeriesWindow(
        FROM data_points dp
        JOIN data_series ds ON ds.id = dp.series_id
        WHERE dp.geo_key = 'US'
-         AND ds.series_key IN ('treasury_10y', 'corn_price')
+         AND ds.series_key IN ('cash_rent', 'corn_yield', 'land_value', 'treasury_10y', 'corn_price')
          AND CAST(dp.as_of_date AS INTEGER) BETWEEN ? AND ?
        ORDER BY CAST(dp.as_of_date AS INTEGER) ASC`,
     )
