@@ -28,6 +28,11 @@ import { runIngestion, ingestBulkDataPoints, refreshAgCompositeIndex, TRACKED_ST
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
 import { filterAnalyticCountyRows } from './services/county-scope';
+import {
+  computeIndustrialScorecard,
+  ensureIndustrialSeriesCatalog,
+  INDUSTRIAL_REQUIRED_SERIES,
+} from './services/industrial';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -970,6 +975,11 @@ function defaultAnalysisRecord() {
     key_risks: [] as string[],
     catalysts: [] as string[],
     decision_state: 'exploring',
+    asset_type: '',
+    target_use_case: '',
+    critical_dependencies: [] as string[],
+    missing_data_notes: [] as string[],
+    approval_state: '',
   };
 }
 
@@ -988,6 +998,15 @@ function parseAnalysis(analysisJson: string | null) {
         ? parsed.catalysts.filter((item: unknown): item is string => typeof item === 'string')
         : [],
       decision_state: typeof parsed?.decision_state === 'string' ? parsed.decision_state : 'exploring',
+      asset_type: typeof parsed?.asset_type === 'string' ? parsed.asset_type : '',
+      target_use_case: typeof parsed?.target_use_case === 'string' ? parsed.target_use_case : '',
+      critical_dependencies: Array.isArray(parsed?.critical_dependencies)
+        ? parsed.critical_dependencies.filter((item: unknown): item is string => typeof item === 'string')
+        : [],
+      missing_data_notes: Array.isArray(parsed?.missing_data_notes)
+        ? parsed.missing_data_notes.filter((item: unknown): item is string => typeof item === 'string')
+        : [],
+      approval_state: typeof parsed?.approval_state === 'string' ? parsed.approval_state : '',
     };
   } catch {
     return defaultAnalysisRecord();
@@ -1010,6 +1029,19 @@ function normalizeAnalysisInput(value: unknown, fallback = defaultAnalysisRecord
     decision_state: typeof incoming.decision_state === 'string'
       ? incoming.decision_state
       : fallback.decision_state,
+    asset_type: typeof incoming.asset_type === 'string' ? incoming.asset_type : fallback.asset_type,
+    target_use_case: typeof incoming.target_use_case === 'string'
+      ? incoming.target_use_case
+      : fallback.target_use_case,
+    critical_dependencies: Array.isArray(incoming.critical_dependencies)
+      ? incoming.critical_dependencies.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : fallback.critical_dependencies,
+    missing_data_notes: Array.isArray(incoming.missing_data_notes)
+      ? incoming.missing_data_notes.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+      : fallback.missing_data_notes,
+    approval_state: typeof incoming.approval_state === 'string'
+      ? incoming.approval_state
+      : fallback.approval_state,
   };
 }
 
@@ -1476,6 +1508,39 @@ app.get('/api/v1/geo/:geoKey/summary', async (c) => {
   return c.json({
     ...result,
     zscores,
+    as_of_meta: resolved.meta,
+  });
+});
+
+app.get('/api/v1/industrial/scorecard/:geoKey', async (c) => {
+  const db = c.env.DB;
+  const geoKey = c.req.param('geoKey');
+  const useCase = (c.req.query('use_case') ?? 'data_center').trim().toLowerCase();
+  if (useCase !== 'data_center') {
+    return c.json({ error: 'Unsupported industrial use_case' }, 400);
+  }
+
+  const county = await getCounty(db, geoKey);
+  if (!county) return c.json({ error: 'County not found' }, 404);
+
+  await ensureIndustrialSeriesCatalog(db);
+  const resolved = await resolveAsOf(db, {
+    requestedAsOf: c.req.query('as_of') ?? 'latest',
+    state: county.state ?? null,
+    requiredSeries: [...INDUSTRIAL_REQUIRED_SERIES],
+  });
+  const snapshot = await loadSeriesForCounty(db, geoKey, resolved.asOf);
+  const scorecard = computeIndustrialScorecard(
+    geoKey,
+    county.name ?? geoKey,
+    county.state ?? '',
+    resolved.asOf,
+    'data_center',
+    snapshot,
+  );
+
+  return c.json({
+    ...scorecard,
     as_of_meta: resolved.meta,
   });
 });
