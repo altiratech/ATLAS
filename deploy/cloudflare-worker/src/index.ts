@@ -23,7 +23,7 @@ import {
   getCounty,
   loadCountySeriesWindow,
 } from './db/queries';
-import type { SeriesLineage } from './db/queries';
+import type { SeriesLineage, SeriesLevels } from './db/queries';
 import { runIngestion, ingestBulkDataPoints, refreshAgCompositeIndex, TRACKED_STATES, NASS_SERIES_KEYS } from './services/ingest';
 import { resolveAsOf } from './services/asof';
 import { computeZScoreStats, zscoreBand } from './services/zscore';
@@ -107,6 +107,10 @@ async function computeCounty(
 ) {
   const snapshot = await loadSeriesForCounty(db, geoKey, asOf);
   const series = { ...snapshot.series };
+  const benchmarkMethod = deriveBenchmarkMethod(snapshot.lineage, snapshot.levels);
+  if (benchmarkMethod.benchmarkProxyValue != null) {
+    series.benchmark_value_proxy = benchmarkMethod.benchmarkProxyValue;
+  }
 
   // Inject access score into series if available
   const accessData = await getAccessScore(db, geoKey, asOf);
@@ -116,7 +120,19 @@ async function computeCounty(
 
   const ctx = createContext(geoKey, asOf, series, assumptions);
   computeAll(ctx);
-  const sourceQuality = getSourceQuality(snapshot.lineage);
+  const sourceQuality = getSourceQuality(benchmarkMethod.method);
+  if (benchmarkMethod.benchmarkProxyValue != null) {
+    ctx.explains.benchmark_value = {
+      ...(ctx.explains.benchmark_value ?? {}),
+      warning: benchmarkMethod.detail,
+      dependencies: {
+        county_cash_rent: roundNullable(snapshot.levels.county.cash_rent, 4) ?? 0,
+        state_cash_rent: roundNullable(snapshot.levels.state.cash_rent, 4) ?? 0,
+        state_land_value: roundNullable(snapshot.levels.state.land_value, 4) ?? 0,
+        state_rent_multiple: benchmarkMethod.benchmarkProxyRatio ?? 0,
+      },
+    };
+  }
 
   const county = await getCounty(db, geoKey);
 
@@ -133,9 +149,12 @@ async function computeCounty(
     explains: ctx.explains,
     fallbacks: ctx.fallbacks,
     input_lineage: snapshot.lineage,
+    benchmark_method: benchmarkMethod.method,
+    benchmark_method_detail: benchmarkMethod.detail,
+    benchmark_proxy_ratio: benchmarkMethod.benchmarkProxyRatio,
     source_quality: sourceQuality.label,
     source_quality_score: sourceQuality.score,
-    source_quality_detail: sourceQuality.detail,
+    source_quality_detail: benchmarkMethod.detail,
     access_details: accessData?.distances ?? {},
     access_density: accessData?.density ?? {},
   };
@@ -154,15 +173,32 @@ function computeCountyFromSeries(
   assumptions: Assumptions,
   accessScore?: number | null,
   lineage?: SeriesLineage,
+  levels?: SeriesLevels,
 ) {
   const hydratedSeries = { ...series };
+  const benchmarkMethod = deriveBenchmarkMethod(lineage, levels);
+  if (benchmarkMethod.benchmarkProxyValue != null) {
+    hydratedSeries.benchmark_value_proxy = benchmarkMethod.benchmarkProxyValue;
+  }
   if (accessScore != null) {
     hydratedSeries['computed.access_score'] = accessScore;
   }
 
   const ctx = createContext(county.fips, asOf, hydratedSeries, assumptions);
   computeAll(ctx);
-  const sourceQuality = getSourceQuality(lineage);
+  const sourceQuality = getSourceQuality(benchmarkMethod.method);
+  if (benchmarkMethod.benchmarkProxyValue != null) {
+    ctx.explains.benchmark_value = {
+      ...(ctx.explains.benchmark_value ?? {}),
+      warning: benchmarkMethod.detail,
+      dependencies: {
+        county_cash_rent: roundNullable(levels?.county.cash_rent, 4) ?? 0,
+        state_cash_rent: roundNullable(levels?.state.cash_rent, 4) ?? 0,
+        state_land_value: roundNullable(levels?.state.land_value, 4) ?? 0,
+        state_rent_multiple: benchmarkMethod.benchmarkProxyRatio ?? 0,
+      },
+    };
+  }
 
   return {
     geo_key: county.fips,
@@ -177,9 +213,12 @@ function computeCountyFromSeries(
     explains: ctx.explains,
     fallbacks: ctx.fallbacks,
     input_lineage: lineage ?? {},
+    benchmark_method: benchmarkMethod.method,
+    benchmark_method_detail: benchmarkMethod.detail,
+    benchmark_proxy_ratio: benchmarkMethod.benchmarkProxyRatio,
     source_quality: sourceQuality.label,
     source_quality_score: sourceQuality.score,
-    source_quality_detail: sourceQuality.detail,
+    source_quality_detail: benchmarkMethod.detail,
   };
 }
 
@@ -210,52 +249,92 @@ function roundNullable(value: number | null | undefined, decimals = 2) {
   return Math.round(value * factor) / factor;
 }
 
-type SourceQualityLabel = 'county' | 'mixed' | 'state' | 'national' | 'unknown';
+type BenchmarkMethod = 'county_observed' | 'rent_multiple_proxy' | 'mixed_fallback' | 'state_fallback' | 'national_fallback' | 'unavailable';
+type SourceQualityLabel = 'county' | 'proxy' | 'mixed' | 'state' | 'national' | 'unknown';
 
-function getSourceQuality(lineage?: SeriesLineage | null) {
+function deriveBenchmarkMethod(lineage?: SeriesLineage | null, levels?: SeriesLevels | null) {
   const rentSource = lineage?.cash_rent ?? null;
   const landSource = lineage?.land_value ?? null;
+  const countyRent = levels?.county.cash_rent ?? null;
+  const stateRent = levels?.state.cash_rent ?? null;
+  const stateLandValue = levels?.state.land_value ?? null;
 
   if (rentSource === 'county' && landSource === 'county') {
     return {
-      label: 'county' as SourceQualityLabel,
-      score: 3,
-      detail: 'County-backed cash rent and land value',
+      method: 'county_observed' as BenchmarkMethod,
+      benchmarkProxyValue: null,
+      benchmarkProxyRatio: null,
+      detail: 'Observed county land value',
     };
   }
 
   if ([rentSource, landSource].includes('national')) {
     return {
-      label: 'national' as SourceQualityLabel,
-      score: 0,
+      method: 'national_fallback' as BenchmarkMethod,
+      benchmarkProxyValue: null,
+      benchmarkProxyRatio: null,
       detail: 'National fallback used in valuation inputs',
+    };
+  }
+
+  if (
+    rentSource === 'county'
+    && landSource === 'state'
+    && countyRent != null
+    && stateRent != null
+    && stateLandValue != null
+    && stateRent > 0
+    && stateLandValue > 0
+  ) {
+    return {
+      method: 'rent_multiple_proxy' as BenchmarkMethod,
+      benchmarkProxyValue: roundNullable(countyRent * (stateLandValue / stateRent), 4),
+      benchmarkProxyRatio: roundNullable(stateLandValue / stateRent, 4),
+      detail: 'County benchmark derived from county cash rent × state rent multiple',
     };
   }
 
   if (rentSource === 'state' && landSource === 'state') {
     return {
-      label: 'state' as SourceQualityLabel,
-      score: 1,
-      detail: 'State-level fallback used for rent and land value',
+      method: 'state_fallback' as BenchmarkMethod,
+      benchmarkProxyValue: null,
+      benchmarkProxyRatio: null,
+      detail: 'State-level fallback used for rent and benchmark value',
     };
   }
 
-  if (
-    [rentSource, landSource].includes('county')
-    && [rentSource, landSource].includes('state')
-  ) {
+  if ([rentSource, landSource].includes('county') && [rentSource, landSource].includes('state')) {
     return {
-      label: 'mixed' as SourceQualityLabel,
-      score: 2,
+      method: 'mixed_fallback' as BenchmarkMethod,
+      benchmarkProxyValue: null,
+      benchmarkProxyRatio: null,
       detail: 'Mixed county/state sourcing in valuation inputs',
     };
   }
 
   return {
-    label: 'unknown' as SourceQualityLabel,
-    score: -1,
+    method: 'unavailable' as BenchmarkMethod,
+    benchmarkProxyValue: null,
+    benchmarkProxyRatio: null,
     detail: 'Valuation input lineage unavailable',
   };
+}
+
+function getSourceQuality(method: BenchmarkMethod) {
+  switch (method) {
+    case 'county_observed':
+      return { label: 'county' as SourceQualityLabel, score: 4 };
+    case 'rent_multiple_proxy':
+      return { label: 'proxy' as SourceQualityLabel, score: 3 };
+    case 'mixed_fallback':
+      return { label: 'mixed' as SourceQualityLabel, score: 2 };
+    case 'state_fallback':
+      return { label: 'state' as SourceQualityLabel, score: 1 };
+    case 'national_fallback':
+      return { label: 'national' as SourceQualityLabel, score: 0 };
+    default:
+      return { label: 'unknown' as SourceQualityLabel, score: -1 };
+  }
 }
 
 function clusterMoverRows<T extends {
@@ -1542,6 +1621,7 @@ app.get('/api/v1/screener', async (c) => {
   for (const county of window.counties) {
     const yearSeries = window.seriesByCountyYear.get(county.fips);
     const yearLineage = window.lineageByCountyYear.get(county.fips);
+    const yearLevels = window.levelsByCountyYear.get(county.fips);
     if (!yearSeries) continue;
 
     const metricHistory: Record<string, number[]> = Object.fromEntries(
@@ -1553,6 +1633,7 @@ app.get('/api/v1/screener', async (c) => {
       const series = yearSeries.get(year);
       if (!series) continue;
       const lineage = yearLineage?.get(year);
+      const levels = yearLevels?.get(year);
       const computed = computeCountyFromSeries(
         county,
         year,
@@ -1560,6 +1641,7 @@ app.get('/api/v1/screener', async (c) => {
         assumptions,
         year === resolved.asOf ? (window.accessByCounty.get(county.fips) ?? null) : null,
         lineage,
+        levels,
       );
       for (const metric of zMetrics) {
         const value = computed.metrics[metric];
@@ -1974,11 +2056,13 @@ app.get('/api/v1/dashboard', async (c) => {
   for (const county of window.counties) {
     const yearSeries = window.seriesByCountyYear.get(county.fips);
     const yearLineage = window.lineageByCountyYear.get(county.fips);
+    const yearLevels = window.levelsByCountyYear.get(county.fips);
     if (!yearSeries) continue;
     for (const year of window.years) {
       const series = yearSeries.get(year);
       if (!series) continue;
       const lineage = yearLineage?.get(year);
+      const levels = yearLevels?.get(year);
       const computed = computeCountyFromSeries(
         county,
         year,
@@ -1986,6 +2070,7 @@ app.get('/api/v1/dashboard', async (c) => {
         assumptions,
         year === resolved.asOf ? (window.accessByCounty.get(county.fips) ?? null) : null,
         lineage,
+        levels,
       );
       const bucket = yearlyMetrics.get(year);
       if (bucket) {
@@ -2102,8 +2187,10 @@ app.get('/api/v1/dashboard', async (c) => {
     const yearTreasury = firstCounty
       ? (() => {
           const series = window.seriesByCountyYear.get(firstCounty.fips)?.get(year);
+          const lineage = window.lineageByCountyYear.get(firstCounty.fips)?.get(year);
+          const levels = window.levelsByCountyYear.get(firstCounty.fips)?.get(year);
           if (!series) return null;
-          const computed = computeCountyFromSeries(firstCounty, year, series, assumptions, null);
+          const computed = computeCountyFromSeries(firstCounty, year, series, assumptions, null, lineage, levels);
           return (computed.metrics.required_return ?? null) != null
             ? ((computed.metrics.required_return ?? 0) - (assumptions.risk_premium ?? 2.0))
             : null;

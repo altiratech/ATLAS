@@ -8,10 +8,16 @@ import { filterAnalyticCountyRows, isAnalyticCountyRow } from '../services/count
 
 export type SeriesLineageLevel = 'county' | 'state' | 'national';
 export type SeriesLineage = Record<string, SeriesLineageLevel>;
+export interface SeriesLevels {
+  county: SeriesData;
+  state: SeriesData;
+  national: SeriesData;
+}
 
 export interface SeriesSnapshot {
   series: SeriesData;
   lineage: SeriesLineage;
+  levels: SeriesLevels;
 }
 
 function parseJsonSafe<T>(value: string | null | undefined, fallback: T): T {
@@ -50,9 +56,15 @@ export async function loadSeriesForCounty(
 
   const result: SeriesData = {};
   const lineage: SeriesLineage = {};
+  const levels: SeriesLevels = {
+    county: {},
+    state: {},
+    national: {},
+  };
   for (const r of countyRows.results) {
     result[r.series_key] = r.value;
     lineage[r.series_key] = 'county';
+    levels.county[r.series_key] = r.value;
   }
 
   // State fallback
@@ -67,6 +79,7 @@ export async function loadSeriesForCounty(
       .bind(state, asOf)
       .all<{ series_key: string; value: number }>();
     for (const r of stateRows.results) {
+      levels.state[r.series_key] = r.value;
       if (!(r.series_key in result)) {
         result[r.series_key] = r.value;
         lineage[r.series_key] = 'state';
@@ -85,13 +98,14 @@ export async function loadSeriesForCounty(
     .bind(asOf)
     .all<{ series_key: string; value: number }>();
   for (const r of natRows.results) {
+    levels.national[r.series_key] = r.value;
     if (!(r.series_key in result)) {
       result[r.series_key] = r.value;
       lineage[r.series_key] = 'national';
     }
   }
 
-  return { series: result, lineage };
+  return { series: result, lineage, levels };
 }
 
 // ── Assumptions Loading ─────────────────────────────────────────────
@@ -184,6 +198,7 @@ export interface CountySeriesWindow {
   years: string[];
   seriesByCountyYear: Map<string, Map<string, SeriesData>>;
   lineageByCountyYear: Map<string, Map<string, SeriesLineage>>;
+  levelsByCountyYear: Map<string, Map<string, SeriesLevels>>;
   accessByCounty: Map<string, number | null>;
 }
 
@@ -223,6 +238,28 @@ function ensureCountyYearLineage(
   return lineage;
 }
 
+function ensureCountyYearLevels(
+  levelsByCountyYear: Map<string, Map<string, SeriesLevels>>,
+  geoKey: string,
+  year: string,
+): SeriesLevels {
+  let byYear = levelsByCountyYear.get(geoKey);
+  if (!byYear) {
+    byYear = new Map<string, SeriesLevels>();
+    levelsByCountyYear.set(geoKey, byYear);
+  }
+  let levels = byYear.get(year);
+  if (!levels) {
+    levels = {
+      county: {},
+      state: {},
+      national: {},
+    };
+    byYear.set(year, levels);
+  }
+  return levels;
+}
+
 export async function loadCountySeriesWindow(
   db: D1Database,
   startYear: number,
@@ -238,10 +275,11 @@ export async function loadCountySeriesWindow(
 
   const seriesByCountyYear = new Map<string, Map<string, SeriesData>>();
   const lineageByCountyYear = new Map<string, Map<string, SeriesLineage>>();
+  const levelsByCountyYear = new Map<string, Map<string, SeriesLevels>>();
   const accessByCounty = new Map<string, number | null>();
 
   if (!counties.length) {
-    return { counties: [], years, seriesByCountyYear, lineageByCountyYear, accessByCounty };
+    return { counties: [], years, seriesByCountyYear, lineageByCountyYear, levelsByCountyYear, accessByCounty };
   }
 
   const yearStart = Math.min(startYear, endYear);
@@ -267,8 +305,10 @@ export async function loadCountySeriesWindow(
   for (const row of countySeries.results ?? []) {
     const series = ensureCountyYearSeries(seriesByCountyYear, row.fips, row.as_of_date);
     const lineage = ensureCountyYearLineage(lineageByCountyYear, row.fips, row.as_of_date);
+    const levels = ensureCountyYearLevels(levelsByCountyYear, row.fips, row.as_of_date);
     series[row.series_key] = row.value;
     lineage[row.series_key] = 'county';
+    levels.county[row.series_key] = row.value;
   }
 
   const stateSeries = await db
@@ -287,6 +327,8 @@ export async function loadCountySeriesWindow(
   for (const row of stateSeries.results ?? []) {
     const series = ensureCountyYearSeries(seriesByCountyYear, row.fips, row.as_of_date);
     const lineage = ensureCountyYearLineage(lineageByCountyYear, row.fips, row.as_of_date);
+    const levels = ensureCountyYearLevels(levelsByCountyYear, row.fips, row.as_of_date);
+    levels.state[row.series_key] = row.value;
     if (!(row.series_key in series)) {
       series[row.series_key] = row.value;
       lineage[row.series_key] = 'state';
@@ -319,7 +361,9 @@ export async function loadCountySeriesWindow(
       if (!national) continue;
       const series = ensureCountyYearSeries(seriesByCountyYear, county.fips, year);
       const lineage = ensureCountyYearLineage(lineageByCountyYear, county.fips, year);
+      const levels = ensureCountyYearLevels(levelsByCountyYear, county.fips, year);
       for (const [seriesKey, value] of Object.entries(national)) {
+        levels.national[seriesKey] = value;
         if (!(seriesKey in series)) {
           series[seriesKey] = value;
           lineage[seriesKey] = 'national';
@@ -354,6 +398,7 @@ export async function loadCountySeriesWindow(
     years,
     seriesByCountyYear,
     lineageByCountyYear,
+    levelsByCountyYear,
     accessByCounty,
   };
 }

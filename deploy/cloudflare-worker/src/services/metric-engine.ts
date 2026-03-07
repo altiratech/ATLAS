@@ -108,10 +108,10 @@ export const METRIC_REGISTRY: MetricDef[] = [
     label: 'Benchmark Land Value',
     unit: '$/acre',
     category: 'valuation',
-    description: 'USDA reported land value per acre',
-    formula: 'benchmark_value = USDA county land value (state fallback)',
+    description: 'County-observed land value when available, otherwise explicit proxy/fallback benchmark',
+    formula: 'benchmark_value = county land value; else county rent × state rent multiple; else state fallback',
     dependencies: [],
-    compute: (ctx) => ctx.series.land_value ?? null,
+    compute: (ctx) => ctx.series.benchmark_value_proxy ?? ctx.series.land_value ?? null,
   },
   // 3) Owner-Paid Costs
   {
