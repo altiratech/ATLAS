@@ -2063,25 +2063,19 @@ app.get('/api/v1/ag-index', async (c) => {
       }>();
 
   let rows = await loadRows();
-  let refreshErrors: string[] = [];
   if (!rows.results.length) {
-    try {
-      const refresh = await refreshAgCompositeIndex(db);
-      refreshErrors = refresh.errors;
-      rows = await loadRows();
-    } catch (error: any) {
-      refreshErrors = [error?.message ?? 'Unknown ag-index refresh error'];
-    }
-  }
-
-  if (!rows.results.length) {
+    c.executionCtx.waitUntil(
+      refreshAgCompositeIndex(db).catch((error) => {
+        console.error('ag-index background refresh failed', error);
+      }),
+    );
     const emptyPayload = {
       latest: null,
       history: [],
-      message: 'Ag composite index has not been ingested yet.',
-      refresh_errors: refreshErrors,
+      message: 'Ag composite index refresh started. Check back shortly.',
+      refresh_started: true,
     };
-    cacheSet(cacheKey, emptyPayload, 120_000);
+    cacheSet(cacheKey, emptyPayload, 15_000);
     return c.json(emptyPayload);
   }
 
