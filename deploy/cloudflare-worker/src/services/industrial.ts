@@ -105,13 +105,13 @@ const INDUSTRIAL_DATA_SOURCES: IndustrialDataSourceDef[] = [
 
 export const INDUSTRIAL_SERIES_DEFS: IndustrialSeriesDef[] = [
   {
-    seriesKey: 'wholesale_power_price',
+    seriesKey: 'industrial_power_price',
     geoLevels: ['state', 'national'],
     frequency: 'annual',
-    unit: 'index',
+    unit: 'cents_per_kwh',
     sourceName: 'EIA',
-    label: 'Wholesale Power Price',
-    description: 'Regional electricity pricing context for power-sensitive uses.',
+    label: 'Industrial Power Price',
+    description: 'Industrial electricity pricing context for power-sensitive uses.',
   },
   {
     seriesKey: 'power_cost_index',
@@ -230,7 +230,7 @@ const COMPONENT_DEFS: Array<{
     key: 'power_readiness',
     label: 'Power Readiness',
     weight: 0.30,
-    seriesKeys: ['power_cost_index', 'substation_proximity_score', 'transmission_proximity_score'],
+    seriesKeys: ['power_cost_index', 'industrial_power_price', 'substation_proximity_score', 'transmission_proximity_score'],
     missingFields: ['Power cost context', 'Substation proximity', 'Transmission proximity'],
     explanation: 'Combines cost and grid-adjacency proxies to estimate whether the geography is plausibly power-ready.',
   },

@@ -23,14 +23,14 @@ This checklist breaks the first industrial Atlas build into concrete execution b
 ## Block 2: First-wave industrial evidence ingest
 
 - [ ] Define exact first-wave source acquisition plan for:
-  - [ ] EIA power pricing / power region context
+  - [x] EIA power pricing / power region context
   - [ ] public electric infrastructure proxies
   - [ ] FEMA flood
   - [ ] USGS slope / elevation
   - [ ] FCC connectivity proxy
   - [ ] transport access proxy
 - [ ] Map each source to specific `series_key` entries and geo levels
-- [ ] Build ingest scripts / transforms for the first source subset
+- [x] Build ingest scripts / transforms for the first source subset
 - [ ] Load first real industrial evidence into D1
 - [ ] Validate lineage, freshness, and missingness behavior in the scorecard endpoint
 
