@@ -171,6 +171,7 @@ async function computeCounty(
     yield_basis_ratio: yieldProductivity.ratio,
     yield_productivity_factor: yieldProductivity.factor,
     yield_productivity_detail: yieldProductivity.detail,
+    productivity_active: yieldProductivity.factor != null,
     source_quality: sourceQuality.label,
     source_quality_score: sourceQuality.score,
     source_quality_detail: benchmarkMethod.detail,
@@ -254,6 +255,7 @@ function computeCountyFromSeries(
     yield_basis_ratio: yieldProductivity.ratio,
     yield_productivity_factor: yieldProductivity.factor,
     yield_productivity_detail: yieldProductivity.detail,
+    productivity_active: yieldProductivity.factor != null,
     source_quality: sourceQuality.label,
     source_quality_score: sourceQuality.score,
     source_quality_detail: benchmarkMethod.detail,
@@ -271,6 +273,18 @@ function stats(arr: number[]) {
     median: Math.round(arr[Math.floor(n / 2)] * 100) / 100,
     p25: Math.round(arr[Math.floor(n / 4)] * 100) / 100,
     p75: Math.round(arr[Math.floor((3 * n) / 4)] * 100) / 100,
+  };
+}
+
+function summarizeProductivity(rows: Array<{ productivity_active?: boolean | null }>) {
+  const totalCount = rows.length;
+  const activeCount = rows.filter((row) => row.productivity_active === true).length;
+  const inactiveCount = totalCount - activeCount;
+  return {
+    total_count: totalCount,
+    active_count: activeCount,
+    inactive_count: inactiveCount,
+    active_pct: totalCount ? Math.round((activeCount / totalCount) * 1000) / 10 : 0,
   };
 }
 
@@ -434,6 +448,7 @@ function clusterMoverRows<T extends {
   implied_cap: number | null;
   noi: number | null;
   benchmark_method?: string | null;
+  productivity_active?: boolean | null;
   source_quality: SourceQualityLabel;
   source_quality_score: number;
   fips: string;
@@ -448,6 +463,7 @@ function clusterMoverRows<T extends {
           row.spread_pct,
           row.source_quality,
           row.benchmark_method,
+          row.productivity_active ? 'active' : 'inactive',
         ].join('|')
       : [
           row.state,
@@ -1811,6 +1827,8 @@ app.get('/api/v1/screener', async (c) => {
         benchmark_method: data.benchmark_method,
         benchmark_method_detail: data.benchmark_method_detail,
         benchmark_proxy_ratio: data.benchmark_proxy_ratio,
+        productivity_active: data.productivity_active,
+        yield_productivity_detail: data.yield_productivity_detail,
         source_quality: data.source_quality,
         source_quality_score: data.source_quality_score,
         source_quality_detail: data.source_quality_detail,
@@ -1837,6 +1855,7 @@ app.get('/api/v1/screener', async (c) => {
     as_of_meta: resolved.meta,
     filters,
     z_filters: zFilters,
+    productivity_summary: summarizeProductivity(results),
     results,
   };
   cacheSet(cacheKey, payload, 30_000);
@@ -2216,6 +2235,8 @@ app.get('/api/v1/dashboard', async (c) => {
         benchmark_method: d.benchmark_method,
         benchmark_method_detail: d.benchmark_method_detail,
         benchmark_proxy_ratio: d.benchmark_proxy_ratio,
+        productivity_active: d.productivity_active,
+        yield_productivity_detail: d.yield_productivity_detail,
         input_lineage: d.input_lineage,
         source_quality: d.source_quality,
         source_quality_score: d.source_quality_score,
@@ -2361,6 +2382,7 @@ app.get('/api/v1/dashboard', async (c) => {
     },
     cap_rate_distribution: capRateDistribution,
     treasury_10y: treasury10y,
+    productivity_summary: summarizeProductivity(allData),
     top_movers: rankedMovers,
     top_overvalued: overvalued.slice(0, 15),
     state_summary: stateSummary,

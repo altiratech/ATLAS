@@ -506,6 +506,20 @@ function sourceText(level) {
   }
 }
 
+function productivityBand(active) {
+  if (active === true) return {label:'ACTIVE', className:'badge-g'};
+  if (active === false) return {label:'INACTIVE', className:'badge-r'};
+  return {label:'UNKNOWN', className:'badge-a'};
+}
+
+function productivitySummaryBand(summary) {
+  const pct = summary?.active_pct;
+  if (pct == null) return {label:'PROD N/A', className:'badge-a'};
+  if (pct >= 70) return {label:`PROD ${Math.round(pct)}% ACTIVE`, className:'badge-g'};
+  if (pct >= 30) return {label:`PROD ${Math.round(pct)}% ACTIVE`, className:'badge-a'};
+  return {label:`PROD ${Math.round(pct)}% ACTIVE`, className:'badge-r'};
+}
+
 function readAuthToken() {
   try {
     return window.localStorage.getItem(AUTH_TOKEN_KEY) || '';
@@ -1262,6 +1276,8 @@ function Dashboard({addToast, nav}) {
   const freshnessRows = coverage?.freshness || [];
   const warnings = coverage?.warnings || [];
   const charts = data.charts || {};
+  const productivity = data.productivity_summary || {};
+  const productivityBadge = productivitySummaryBand(productivity);
 
   const capBuckets = data.cap_rate_distribution || [];
 
@@ -1271,6 +1287,7 @@ function Dashboard({addToast, nav}) {
         <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',alignItems:'center'}}>
           <span className="badge badge-b">AS OF {data.as_of}</span>
           {coveragePct != null && <span className={`badge ${coveragePct >= 70 ? 'badge-g' : 'badge-r'}`}>COVERAGE {coveragePct}%</span>}
+          {productivity.total_count > 0 && <span className={`badge ${productivityBadge.className}`}>{productivityBadge.label}</span>}
           {freshnessRows.length > 0 && <span className="badge badge-a">FRESHNESS {freshnessRows[0].last_updated || '--'}</span>}
           {warnings.map(w => <span key={w} className="badge badge-r">{w}</span>)}
         </div>
@@ -1342,7 +1359,7 @@ function Dashboard({addToast, nav}) {
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
         <div>
           <h3 style={{fontSize:'1rem'}}>Top Value Opportunities</h3>
-          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>County-backed rows are prioritized; identical fallback-driven clusters are collapsed.</div>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>County-backed rows are prioritized; identical fallback-driven clusters are collapsed; Prod shows whether county yield differentiation is active.</div>
         </div>
         <span className="badge badge-b">{movers.length} ranked clusters</span>
       </div>
@@ -1352,6 +1369,10 @@ function Dashboard({addToast, nav}) {
           {key:'state',label:'ST'},
           {key:'source_quality',label:'Data',fmt:v=>{
             const badge = sourceBand(v);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'productivity_active',label:'Prod',fmt:v=>{
+            const badge = productivityBand(v);
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
           {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
@@ -1445,6 +1466,9 @@ function Screener({addToast, nav}) {
   // Run on first load with defaults
   React.useEffect(() => { run(); }, []);
 
+  const screenerProductivity = results?.productivity_summary || {};
+  const screenerProductivityBadge = productivitySummaryBand(screenerProductivity);
+
   return <div>
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
@@ -1496,6 +1520,7 @@ function Screener({addToast, nav}) {
         <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>
           COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
         </span>
+        {screenerProductivity.total_count > 0 && <span className={`badge ${screenerProductivityBadge.className}`}>{screenerProductivityBadge.label}</span>}
         <span className="badge badge-a">COUNTY-BACKED ROWS PREFERRED</span>
         {(results.as_of_meta.warnings || []).map(w => <span key={w} className="badge badge-r">{w}</span>)}
       </div>}
@@ -1505,6 +1530,10 @@ function Screener({addToast, nav}) {
           {key:'state',label:'ST'},
           {key:'source_quality',label:'Data',fmt:v=>{
             const badge = sourceBand(v);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'productivity_active',label:'Prod',fmt:v=>{
+            const badge = productivityBand(v);
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
           {key:'_cash_rent',label:'Cash Rent',num:true,fmt:(_,r)=>$$(r.metrics?.cash_rent)},
@@ -1627,6 +1656,7 @@ function CountyPage({addToast, params, nav}) {
   const capHist = ts.map(t => t.implied_cap_rate).filter(v => v != null);
   const fvHist = ts.map(t => t.fair_value).filter(v => v != null);
   const zscores = data.zscores || {};
+  const countyProductivity = productivityBand(data.productivity_active);
 
   return <div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
@@ -1672,6 +1702,11 @@ function CountyPage({addToast, params, nav}) {
         <div className="sc-v" style={{fontSize:'.95rem'}}>{sourceBand(data.source_quality).label}</div>
         <div className="sc-c">{data.source_quality_detail || 'Valuation input lineage unavailable'}</div>
       </div>
+      <div className="sc">
+        <div className="sc-l">Productivity Adj.</div>
+        <div className="sc-v" style={{fontSize:'.95rem'}}>{countyProductivity.label}</div>
+        <div className="sc-c">{data.productivity_active ? (data.yield_productivity_detail || 'County yield differentiation is active in fair value.') : 'Inactive for selected year; fair value is using the base model without county yield adjustment.'}</div>
+      </div>
       <div className="sc"><div className="sc-l">NOI / Acre</div><div className="sc-v">{$$(m.noi_per_acre)}</div></div>
       <div className="sc"><div className="sc-l">Rent Multiple</div><div className="sc-v">{$(m.rent_multiple,1)}x</div></div>
       <div className="sc"><div className="sc-l">DSCR</div><div className="sc-v">{$(m.dscr,2)}</div></div>
@@ -1692,8 +1727,9 @@ function CountyPage({addToast, params, nav}) {
             <tr><td>Operating Cost Ratio</td><td className="n">{$pct(m.operating_cost_ratio)}</td><td style={{fontSize:'.8rem'}}>Cost as % of rent</td></tr>
             <tr><td>NOI per Acre</td><td className="n">{$$(m.noi_per_acre)}</td><td style={{fontSize:'.8rem'}}>Net operating income</td></tr>
             <tr><td>Benchmark Value ($/ac)</td><td className="n">{$$(m.benchmark_value)}</td><td style={{fontSize:'.8rem'}}>{data.benchmark_method_detail || `USDA NASS land value • ${sourceText(data.input_lineage?.land_value)}`}</td></tr>
+            <tr><td>Productivity Adjustment</td><td className="n">{countyProductivity.label}</td><td style={{fontSize:'.8rem'}}>{data.productivity_active ? (data.yield_productivity_detail || 'County yield differentiation is active in fair value.') : 'Inactive for selected year; fair value is using the base model without county yield adjustment.'}</td></tr>
             <tr><td>Yield Basis vs State</td><td className="n">{$x(m.yield_basis_ratio)}</td><td style={{fontSize:'.8rem'}}>{data.yield_productivity_detail || 'No county yield basis available'}</td></tr>
-            <tr><td>Yield Productivity Factor</td><td className="n">{$x(m.yield_productivity_factor)}</td><td style={{fontSize:'.8rem'}}>Applied inside fair value model when county yield basis exists</td></tr>
+            <tr><td>Yield Productivity Factor</td><td className="n">{$x(m.yield_productivity_factor)}</td><td style={{fontSize:'.8rem'}}>{data.productivity_active ? 'Applied inside fair value model using county yield basis.' : 'Inactive: no county yield basis was available for the selected year.'}</td></tr>
             <tr><td>Implied Cap Rate</td><td className="n">{$pct(m.implied_cap_rate)}</td><td style={{fontSize:'.8rem'}}>NOI / Land Value</td></tr>
             <tr><td>Required Return</td><td className="n">{$pct(m.required_return)}</td><td style={{fontSize:'.8rem'}}>10Y + risk premium</td></tr>
             <tr><td>Fair Value (Gordon)</td><td className="n">{$$(m.fair_value)}</td><td style={{fontSize:'.8rem'}}>NOI(1+g)/(r-g)</td></tr>
