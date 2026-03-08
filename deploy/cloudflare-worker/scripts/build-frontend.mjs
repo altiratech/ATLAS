@@ -11,27 +11,67 @@ const __dirname = path.dirname(__filename);
 const workerRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(workerRoot, '..', '..');
 const sourceHtmlPath = path.join(repoRoot, 'frontend', 'index.html');
+const sourceEntryPath = path.join(repoRoot, 'frontend', 'src', 'main.jsx');
 const outputHtmlPath = path.join(workerRoot, 'public', 'index.html');
 const assetsDir = path.join(workerRoot, 'public', 'assets');
 
 const sourceHtml = await fs.readFile(sourceHtmlPath, 'utf8');
+const entryExists = await fs.access(sourceEntryPath).then(() => true).catch(() => false);
 
-const scriptMatch = sourceHtml.match(
-  /<script\s+type="text\/babel">([\s\S]*?)<\/script>/i,
-);
+let compiledHtml;
+let appCode;
 
-if (!scriptMatch) {
-  throw new Error('Could not find <script type="text/babel"> block in frontend/index.html');
+if (entryExists) {
+  const buildResult = await esbuild.build({
+    entryPoints: [sourceEntryPath],
+    bundle: true,
+    write: false,
+    format: 'iife',
+    platform: 'browser',
+    loader: { '.js': 'jsx', '.jsx': 'jsx' },
+    jsxFactory: 'React.createElement',
+    jsxFragment: 'React.Fragment',
+    target: 'es2018',
+    minify: true,
+  });
+
+  appCode = buildResult.outputFiles[0].text;
+  compiledHtml = sourceHtml.replace(
+    /<script\s+type="module"\s+src="\.\/*src\/main\.jsx"><\/script>/i,
+    `<!-- FRONTEND_ENTRY -->`,
+  );
+} else {
+  const scriptMatch = sourceHtml.match(
+    /<script\s+type="text\/babel">([\s\S]*?)<\/script>/i,
+  );
+
+  if (!scriptMatch) {
+    throw new Error('Could not find frontend entry in frontend/index.html');
+  }
+
+  const jsxCode = scriptMatch[1];
+  const transformed = await esbuild.transform(jsxCode, {
+    loader: 'jsx',
+    jsxFactory: 'React.createElement',
+    jsxFragment: 'React.Fragment',
+    target: 'es2018',
+    minify: true,
+  });
+
+  appCode = transformed.code;
+  const withoutBabelLib = sourceHtml.replace(
+    /\s*<script\s+src="https:\/\/unpkg\.com\/@babel\/standalone\/babel\.min\.js"><\/script>\s*/i,
+    '\n',
+  );
+  compiledHtml = withoutBabelLib.replace(
+    /<script\s+type="text\/babel">[\s\S]*?<\/script>/i,
+    `<!-- FRONTEND_ENTRY -->`,
+  );
 }
 
-const jsxCode = scriptMatch[1];
-const transformed = await esbuild.transform(jsxCode, {
-  loader: 'jsx',
-  jsxFactory: 'React.createElement',
-  jsxFragment: 'React.Fragment',
-  target: 'es2018',
-  minify: true,
-});
+const transformed = {
+  code: appCode,
+};
 
 const appHash = createHash('sha256').update(transformed.code).digest('hex').slice(0, 12);
 const appFileName = `app.${appHash}.js`;
@@ -47,13 +87,8 @@ for (const fileName of assetFiles) {
 
 await fs.writeFile(appOutputPath, `${transformed.code}\n`, 'utf8');
 
-const withoutBabelLib = sourceHtml.replace(
-  /\s*<script\s+src="https:\/\/unpkg\.com\/@babel\/standalone\/babel\.min\.js"><\/script>\s*/i,
-  '\n',
-);
-
-const compiledHtml = withoutBabelLib.replace(
-  /<script\s+type="text\/babel">[\s\S]*?<\/script>/i,
+compiledHtml = compiledHtml.replace(
+  '<!-- FRONTEND_ENTRY -->',
   `<script src="/assets/${appFileName}" defer></script>`,
 );
 
