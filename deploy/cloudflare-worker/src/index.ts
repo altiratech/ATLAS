@@ -58,6 +58,78 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
+type IndustrialScreeningSignal = {
+  power_cost_index: number | null;
+  industrial_power_price: number | null;
+  lineage: 'state' | 'national' | 'missing';
+  mode: 'power_only';
+};
+
+async function loadIndustrialScreeningSignals(
+  db: D1Database,
+  asOf: string,
+  states: string[],
+): Promise<Map<string, Partial<Record<'power_cost_index' | 'industrial_power_price', number>>>> {
+  const geoKeys = Array.from(new Set([...states.filter(Boolean), 'US']));
+  if (!geoKeys.length) return new Map();
+
+  await ensureIndustrialSeriesCatalog(db);
+
+  const seriesKeys = ['power_cost_index', 'industrial_power_price'] as const;
+  const rows = await db
+    .prepare(
+      `SELECT dp.geo_key, ds.series_key, dp.value
+       FROM data_points dp
+       JOIN data_series ds ON ds.id = dp.series_id
+       WHERE dp.as_of_date = ?
+         AND ds.series_key IN (${seriesKeys.map(() => '?').join(',')})
+         AND dp.geo_key IN (${geoKeys.map(() => '?').join(',')})`,
+    )
+    .bind(asOf, ...seriesKeys, ...geoKeys)
+    .all<{ geo_key: string; series_key: 'power_cost_index' | 'industrial_power_price'; value: number }>();
+
+  const byGeo = new Map<string, Partial<Record<'power_cost_index' | 'industrial_power_price', number>>>();
+  for (const row of rows.results ?? []) {
+    const current = byGeo.get(row.geo_key) ?? {};
+    current[row.series_key] = row.value;
+    byGeo.set(row.geo_key, current);
+  }
+  return byGeo;
+}
+
+function buildIndustrialScreeningSignal(
+  state: string,
+  byGeo: Map<string, Partial<Record<'power_cost_index' | 'industrial_power_price', number>>>,
+): IndustrialScreeningSignal {
+  const stateSeries = byGeo.get(state) ?? {};
+  const nationalSeries = byGeo.get('US') ?? {};
+
+  const hasState = stateSeries.power_cost_index != null || stateSeries.industrial_power_price != null;
+  const hasNational = nationalSeries.power_cost_index != null || nationalSeries.industrial_power_price != null;
+
+  return {
+    power_cost_index: stateSeries.power_cost_index ?? nationalSeries.power_cost_index ?? null,
+    industrial_power_price: stateSeries.industrial_power_price ?? nationalSeries.industrial_power_price ?? null,
+    lineage: hasState ? 'state' : hasNational ? 'national' : 'missing',
+    mode: 'power_only',
+  };
+}
+
+function summarizeIndustrialSignals(results: Array<{ industrial?: IndustrialScreeningSignal }>) {
+  const total = results.length;
+  const powerLoaded = results.filter((row) => row.industrial?.power_cost_index != null || row.industrial?.industrial_power_price != null).length;
+  const stateBacked = results.filter((row) => row.industrial?.lineage === 'state').length;
+  const nationalFallback = results.filter((row) => row.industrial?.lineage === 'national').length;
+
+  return {
+    total_count: total,
+    power_loaded_count: powerLoaded,
+    power_loaded_pct: total > 0 ? powerLoaded / total : 0,
+    state_backed_count: stateBacked,
+    national_fallback_count: nationalFallback,
+  };
+}
+
 // ── Middleware ───────────────────────────────────────────────────────
 
 app.use('*', cors());
@@ -1756,6 +1828,8 @@ app.get('/api/v1/screener', async (c) => {
   const minCap = c.req.query('min_cap');
   const maxRentMult = c.req.query('max_rent_mult');
   const minAccess = c.req.query('min_access');
+  const minPowerIndex = c.req.query('min_power_index');
+  const maxPowerPrice = c.req.query('max_power_price');
   const state = c.req.query('state');
   const sortBy = c.req.query('sort_by') ?? 'implied_cap_rate';
   const sortDir = c.req.query('sort_dir') ?? 'desc';
@@ -1805,6 +1879,11 @@ app.get('/api/v1/screener', async (c) => {
 
   const windowStartYear = Math.max(1950, resolvedYear - Math.max(1, windowYears) + 1);
   const window = await loadCountySeriesWindow(db, windowStartYear, resolvedYear, state?.toUpperCase());
+  const industrialSignalsByGeo = await loadIndustrialScreeningSignals(
+    db,
+    resolved.asOf,
+    Array.from(new Set(window.counties.map((county) => county.state).filter(Boolean))),
+  );
   const results: any[] = [];
 
   for (const county of window.counties) {
@@ -1848,6 +1927,7 @@ app.get('/api/v1/screener', async (c) => {
     if (!data) continue;
     const m = data.metrics;
     if (!hasModeledCoreMetrics(m)) continue;
+    const industrial = buildIndustrialScreeningSignal(county.state, industrialSignalsByGeo);
     const zscores = Object.fromEntries(
       zMetrics.map((metric) => {
         const currentValue = (m[metric] ?? null) as number | null;
@@ -1895,10 +1975,26 @@ app.get('/api/v1/screener', async (c) => {
     }
 
     if (passes) {
+      if (minPowerIndex) {
+        const floor = Number(minPowerIndex);
+        if (!Number.isNaN(floor) && ((industrial.power_cost_index ?? -Infinity) < floor)) {
+          passes = false;
+        }
+      }
+      if (passes && maxPowerPrice) {
+        const ceiling = Number(maxPowerPrice);
+        if (!Number.isNaN(ceiling) && ((industrial.industrial_power_price ?? Infinity) > ceiling)) {
+          passes = false;
+        }
+      }
+    }
+
+    if (passes) {
       results.push({
         fips: county.fips,
         county: county.name,
         state: county.state,
+        industrial,
         zscores,
         input_lineage: data.input_lineage,
         benchmark_method: data.benchmark_method,
@@ -1918,8 +2014,16 @@ app.get('/api/v1/screener', async (c) => {
 
   const reverse = sortDir !== 'asc';
   results.sort((a, b) => {
-    const av = a.metrics[sortBy] ?? 0;
-    const bv = b.metrics[sortBy] ?? 0;
+    const av = sortBy === 'power_cost_index'
+      ? (a.industrial?.power_cost_index ?? -1)
+      : sortBy === 'industrial_power_price'
+        ? (a.industrial?.industrial_power_price ?? Number.POSITIVE_INFINITY)
+        : (a.metrics[sortBy] ?? 0);
+    const bv = sortBy === 'power_cost_index'
+      ? (b.industrial?.power_cost_index ?? -1)
+      : sortBy === 'industrial_power_price'
+        ? (b.industrial?.industrial_power_price ?? Number.POSITIVE_INFINITY)
+        : (b.metrics[sortBy] ?? 0);
     if (av !== bv) {
       return reverse ? bv - av : av - bv;
     }
@@ -1933,6 +2037,7 @@ app.get('/api/v1/screener', async (c) => {
     filters,
     z_filters: zFilters,
     productivity_summary: summarizeProductivity(results),
+    industrial_summary: summarizeIndustrialSignals(results),
     results,
   };
   cacheSet(cacheKey, payload, 30_000);

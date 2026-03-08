@@ -529,6 +529,22 @@ function industrialConfidenceBand(level) {
   }
 }
 
+function industrialLineageBand(level) {
+  switch (level) {
+    case 'state': return {label:'STATE PWR', className:'badge-b'};
+    case 'national': return {label:'US PWR', className:'badge-a'};
+    default: return {label:'NO PWR', className:'badge-r'};
+  }
+}
+
+function industrialPowerSummaryBand(summary) {
+  const pct = summary?.power_loaded_pct;
+  if (pct == null) return {label:'POWER N/A', className:'badge-a'};
+  if (pct >= 0.9) return {label:`POWER ${Math.round(pct * 100)}% LOADED`, className:'badge-g'};
+  if (pct >= 0.5) return {label:`POWER ${Math.round(pct * 100)}% LOADED`, className:'badge-a'};
+  return {label:`POWER ${Math.round(pct * 100)}% LOADED`, className:'badge-r'};
+}
+
 function readAuthToken() {
   try {
     return window.localStorage.getItem(AUTH_TOKEN_KEY) || '';
@@ -1496,6 +1512,8 @@ function Screener({addToast, nav}) {
   const [minCap, setMinCap] = React.useState('');
   const [maxRentMult, setMaxRentMult] = React.useState('');
   const [minAccess, setMinAccess] = React.useState('');
+  const [minPowerIndex, setMinPowerIndex] = React.useState('');
+  const [maxPowerPrice, setMaxPowerPrice] = React.useState('');
   const [state, setState] = React.useState('');
   const [sortBy, setSortBy] = React.useState('implied_cap_rate');
   const [sortDir, setSortDir] = React.useState('desc');
@@ -1516,6 +1534,8 @@ function Screener({addToast, nav}) {
     if (minCap) qs += `&min_cap=${minCap}`;
     if (maxRentMult) qs += `&max_rent_mult=${maxRentMult}`;
     if (minAccess) qs += `&min_access=${minAccess}`;
+    if (minPowerIndex) qs += `&min_power_index=${minPowerIndex}`;
+    if (maxPowerPrice) qs += `&max_power_price=${maxPowerPrice}`;
     if (state) qs += `&state=${state}`;
     if (selScreen) qs += `&screen_id=${selScreen}`;
     if (zCapMin) qs += `&z_implied_cap_rate_min=${zCapMin}`;
@@ -1541,6 +1561,8 @@ function Screener({addToast, nav}) {
 
   const screenerProductivity = results?.productivity_summary || {};
   const screenerProductivityBadge = productivitySummaryBand(screenerProductivity);
+  const screenerIndustrial = results?.industrial_summary || {};
+  const screenerIndustrialBadge = industrialPowerSummaryBand(screenerIndustrial);
 
   return <div>
     <div className="card" style={{marginBottom:'1.5rem'}}>
@@ -1555,6 +1577,8 @@ function Screener({addToast, nav}) {
         <div className="fg"><label>Min Cap Rate</label><input type="number" step="0.1" value={minCap} onChange={e=>setMinCap(e.target.value)} placeholder="e.g. 2.0"/></div>
         <div className="fg"><label>Max Rent Multiple</label><input type="number" step="1" value={maxRentMult} onChange={e=>setMaxRentMult(e.target.value)} placeholder="e.g. 25"/></div>
         <div className="fg"><label>Min Access Score</label><input type="number" step="1" value={minAccess} onChange={e=>setMinAccess(e.target.value)} placeholder="e.g. 50"/></div>
+        <div className="fg"><label>Min Power Index</label><input type="number" step="1" value={minPowerIndex} onChange={e=>setMinPowerIndex(e.target.value)} placeholder="e.g. 80"/></div>
+        <div className="fg"><label>Max Power Price</label><input type="number" step="0.1" value={maxPowerPrice} onChange={e=>setMaxPowerPrice(e.target.value)} placeholder="c/kWh"/></div>
         <div className="fg"><label>Z Cap Min</label><input type="number" step="0.1" value={zCapMin} onChange={e=>setZCapMin(e.target.value)} placeholder="e.g. 1.0"/></div>
         <div className="fg"><label>Z Cap Max</label><input type="number" step="0.1" value={zCapMax} onChange={e=>setZCapMax(e.target.value)} placeholder="e.g. 2.5"/></div>
         <div className="fg"><label>Z Fair Min</label><input type="number" step="0.1" value={zFairMin} onChange={e=>setZFairMin(e.target.value)} placeholder="e.g. -1.0"/></div>
@@ -1569,6 +1593,8 @@ function Screener({addToast, nav}) {
             <option value="cash_rent">Cash Rent</option>
             <option value="benchmark_value">Land Value</option>
             <option value="access_score">Access Score</option>
+            <option value="power_cost_index">Power Cost Index</option>
+            <option value="industrial_power_price">Power Price</option>
             <option value="noi_per_acre">NOI/Acre</option>
             <option value="rent_multiple">Rent Multiple</option>
           </select>
@@ -1594,6 +1620,7 @@ function Screener({addToast, nav}) {
           COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
         </span>
         {screenerProductivity.total_count > 0 && <span className={`badge ${screenerProductivityBadge.className}`}>{screenerProductivityBadge.label}</span>}
+        {screenerIndustrial.total_count > 0 && <span className={`badge ${screenerIndustrialBadge.className}`}>{screenerIndustrialBadge.label}</span>}
         <span className="badge badge-a">COUNTY-BACKED ROWS PREFERRED</span>
         {(results.as_of_meta.warnings || []).map(w => <span key={w} className="badge badge-r">{w}</span>)}
       </div>}
@@ -1603,6 +1630,10 @@ function Screener({addToast, nav}) {
           {key:'state',label:'ST'},
           {key:'source_quality',label:'Data',fmt:v=>{
             const badge = sourceBand(v);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'_industrial_lineage',label:'Ind',fmt:(_,r)=>{
+            const badge = industrialLineageBand(r.industrial?.lineage);
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
           {key:'productivity_active',label:'Prod',fmt:v=>{
@@ -1620,6 +1651,8 @@ function Screener({addToast, nav}) {
           }},
           {key:'_rm',label:'Rent Mult',num:true,fmt:(_,r)=>$(r.metrics?.rent_multiple,1)},
           {key:'_access',label:'Access',num:true,fmt:(_,r)=>$(r.metrics?.access_score,1)},
+          {key:'_pidx',label:'Pwr Idx',num:true,fmt:(_,r)=>$(r.industrial?.power_cost_index,1)},
+          {key:'_ppx',label:'Pwr $',num:true,fmt:(_,r)=>$(r.industrial?.industrial_power_price,2)},
           {key:'_zcap',label:'Cap Z',num:true,fmt:(_,r)=> {
             const badge = zBand(r.zscores?.implied_cap_rate || {});
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
@@ -1639,7 +1672,7 @@ function Screener({addToast, nav}) {
           const spread = (fair != null && benchmark != null && benchmark > 0)
             ? ((fair - benchmark) / benchmark) * 100
             : null;
-          return {...r, _cash_rent:r.metrics?.cash_rent, _bv:benchmark, _cap:r.metrics?.implied_cap_rate, _fv:fair, _spread:spread, _rm:r.metrics?.rent_multiple, _noi:r.metrics?.noi_per_acre, _access:r.metrics?.access_score, _zcap:r.zscores?.implied_cap_rate?.zscore, _zfv:r.zscores?.fair_value?.zscore, _zrent:r.zscores?.cash_rent?.zscore};
+          return {...r, _cash_rent:r.metrics?.cash_rent, _bv:benchmark, _cap:r.metrics?.implied_cap_rate, _fv:fair, _spread:spread, _rm:r.metrics?.rent_multiple, _noi:r.metrics?.noi_per_acre, _access:r.metrics?.access_score, _industrial_lineage:r.industrial?.lineage, _pidx:r.industrial?.power_cost_index, _ppx:r.industrial?.industrial_power_price, _zcap:r.zscores?.implied_cap_rate?.zscore, _zfv:r.zscores?.fair_value?.zscore, _zrent:r.zscores?.cash_rent?.zscore};
         })}
         onRow={r => nav(PG.COUNTY, {fips:r.fips})}
       />
