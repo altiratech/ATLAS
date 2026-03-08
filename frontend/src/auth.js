@@ -27,7 +27,7 @@ export function clearAuthToken() {
 let AUTH_TOKEN = readAuthToken();
 let AUTH_BOOTSTRAP_INFLIGHT = null;
 
-function defaultResearchRecord() {
+export function defaultResearchRecord() {
   return {
     thesis:'',
     analysis:{
@@ -53,7 +53,7 @@ function defaultResearchRecord() {
   };
 }
 
-function normalizeResearchRecord(record) {
+export function normalizeResearchRecord(record) {
   const base = defaultResearchRecord();
   const safe = record && typeof record === 'object' ? record : {};
   const conviction = Number(safe.conviction);
