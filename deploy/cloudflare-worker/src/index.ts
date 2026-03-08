@@ -2015,17 +2015,26 @@ app.get('/api/v1/screener', async (c) => {
   const reverse = sortDir !== 'asc';
   results.sort((a, b) => {
     const av = sortBy === 'power_cost_index'
-      ? (a.industrial?.power_cost_index ?? -1)
+      ? (a.industrial?.power_cost_index ?? null)
       : sortBy === 'industrial_power_price'
-        ? (a.industrial?.industrial_power_price ?? Number.POSITIVE_INFINITY)
+        ? (a.industrial?.industrial_power_price ?? null)
         : (a.metrics[sortBy] ?? 0);
     const bv = sortBy === 'power_cost_index'
-      ? (b.industrial?.power_cost_index ?? -1)
+      ? (b.industrial?.power_cost_index ?? null)
       : sortBy === 'industrial_power_price'
-        ? (b.industrial?.industrial_power_price ?? Number.POSITIVE_INFINITY)
+        ? (b.industrial?.industrial_power_price ?? null)
         : (b.metrics[sortBy] ?? 0);
+
+    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price')) {
+      if (av == null && bv != null) return 1;
+      if (av != null && bv == null) return -1;
+      if (av == null && bv == null) {
+        return (b.source_quality_score ?? -1) - (a.source_quality_score ?? -1);
+      }
+    }
+
     if (av !== bv) {
-      return reverse ? bv - av : av - bv;
+      return reverse ? Number(bv) - Number(av) : Number(av) - Number(bv);
     }
     return (b.source_quality_score ?? -1) - (a.source_quality_score ?? -1);
   });
