@@ -31,6 +31,7 @@ import {
 import { AccessGate, ErrBox, Loading } from './shared/system.jsx';
 import { AppShell } from './app/shell.jsx';
 import { Dashboard } from './features/dashboard.jsx';
+import { Screener } from './features/screener.jsx';
 import { CountyPicker, MiniBar, Spark, STable } from './shared/data-ui.jsx';
 
 // ═══════════════════════════════════════════════════════════════════

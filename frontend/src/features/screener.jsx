@@ -1,0 +1,228 @@
+import { API, PG } from '../config.js';
+import {
+  $,
+  $$,
+  $chg,
+  $pct,
+  industrialLineageBand,
+  industrialPowerSummaryBand,
+  productivityBand,
+  productivitySummaryBand,
+  sourceBand,
+  toast,
+  zBand,
+} from '../formatting.js';
+import { api } from '../auth.js';
+import { ErrBox } from '../shared/system.jsx';
+import { STable } from '../shared/data-ui.jsx';
+
+export function Screener({addToast, nav}) {
+  const [results, setResults] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  const [minCap, setMinCap] = React.useState('');
+  const [maxRentMult, setMaxRentMult] = React.useState('');
+  const [minAccess, setMinAccess] = React.useState('');
+  const [minPowerIndex, setMinPowerIndex] = React.useState('');
+  const [maxPowerPrice, setMaxPowerPrice] = React.useState('');
+  const [state, setState] = React.useState('');
+  const [sortBy, setSortBy] = React.useState('implied_cap_rate');
+  const [sortDir, setSortDir] = React.useState('desc');
+  const [zCapMin, setZCapMin] = React.useState('');
+  const [zCapMax, setZCapMax] = React.useState('');
+  const [zFairMin, setZFairMin] = React.useState('');
+  const [zFairMax, setZFairMax] = React.useState('');
+  const [zRentMin, setZRentMin] = React.useState('');
+  const [zRentMax, setZRentMax] = React.useState('');
+  const [screens, setScreens] = React.useState([]);
+  const [selScreen, setSelScreen] = React.useState('');
+
+  React.useEffect(() => {
+    api('/screens').then(d => setScreens(d)).catch(() => {});
+  }, []);
+
+  const run = React.useCallback(() => {
+    setLoading(true);
+    setErr(null);
+    let qs = `?sort_by=${sortBy}&sort_dir=${sortDir}`;
+    if (minCap) qs += `&min_cap=${minCap}`;
+    if (maxRentMult) qs += `&max_rent_mult=${maxRentMult}`;
+    if (minAccess) qs += `&min_access=${minAccess}`;
+    if (minPowerIndex) qs += `&min_power_index=${minPowerIndex}`;
+    if (maxPowerPrice) qs += `&max_power_price=${maxPowerPrice}`;
+    if (state) qs += `&state=${state}`;
+    if (selScreen) qs += `&screen_id=${selScreen}`;
+    if (zCapMin) qs += `&z_implied_cap_rate_min=${zCapMin}`;
+    if (zCapMax) qs += `&z_implied_cap_rate_max=${zCapMax}`;
+    if (zFairMin) qs += `&z_fair_value_min=${zFairMin}`;
+    if (zFairMax) qs += `&z_fair_value_max=${zFairMax}`;
+    if (zRentMin) qs += `&z_cash_rent_min=${zRentMin}`;
+    if (zRentMax) qs += `&z_cash_rent_max=${zRentMax}`;
+    api('/screener' + qs)
+      .then(d => setResults(d))
+      .catch(e => setErr(e.message))
+      .finally(() => setLoading(false));
+  }, [
+    maxPowerPrice,
+    maxRentMult,
+    minAccess,
+    minCap,
+    minPowerIndex,
+    selScreen,
+    sortBy,
+    sortDir,
+    state,
+    zCapMax,
+    zCapMin,
+    zFairMax,
+    zFairMin,
+    zRentMax,
+    zRentMin,
+  ]);
+
+  const exportCSV = () => {
+    const asOf = results?.as_of ? `?as_of=${encodeURIComponent(results.as_of)}` : '';
+    window.open(API + '/export/screener' + asOf, '_blank');
+    addToast(toast('CSV export started', 'ok'));
+  };
+
+  React.useEffect(() => {
+    run();
+  }, [run]);
+
+  const screenerProductivity = results?.productivity_summary || {};
+  const screenerProductivityBadge = productivitySummaryBand(screenerProductivity);
+  const screenerIndustrial = results?.industrial_summary || {};
+  const screenerIndustrialBadge = industrialPowerSummaryBand(screenerIndustrial);
+
+  return <div>
+    <div className="card" style={{marginBottom:'1.5rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
+        <h3 style={{fontSize:'1rem'}}>Filter Builder</h3>
+        <div style={{display:'flex',gap:'.5rem'}}>
+          <button className="btn btn-sm" onClick={exportCSV}>Export CSV</button>
+          <button className="btn btn-sm btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Screen'}</button>
+        </div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'.75rem'}}>
+        <div className="fg"><label>Min Cap Rate</label><input type="number" step="0.1" value={minCap} onChange={e => setMinCap(e.target.value)} placeholder="e.g. 2.0"/></div>
+        <div className="fg"><label>Max Rent Multiple</label><input type="number" step="1" value={maxRentMult} onChange={e => setMaxRentMult(e.target.value)} placeholder="e.g. 25"/></div>
+        <div className="fg"><label>Min Access Score</label><input type="number" step="1" value={minAccess} onChange={e => setMinAccess(e.target.value)} placeholder="e.g. 50"/></div>
+        <div className="fg"><label>Min Power Index</label><input type="number" step="1" value={minPowerIndex} onChange={e => setMinPowerIndex(e.target.value)} placeholder="e.g. 80"/></div>
+        <div className="fg"><label>Max Power Price</label><input type="number" step="0.1" value={maxPowerPrice} onChange={e => setMaxPowerPrice(e.target.value)} placeholder="c/kWh"/></div>
+        <div className="fg"><label>Z Cap Min</label><input type="number" step="0.1" value={zCapMin} onChange={e => setZCapMin(e.target.value)} placeholder="e.g. 1.0"/></div>
+        <div className="fg"><label>Z Cap Max</label><input type="number" step="0.1" value={zCapMax} onChange={e => setZCapMax(e.target.value)} placeholder="e.g. 2.5"/></div>
+        <div className="fg"><label>Z Fair Min</label><input type="number" step="0.1" value={zFairMin} onChange={e => setZFairMin(e.target.value)} placeholder="e.g. -1.0"/></div>
+        <div className="fg"><label>Z Fair Max</label><input type="number" step="0.1" value={zFairMax} onChange={e => setZFairMax(e.target.value)} placeholder="e.g. 1.0"/></div>
+        <div className="fg"><label>Z Rent Min</label><input type="number" step="0.1" value={zRentMin} onChange={e => setZRentMin(e.target.value)} placeholder="e.g. -0.5"/></div>
+        <div className="fg"><label>Z Rent Max</label><input type="number" step="0.1" value={zRentMax} onChange={e => setZRentMax(e.target.value)} placeholder="e.g. 1.5"/></div>
+        <div className="fg"><label>State</label><input type="text" value={state} onChange={e => setState(e.target.value)} placeholder="e.g. IA"/></div>
+        <div className="fg"><label>Sort By</label>
+          <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+            <option value="implied_cap_rate">Cap Rate</option>
+            <option value="fair_value">Fair Value</option>
+            <option value="cash_rent">Cash Rent</option>
+            <option value="benchmark_value">Land Value</option>
+            <option value="access_score">Access Score</option>
+            <option value="power_cost_index">Power Cost Index</option>
+            <option value="industrial_power_price">Power Price</option>
+            <option value="noi_per_acre">NOI/Acre</option>
+            <option value="rent_multiple">Rent Multiple</option>
+          </select>
+        </div>
+        <div className="fg"><label>Saved Screen</label>
+          <select value={selScreen} onChange={e => setSelScreen(e.target.value)}>
+            <option value="">None</option>
+            {screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      </div>
+    </div>
+
+    {err && <ErrBox title="Screener Error" msg={err}/>}
+
+    {results && <div className="card">
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.5rem'}}>
+        <h3 style={{fontSize:'1rem'}}>Results ({results.count} counties)</h3>
+        <span className="badge badge-b">as of {results.as_of}</span>
+      </div>
+      {results.as_of_meta && <div style={{marginBottom:'.55rem',display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
+        <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>
+          COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
+        </span>
+        {screenerProductivity.total_count > 0 && <span className={`badge ${screenerProductivityBadge.className}`}>{screenerProductivityBadge.label}</span>}
+        {screenerIndustrial.total_count > 0 && <span className={`badge ${screenerIndustrialBadge.className}`}>{screenerIndustrialBadge.label}</span>}
+        <span className="badge badge-a">COUNTY-BACKED ROWS PREFERRED</span>
+        {(results.as_of_meta.warnings || []).map(w => <span key={w} className="badge badge-r">{w}</span>)}
+      </div>}
+      <STable
+        cols={[
+          {key:'county',label:'County'},
+          {key:'state',label:'ST'},
+          {key:'source_quality',label:'Data',fmt:v => {
+            const badge = sourceBand(v);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'_industrial_lineage',label:'Ind',fmt:(_,r) => {
+            const badge = industrialLineageBand(r.industrial?.lineage);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'productivity_active',label:'Prod',fmt:v => {
+            const badge = productivityBand(v);
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'_cash_rent',label:'Cash Rent',num:true,fmt:(_,r) => $$(r.metrics?.cash_rent)},
+          {key:'_bv',label:'Land Value',num:true,fmt:(_,r) => $$(r.metrics?.benchmark_value)},
+          {key:'_noi',label:'NOI/ac',num:true,fmt:(_,r) => $$(r.metrics?.noi_per_acre)},
+          {key:'_cap',label:'Cap Rate',num:true,fmt:(_,r) => $pct(r.metrics?.implied_cap_rate)},
+          {key:'_fv',label:'Fair Value',num:true,fmt:(_,r) => $$(r.metrics?.fair_value)},
+          {key:'_spread',label:'Spread',num:true,fmt:(_,r) => {
+            const v = r._spread;
+            return v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>;
+          }},
+          {key:'_rm',label:'Rent Mult',num:true,fmt:(_,r) => $(r.metrics?.rent_multiple,1)},
+          {key:'_access',label:'Access',num:true,fmt:(_,r) => $(r.metrics?.access_score,1)},
+          {key:'_pidx',label:'Pwr Idx',num:true,fmt:(_,r) => $(r.industrial?.power_cost_index,1)},
+          {key:'_ppx',label:'Pwr $',num:true,fmt:(_,r) => $(r.industrial?.industrial_power_price,2)},
+          {key:'_zcap',label:'Cap Z',num:true,fmt:(_,r) => {
+            const badge = zBand(r.zscores?.implied_cap_rate || {});
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'_zfv',label:'Fair Z',num:true,fmt:(_,r) => {
+            const badge = zBand(r.zscores?.fair_value || {});
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+          {key:'_zrent',label:'Rent Z',num:true,fmt:(_,r) => {
+            const badge = zBand(r.zscores?.cash_rent || {});
+            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+          }},
+        ]}
+        rows={(results.results || []).map(r => {
+          const fair = r.metrics?.fair_value;
+          const benchmark = r.metrics?.benchmark_value;
+          const spread = fair != null && benchmark != null && benchmark > 0
+            ? ((fair - benchmark) / benchmark) * 100
+            : null;
+          return {
+            ...r,
+            _cash_rent:r.metrics?.cash_rent,
+            _bv:benchmark,
+            _cap:r.metrics?.implied_cap_rate,
+            _fv:fair,
+            _spread:spread,
+            _rm:r.metrics?.rent_multiple,
+            _noi:r.metrics?.noi_per_acre,
+            _access:r.metrics?.access_score,
+            _industrial_lineage:r.industrial?.lineage,
+            _pidx:r.industrial?.power_cost_index,
+            _ppx:r.industrial?.industrial_power_price,
+            _zcap:r.zscores?.implied_cap_rate?.zscore,
+            _zfv:r.zscores?.fair_value?.zscore,
+            _zrent:r.zscores?.cash_rent?.zscore,
+          };
+        })}
+        onRow={r => nav(PG.COUNTY, {fips:r.fips})}
+      />
+    </div>}
+  </div>;
+}
