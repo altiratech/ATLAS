@@ -56,6 +56,11 @@ It should not initially mean:
 **Advisors and intermediaries**
 - consultants, appraisers, land advisors, and independent analysts preparing site memos or investment recommendations
 
+**Insurance and risk users**
+- mid-sized carriers and MGAs evaluating geographic accumulation and underwriting context
+- reinsurers assessing concentration and catastrophe exposure by geography or infrastructure dependency
+- climate-focused risk consultants building client dashboards, market screens, and mitigation recommendations
+
 ### Anti-ICP for early industrial expansion
 
 Atlas should not initially optimize for:
@@ -65,7 +70,36 @@ Atlas should not initially optimize for:
 
 Those can come later. The near-term value is institutional research and decision support.
 
-## 3) Core Jobs To Be Done
+## 3) Adjacent Risk-Management Audience
+
+The same industrial evidence stack that helps an investor or lender screen land can also support a second long-term audience:
+- insurers,
+- reinsurers,
+- MGAs,
+- climate and resilience consultants.
+
+These users are not trying to answer exactly the same question as investors.
+
+They care more about:
+1. concentration of exposure,
+2. aggregation of CAT risk,
+3. climate and infrastructure vulnerability,
+4. insured-asset or portfolio sensitivity to environmental and systems disruption.
+
+Representative use cases:
+- property CAT aggregation by county, corridor, or market
+- climate risk dashboards for insured or target geographies
+- cyber infrastructure exposure mapping for power, telecom, and other critical nodes
+
+Important product rule:
+- Atlas should not retarget itself toward insurance workflow first.
+- It should build reusable evidence layers and workflow primitives that can later serve that audience without forcing the current wedge off course.
+
+That means:
+- the current primary wedge remains land and infrastructure underwriting,
+- but hazard, dependency, and resilience layers should be named and structured so they can be reused by future risk users.
+
+## 4) Core Jobs To Be Done
 
 Industrial-land users are trying to answer questions like:
 
@@ -78,7 +112,7 @@ Industrial-land users are trying to answer questions like:
 
 That is a research-and-modeling workflow, not a simple search workflow.
 
-## 4) Why This Matters For Atlas
+## 5) Why This Matters For Atlas
 
 Atlas already has the right underlying product shape:
 - dense screener,
@@ -103,7 +137,7 @@ in one workflow.
 
 That is the gap between listings tools and an actual intelligence platform.
 
-## 5) Industrial Land Product Thesis
+## 6) Industrial Land Product Thesis
 
 Atlas industrial land should answer three layers of analysis.
 
@@ -147,7 +181,7 @@ Examples:
 
 This is where Atlas becomes more useful than a map overlay tool.
 
-## 6) Data Domains Atlas Will Need
+## 7) Data Domains Atlas Will Need
 
 Industrial land should be built as a layered evidence stack.
 
@@ -217,6 +251,13 @@ Likely sources:
 - EPA
 - NOAA
 - state environmental agencies
+
+These same layers also form the beginning of a future insurance / resilience evidence stack.
+For risk users, they should later support:
+- peril accumulation views,
+- market-level climate dashboards,
+- concentration hotspots,
+- infrastructure dependency overlays.
 
 ### F. Zoning and entitlement context
 - current zoning

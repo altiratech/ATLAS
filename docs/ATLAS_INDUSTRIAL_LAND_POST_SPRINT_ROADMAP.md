@@ -30,6 +30,12 @@ This is the best starting point because it is:
 - better suited to public-data-first execution,
 - and reusable later for logistics, manufacturing, and energy-adjacent land.
 
+It also creates a reusable hazard-and-infrastructure layer that can later support adjacent risk-management users such as:
+- mid-sized carriers,
+- reinsurers,
+- MGAs,
+- climate-focused risk consultants.
+
 ## 2) Why This Should Be the First Industrial Wedge
 
 There are three realistic ways Atlas could enter industrial land:
@@ -223,6 +229,7 @@ The first industrial data layer should be chosen by this rule:
 - role: immediate exclusion and risk signal
 - why first: important, public, easy to explain, high value in screening
 - likely use: exclusion filter and risk component
+- secondary long-term use: property CAT aggregation, climate risk dashboards, and geographic accumulation views
 
 **USGS elevation / slope proxies**
 - role: physical buildability signal
@@ -271,7 +278,37 @@ The first industrial data layer should be chosen by this rule:
 - role: rent, vacancy, absorption, comp depth
 - why later: useful, but not necessary to prove the differentiated thesis
 
-## 7) Product Changes Needed Before Industrial Data Lands
+## 7) Adjacent Insurance / Risk Lane
+
+This should be treated as a future extension of the same Atlas core, not as a separate product rewrite.
+
+### Future target users
+- mid-sized carriers
+- MGAs
+- reinsurers
+- climate and resilience consultants
+
+### Future use cases
+- property CAT aggregation
+- climate risk dashboards
+- cyber infrastructure exposure mapping
+
+### What changes for those users
+- the data layer matters even more than the underwriting narrative
+- portfolio and aggregation views matter more than single-county investment memos
+- hazard, dependency, and concentration reporting become first-class outputs
+
+### What does not change
+- explainable lineage
+- geographic screening
+- scenario and stress thinking
+- research memory and decision continuity
+
+The implication for current Atlas work:
+- build hazard and infrastructure layers generically enough to be reused later,
+- but keep the immediate workflow focused on land and infrastructure underwriting first.
+
+## 8) Product Changes Needed Before Industrial Data Lands
 
 Atlas should not wait for every industrial dataset before making a few product-level changes.
 
@@ -311,7 +348,7 @@ Every industrial metric or score needs:
 
 This matters more in industrial land than in ag because the evidence stack is messier.
 
-## 8) Exact Build Order
+## 9) Exact Build Order
 
 ## Phase 0: Finish current Atlas sprint
 Do not interrupt the current agriculture sprint.
@@ -380,7 +417,7 @@ Build order:
 Deliverable:
 - Atlas shifts from geography-first industrial intelligence toward parcel-aware underwriting
 
-## 9) Success Criteria For The First Industrial Block
+## 10) Success Criteria For The First Industrial Block
 
 Atlas industrial expansion is successful if a target user can:
 1. identify 5-10 interesting candidate geographies
@@ -391,7 +428,7 @@ Atlas industrial expansion is successful if a target user can:
 
 If Atlas can do that, then parcel enrichment and premium data become easier to justify.
 
-## 10) What To Explicitly Avoid
+## 11) What To Explicitly Avoid
 
 Do not start with:
 - a broad industrial marketplace
@@ -403,7 +440,7 @@ Do not start with:
 The product risk is not "being too narrow."
 The product risk is building a wide but shallow industrial layer that looks impressive and is not decision-useful.
 
-## 11) Recommended Immediate Next Action
+## 12) Recommended Immediate Next Action
 
 After the current agriculture sprint is stabilized, the first industrial planning-to-build handoff should be:
 
