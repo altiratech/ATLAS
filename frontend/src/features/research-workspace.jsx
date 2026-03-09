@@ -6,10 +6,11 @@ import {
   fetchResearchWorkspaces,
   normalizeResearchRecord,
 } from '../auth.js';
+import { assumptionSetLabel, summarizeScenarioAssumptions } from '../shared/assumptions-ui.jsx';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, STable } from '../shared/data-ui.jsx';
 
-export function ResearchWorkspace({addToast, nav, params, researchUser}) {
+export function ResearchWorkspace({addToast, nav, params, researchUser, activeAssumptionSet, activeAssumptionSetId}) {
   const [store, setStore] = React.useState({});
   const [storeLoading, setStoreLoading] = React.useState(true);
   const [storeErr, setStoreErr] = React.useState(null);
@@ -146,6 +147,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
   const latestTopDriver = latestDriverDecomposition
     .map((entry) => ({ scenario: entry.scenario, driver: Array.isArray(entry.drivers) ? entry.drivers[0] : null }))
     .find((entry) => entry.driver?.driver && entry.driver?.delta != null) || null;
+  const latestScenarioAssumptionSummary = summarizeScenarioAssumptions(latestScenarioRun?.assumptions);
   const selectedCountyLabel = county
     ? (countyMap[county] || (params?.countyName ? `${params.countyName}${params?.state ? `, ${params.state}` : ''}` : county))
     : 'None';
@@ -258,6 +260,20 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
         </div>
       </div>
     </div>}
+    <div className="card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr',gap:'.75rem'}}>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Active Modeling Context</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div>
+          <div className="sc-c">Dashboard, Screener, County Detail, Compare, Backtest, and new Scenario Lab runs all inherit this saved assumption set.</div>
+        </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Research Guardrail</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>REPRODUCIBLE</div>
+          <div className="sc-c">Workspace notes do not recalculate on their own, so keep the active set visible when moving between analysis surfaces and saved scenario runs.</div>
+        </div>
+      </div>
+    </div>
     <div className="rw-grid">
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Research Workspace</h3>
@@ -341,6 +357,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Workspace Snapshot</h3>
         <div className="sc"><div className="sc-l">Session User</div><div className="sc-v" style={{fontSize:'.82rem'}}>{researchUser || '--'}</div></div>
         <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{selectedCountyLabel}</div></div>
+        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Active Assumption Set</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Asset Type</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.analysis?.asset_type || '--'}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Target Use Case</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.analysis?.target_use_case || '--'}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
@@ -354,6 +371,30 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
       <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Latest Scenario Snapshot</h3>
       {!latestScenarioRun ? <div className="empty"><p>No saved scenario compare snapshot yet.</p></div> : <div>
         <div className="sc"><div className="sc-l">Snapshot</div><div className="sc-v" style={{fontSize:'.9rem'}}>{latestScenarioRun.scenario_name || 'Scenario Snapshot'}</div><div className="sc-c">{latestScenarioRun.created_at ? new Date(latestScenarioRun.created_at).toLocaleString() : '--'} • As of {latestScenarioRun.as_of_date || '--'}</div></div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem',marginTop:'.6rem'}}>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Snapshot Model Basis</div>
+            <div className="sc-v" style={{fontSize:'.88rem'}}>{latestScenarioAssumptionSummary.baseLabel}</div>
+            <div className="sc-c">
+              {latestScenarioAssumptionSummary.overrideCount > 0
+                ? `${latestScenarioAssumptionSummary.overrideCount} override${latestScenarioAssumptionSummary.overrideCount === 1 ? '' : 's'} layered on top of the base set.`
+                : 'No override values were stored with this snapshot.'}
+            </div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Current vs Snapshot</div>
+            <div className="sc-v" style={{fontSize:'.88rem'}}>
+              {latestScenarioAssumptionSummary.baseId != null && String(latestScenarioAssumptionSummary.baseId) === String(activeAssumptionSetId)
+                ? 'MATCHES ACTIVE SET'
+                : 'CHECK ACTIVE SET'}
+            </div>
+            <div className="sc-c">
+              {latestScenarioAssumptionSummary.baseId != null && String(latestScenarioAssumptionSummary.baseId) === String(activeAssumptionSetId)
+                ? 'The latest saved scenario snapshot used the same base assumption set currently active in Atlas.'
+                : `Active set now: ${assumptionSetLabel(activeAssumptionSet)}.`}
+            </div>
+          </div>
+        </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.55rem',marginTop:'.6rem'}}>
           <div className="sc" style={{margin:0}}>
             <div className="sc-l">Base Fair Value</div>
@@ -413,13 +454,20 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
     <div className="card" style={{marginBottom:'.7rem'}}>
       <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Scenario Run History</h3>
       {scenarioRuns.length === 0 ? <div className="empty"><p>No scenario compare snapshots yet.</p></div>
-      : scenarioRuns.map(run => <div key={run.id} className="pack-row">
-        <div>
-          <div style={{fontSize:'.8rem',fontWeight:600,marginBottom:'.18rem'}}>{run.scenario_name || 'Scenario Snapshot'}</div>
-          <div style={{fontSize:'.74rem',color:'var(--text2)'}}>As of {run.as_of_date} • {run.created_at ? new Date(run.created_at).toLocaleString() : '--'}</div>
-        </div>
-        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county})}>Open</button>
-      </div>)}
+      : scenarioRuns.map(run => {
+        const assumptionSummary = summarizeScenarioAssumptions(run.assumptions);
+        return <div key={run.id} className="pack-row">
+          <div>
+            <div style={{fontSize:'.8rem',fontWeight:600,marginBottom:'.18rem'}}>{run.scenario_name || 'Scenario Snapshot'}</div>
+            <div style={{fontSize:'.74rem',color:'var(--text2)'}}>As of {run.as_of_date} • {run.created_at ? new Date(run.created_at).toLocaleString() : '--'}</div>
+            <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>
+              Base set: {assumptionSummary.baseLabel}
+              {assumptionSummary.overrideCount > 0 ? ` • overrides: ${assumptionSummary.overrideKeys.join(', ')}` : ' • no stored overrides'}
+            </div>
+          </div>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county})}>Open</button>
+        </div>;
+      })}
     </div>
 
     <div className="card">

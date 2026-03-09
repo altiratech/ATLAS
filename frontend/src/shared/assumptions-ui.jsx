@@ -38,6 +38,25 @@ export function buildVersionedAssumptionParams(baseParams, nextValues) {
   return merged;
 }
 
+export function summarizeScenarioAssumptions(assumptions) {
+  const safe = assumptions && typeof assumptions === 'object' ? assumptions : {};
+  const usesStructuredBase = Object.prototype.hasOwnProperty.call(safe, 'base_assumption_set_id')
+    || Object.prototype.hasOwnProperty.call(safe, 'base_assumption_set_label')
+    || Object.prototype.hasOwnProperty.call(safe, 'overrides');
+  const overrideSource = usesStructuredBase
+    ? (safe.overrides && typeof safe.overrides === 'object' ? safe.overrides : {})
+    : safe;
+  const overrideEntries = Object.entries(overrideSource).filter(([, value]) => value != null && value !== '');
+  return {
+    baseId: safe.base_assumption_set_id ?? null,
+    baseLabel: typeof safe.base_assumption_set_label === 'string' && safe.base_assumption_set_label
+      ? safe.base_assumption_set_label
+      : (usesStructuredBase ? 'Saved set unavailable' : 'Legacy ad hoc overrides'),
+    overrideCount: overrideEntries.length,
+    overrideKeys: overrideEntries.map(([key]) => key),
+  };
+}
+
 export function AssumptionContextBar({
   assumptionSets,
   activeAssumptionSetId,

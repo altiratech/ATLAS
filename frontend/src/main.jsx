@@ -147,7 +147,7 @@ function App() {
     switch(pg) {
       case PG.MISSION: return <MissionPage nav={nav}/>;
       case PG.ABOUT: return <AboutPage/>;
-      case PG.RESEARCH: return <ResearchWorkspace addToast={addToast} nav={nav} params={pp} researchUser={researchUser}/>;
+      case PG.RESEARCH: return <ResearchWorkspace addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps}/>;
       case PG.DASH: return <Dashboard addToast={addToast} nav={nav} {...assumptionProps}/>;
       case PG.SCREEN: return <Screener addToast={addToast} nav={nav} {...assumptionProps}/>;
       case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav} {...assumptionProps}/>;
