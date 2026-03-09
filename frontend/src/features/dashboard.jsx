@@ -1,17 +1,21 @@
 import { api } from '../auth.js';
 import { $, $$, $pct, zBand, productivitySummaryBand, sourceBand, productivityBand, $chg } from '../formatting.js';
-import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
+import { appendAssumptionParam, AssumptionContextBar, assumptionSetLabel, findDefaultAssumptionSet } from '../shared/assumptions-ui.jsx';
 import { Loading, ErrBox } from '../shared/system.jsx';
 import { LineChart, MiniBar, STable } from '../shared/data-ui.jsx';
 import { PG } from '../config.js';
 
 export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [data, setData] = React.useState(null);
+  const [baselineData, setBaselineData] = React.useState(null);
   const [coverage, setCoverage] = React.useState(null);
   const [agIndex, setAgIndex] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [secondaryLoading, setSecondaryLoading] = React.useState(false);
+  const [impactLoading, setImpactLoading] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  const defaultAssumptionSet = React.useMemo(() => findDefaultAssumptionSet(assumptionSets), [assumptionSets]);
+  const compareAgainstDefault = !!defaultAssumptionSet && !!activeAssumptionSetId && String(defaultAssumptionSet.id) !== String(activeAssumptionSetId);
   const workflowParams = React.useCallback((row, sourcePage = 'dashboard') => ({
     fips: row.fips,
     countyName: row.county,
@@ -21,10 +25,12 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
     targetUseCase: 'farmland_investment',
   }), []);
 
-  const load = () => {
+  const load = React.useCallback(() => {
     setLoading(true);
     setSecondaryLoading(false);
+    setImpactLoading(false);
     setErr(null);
+    setBaselineData(null);
     setCoverage(null);
     setAgIndex(null);
 
@@ -33,6 +39,13 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
         setData(dashboardData);
         setLoading(false);
         setSecondaryLoading(true);
+        if (compareAgainstDefault) {
+          setImpactLoading(true);
+          api(appendAssumptionParam('/dashboard', defaultAssumptionSet.id))
+            .then((baseline) => setBaselineData(baseline))
+            .catch(() => setBaselineData(null))
+            .finally(() => setImpactLoading(false));
+        }
         return Promise.allSettled([
           api('/data/coverage'),
           api('/ag-index'),
@@ -48,8 +61,8 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
       .finally(() => {
         setSecondaryLoading(false);
       });
-  };
-  React.useEffect(load, [activeAssumptionSetId]);
+  }, [activeAssumptionSetId, compareAgainstDefault, defaultAssumptionSet?.id]);
+  React.useEffect(load, [load]);
 
   if (loading) return <Loading/>;
   if (err) return <ErrBox title="Dashboard Error" msg={err} onRetry={load}/>;
@@ -79,6 +92,16 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
   const hasValuationReadyMetrics = (row) => row?.benchmark_value != null && row?.fair_value != null && (row?.implied_cap_rate ?? row?.implied_cap) != null && (row?.noi_per_acre ?? row?.noi) != null;
   const decisionReadyMovers = movers.filter((row) => hasValuationReadyMetrics(row) && row.source_quality !== 'national');
   const signalMovers = movers.filter((row) => !decisionReadyMovers.includes(row));
+  const baselineSummary = baselineData?.summary || {};
+  const baselineCap = baselineSummary.implied_cap_rate || {};
+  const baselineFv = baselineSummary.fair_value || {};
+  const baselineRent = baselineSummary.cash_rent || {};
+  const baselineMovers = baselineData?.top_movers || [];
+  const baselineDecisionReadyCount = baselineMovers.filter((row) => hasValuationReadyMetrics(row) && row.source_quality !== 'national').length;
+  const fairValueDelta = fv.median != null && baselineFv.median != null ? fv.median - baselineFv.median : null;
+  const capRateDelta = cap.median != null && baselineCap.median != null ? cap.median - baselineCap.median : null;
+  const cashRentDelta = rent.median != null && baselineRent.median != null ? rent.median - baselineRent.median : null;
+  const decisionReadyCountDelta = baselineData ? decisionReadyMovers.length - baselineDecisionReadyCount : null;
 
   return <div>
     <AssumptionContextBar
@@ -89,6 +112,52 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
       title="Active Model Basis"
       description="Dashboard medians, county shortlist, and valuation rankings all use this saved assumption set."
     />
+    <div className="card" style={{marginBottom:'.7rem',padding:'.65rem .75rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap'}}>
+        <div style={{minWidth:'240px',flex:'1 1 280px'}}>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Assumption Impact vs Default</div>
+          {!compareAgainstDefault ? (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              <strong style={{color:'var(--text)'}}>{assumptionSetLabel(activeAssumptionSet)}</strong> is the baseline. Switch to another saved set to see the modeled before/after effect on fair value, cap rate, and shortlist quality.
+            </div>
+          ) : impactLoading ? (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              Comparing <strong style={{color:'var(--text)'}}>{assumptionSetLabel(activeAssumptionSet)}</strong> against <strong style={{color:'var(--text)'}}>{assumptionSetLabel(defaultAssumptionSet)}</strong> using live dashboard medians.
+            </div>
+          ) : baselineData ? (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              The active set is moving modeled outputs relative to <strong style={{color:'var(--text)'}}>{assumptionSetLabel(defaultAssumptionSet)}</strong>. Raw rent should stay mostly unchanged; valuation metrics should move.
+            </div>
+          ) : (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              Default-baseline comparison is temporarily unavailable. The dashboard still reflects the active set <strong style={{color:'var(--text)'}}>{assumptionSetLabel(activeAssumptionSet)}</strong>.
+            </div>
+          )}
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4, minmax(140px, 1fr))',gap:'.5rem',flex:'2 1 640px'}}>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Median Fair Value</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{compareAgainstDefault && baselineData ? $$(fv.median) : '--'}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineData ? `${formatDollarDelta(fairValueDelta)} vs default` : 'Model output'}</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Median Cap Rate</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{compareAgainstDefault && baselineData ? $pct(cap.median) : '--'}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineData && capRateDelta != null ? `${capRateDelta >= 0 ? '+' : ''}${Math.round(capRateDelta * 100)} bps vs default` : 'Required-return sensitive'}</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Median Cash Rent</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{compareAgainstDefault && baselineData ? $$(rent.median) : '--'}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineData ? `${formatDollarDelta(cashRentDelta)} vs default` : 'Raw market input'}</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Decision-Ready Rows</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{decisionReadyMovers.length}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineData && decisionReadyCountDelta != null ? `${decisionReadyCountDelta >= 0 ? '+' : ''}${decisionReadyCountDelta} vs default` : 'Valuation-ready shortlist'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div className="card" style={{marginBottom:'1rem',padding:'.65rem .75rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'.5rem'}}>
         <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',alignItems:'center'}}>
@@ -239,4 +308,11 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
       </div>
     </div>
   </div>;
+}
+
+function formatDollarDelta(value) {
+  if (value == null) return '--';
+  const rounded = Math.round(value);
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
+  return `${sign}$${Math.abs(rounded).toLocaleString('en-US')}`;
 }

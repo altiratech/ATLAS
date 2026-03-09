@@ -21,6 +21,11 @@ export function assumptionSetLabel(set) {
   return `${set.name} v${set.version}`;
 }
 
+export function findDefaultAssumptionSet(assumptionSets) {
+  if (!Array.isArray(assumptionSets) || assumptionSets.length === 0) return null;
+  return assumptionSets.find((set) => set.name === 'Default') || assumptionSets[0] || null;
+}
+
 export function appendAssumptionParam(path, assumptionSetId) {
   if (!assumptionSetId) return path;
   const joiner = path.includes('?') ? '&' : '?';

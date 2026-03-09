@@ -12,7 +12,7 @@ import {
   zBand,
 } from '../formatting.js';
 import { api } from '../auth.js';
-import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
+import { appendAssumptionParam, AssumptionContextBar, assumptionSetLabel, findDefaultAssumptionSet } from '../shared/assumptions-ui.jsx';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { MiniBar, Spark } from '../shared/data-ui.jsx';
 
@@ -26,6 +26,7 @@ function confidenceBand(level) {
 
 export function CountyPage({addToast, params, nav, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [data, setData] = React.useState(null);
+  const [baselineSummary, setBaselineSummary] = React.useState(null);
   const [industrial, setIndustrial] = React.useState(null);
   const [ts, setTs] = React.useState([]);
   const [tsBands, setTsBands] = React.useState({});
@@ -36,11 +37,16 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
   const [newNote, setNewNote] = React.useState('');
   const [watched, setWatched] = React.useState(false);
   const [sens, setSens] = React.useState(null);
+  const [impactLoading, setImpactLoading] = React.useState(false);
+  const defaultAssumptionSet = React.useMemo(() => findDefaultAssumptionSet(assumptionSets), [assumptionSets]);
+  const compareAgainstDefault = !!defaultAssumptionSet && !!activeAssumptionSetId && String(defaultAssumptionSet.id) !== String(activeAssumptionSetId);
 
   const load = () => {
     if (!params.fips) return;
     setLoading(true);
     setErr(null);
+    setBaselineSummary(null);
+    setImpactLoading(false);
     Promise.all([
       api(appendAssumptionParam(`/geo/${params.fips}/summary`, activeAssumptionSetId)),
       api(appendAssumptionParam(`/geo/${params.fips}/timeseries?metrics=cash_rent,benchmark_value,implied_cap_rate,fair_value,noi_per_acre`, activeAssumptionSetId)),
@@ -58,6 +64,28 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
   };
   React.useEffect(() => { setSens(null); }, [params.fips, activeAssumptionSetId]);
   React.useEffect(load, [params.fips, activeAssumptionSetId]);
+  React.useEffect(() => {
+    if (!params.fips || !compareAgainstDefault) {
+      setBaselineSummary(null);
+      setImpactLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setImpactLoading(true);
+    api(appendAssumptionParam(`/geo/${params.fips}/summary`, defaultAssumptionSet.id))
+      .then((summary) => {
+        if (!cancelled) setBaselineSummary(summary);
+      })
+      .catch(() => {
+        if (!cancelled) setBaselineSummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setImpactLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.fips, compareAgainstDefault, defaultAssumptionSet?.id]);
 
   const toggleWatch = async () => {
     try {
@@ -111,6 +139,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
   if (err || !data) return <ErrBox title="County Error" msg={err || 'Not found'} onRetry={load}/>;
 
   const m = data.metrics || {};
+  const baselineMetrics = baselineSummary?.metrics || {};
   const rentHist = ts.map(t => t.cash_rent).filter(v => v != null);
   const valHist = ts.map(t => t.benchmark_value).filter(v => v != null);
   const capHist = ts.map(t => t.implied_cap_rate).filter(v => v != null);
@@ -184,6 +213,10 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       : 'No county productivity uplift is active in the current fair value.',
     data.benchmark_method_detail || 'Benchmark method detail unavailable.',
   ];
+  const fairValueDelta = m.fair_value != null && baselineMetrics.fair_value != null ? m.fair_value - baselineMetrics.fair_value : null;
+  const requiredReturnDelta = m.required_return != null && baselineMetrics.required_return != null ? m.required_return - baselineMetrics.required_return : null;
+  const dscrDelta = m.dscr != null && baselineMetrics.dscr != null ? m.dscr - baselineMetrics.dscr : null;
+  const breakEvenRentDelta = m.break_even_rent != null && baselineMetrics.break_even_rent != null ? m.break_even_rent - baselineMetrics.break_even_rent : null;
 
   return <div>
     <AssumptionContextBar
@@ -194,6 +227,52 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       title="County Modeling Assumptions"
       description="County valuation, fair value, time series, and sensitivity analysis on this page all use the active assumption set."
     />
+    <div className="card" style={{marginBottom:'1rem',padding:'.65rem .75rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap'}}>
+        <div style={{minWidth:'240px',flex:'1 1 280px'}}>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Assumption Impact vs Default</div>
+          {!compareAgainstDefault ? (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              <strong style={{color:'var(--text)'}}>{assumptionSetLabel(activeAssumptionSet)}</strong> is the baseline. Switch sets to see how this county’s modeled fair value, required return, DSCR, and break-even rent move.
+            </div>
+          ) : impactLoading ? (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              Comparing <strong style={{color:'var(--text)'}}>{assumptionSetLabel(activeAssumptionSet)}</strong> against <strong style={{color:'var(--text)'}}>{assumptionSetLabel(defaultAssumptionSet)}</strong> for this county.
+            </div>
+          ) : baselineSummary ? (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              This county is using <strong style={{color:'var(--text)'}}>{assumptionSetLabel(activeAssumptionSet)}</strong> instead of the default baseline <strong style={{color:'var(--text)'}}>{assumptionSetLabel(defaultAssumptionSet)}</strong>.
+            </div>
+          ) : (
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+              Default-baseline comparison is temporarily unavailable. The county model still reflects the active set <strong style={{color:'var(--text)'}}>{assumptionSetLabel(activeAssumptionSet)}</strong>.
+            </div>
+          )}
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4, minmax(140px, 1fr))',gap:'.5rem',flex:'2 1 640px'}}>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Fair Value</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{compareAgainstDefault && baselineSummary ? $$(m.fair_value) : '--'}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineSummary ? `${formatDollarDelta(fairValueDelta)} vs default` : 'Valuation output'}</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Required Return</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{compareAgainstDefault && baselineSummary ? $pct(m.required_return) : '--'}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineSummary ? `${formatBpsDelta(requiredReturnDelta)} vs default` : '10Y + risk premium'}</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">DSCR</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{compareAgainstDefault && baselineSummary ? $(m.dscr, 2) : '--'}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineSummary ? `${formatSignedNumber(dscrDelta, 2)} vs default` : 'Debt-service cushion'}</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Break-even Rent</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{compareAgainstDefault && baselineSummary ? $$(m.break_even_rent) : '--'}</div>
+            <div className="sc-c">{compareAgainstDefault && baselineSummary ? `${formatDollarDelta(breakEvenRentDelta)} vs default` : 'Stress threshold'}</div>
+          </div>
+        </div>
+      </div>
+    </div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
       <div>
         <h2 style={{fontSize:'1.35rem',marginBottom:'.25rem'}}>{data.county_name}, {data.state}</h2>
@@ -447,4 +526,22 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       </div>}
     </div>
   </div>;
+}
+
+function formatDollarDelta(value) {
+  if (value == null) return '--';
+  const rounded = Math.round(value);
+  const sign = rounded > 0 ? '+' : rounded < 0 ? '-' : '';
+  return `${sign}$${Math.abs(rounded).toLocaleString('en-US')}`;
+}
+
+function formatBpsDelta(value) {
+  if (value == null) return '--';
+  const bps = Math.round(value * 100);
+  return `${bps >= 0 ? '+' : ''}${bps} bps`;
+}
+
+function formatSignedNumber(value, digits = 2) {
+  if (value == null) return '--';
+  return `${value >= 0 ? '+' : ''}${Number(value).toFixed(digits)}`;
 }
