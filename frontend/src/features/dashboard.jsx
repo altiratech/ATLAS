@@ -75,6 +75,9 @@ export function Dashboard({addToast, nav}) {
   const productivityBadge = productivitySummaryBand(productivity);
 
   const capBuckets = data.cap_rate_distribution || [];
+  const hasCoreCountyMetrics = (row) => row?.benchmark_value != null && row?.fair_value != null && row?.implied_cap_rate != null && row?.noi_per_acre != null && row?.access_score != null;
+  const decisionReadyMovers = movers.filter((row) => hasCoreCountyMetrics(row) && row.source_quality !== 'national');
+  const signalMovers = movers.filter((row) => !decisionReadyMovers.includes(row));
 
   return <div>
     <div className="card" style={{marginBottom:'1rem',padding:'.65rem .75rem'}}>
@@ -134,12 +137,17 @@ export function Dashboard({addToast, nav}) {
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
         <div>
-          <h3 style={{fontSize:'1rem'}}>Top Value Opportunities</h3>
-          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>County-backed rows are prioritized; identical fallback-driven clusters are collapsed; Prod shows whether county yield differentiation is active.</div>
+          <h3 style={{fontSize:'1rem'}}>Decision-Ready County Candidates</h3>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>Only counties with full valuation support on this page: land value, fair value, cap rate, NOI, and access. Use these first for live research and scenarios.</div>
         </div>
-        <span className="badge badge-b">{movers.length} ranked clusters</span>
+        <span className="badge badge-b">{decisionReadyMovers.length} ready now</span>
       </div>
-      <STable
+      {decisionReadyMovers.length === 0 ? <div className="empty">
+        <p>No fully decision-ready county rows are in the current dashboard shortlist.</p>
+        <div style={{display:'flex',justifyContent:'center',marginTop:'.7rem'}}>
+          <button className="btn btn-sm btn-p" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
+        </div>
+      </div> : <STable
         cols={[
           {key:'county',label:'County',fmt:(_,r)=><span>{r.county}{r.duplicate_count > 1 ? ` x${r.duplicate_count}` : ''}</span>},
           {key:'state',label:'ST'},
@@ -156,7 +164,37 @@ export function Dashboard({addToast, nav}) {
             <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.SCENARIO, workflowParams(r)); }}>Scenario</button>
           </div>},
         ]}
-        rows={movers.map(r => ({ ...r, _workflow: r.fips }))}
+        rows={decisionReadyMovers.map(r => ({ ...r, _workflow: r.fips }))}
+        onRow={(r) => nav(PG.COUNTY, {fips:r.fips})}
+      />}
+    </div>
+
+    <div className="card" style={{marginBottom:'1.5rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
+        <div>
+          <h3 style={{fontSize:'1rem'}}>Market Signal Clusters</h3>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>These rows are still useful for regime detection and county triage, but some rely on proxies or lack full underwriting fields. Treat them as prompts to investigate, not final candidates.</div>
+        </div>
+        <span className="badge badge-a">{signalMovers.length} signal rows</span>
+      </div>
+      <STable
+        cols={[
+          {key:'county',label:'County',fmt:(_,r)=><span>{r.county}{r.duplicate_count > 1 ? ` x${r.duplicate_count}` : ''}</span>},
+          {key:'state',label:'ST'},
+          {key:'source_quality',label:'Data',fmt:v=>{ const badge = sourceBand(v); return <span className={`badge ${badge.className}`}>{badge.label}</span>; }},
+          {key:'productivity_active',label:'Prod',fmt:v=>{ const badge = productivityBand(v); return <span className={`badge ${badge.className}`}>{badge.label}</span>; }},
+          {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
+          {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
+          {key:'spread_pct',label:'Spread',num:true,fmt:v=>v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},
+          {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:v=>$pct(v)},
+          {key:'noi_per_acre',label:'NOI/ac',num:true,fmt:v=>$$(v)},
+          {key:'access_score',label:'Access',num:true,fmt:v=>$(v,1)},
+          {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r)=><div style={{display:'flex',gap:'.3rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
+            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.COUNTY, {fips:r.fips}); }}>Inspect</button>
+            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research</button>
+          </div>},
+        ]}
+        rows={signalMovers.map(r => ({ ...r, _workflow: r.fips }))}
         onRow={(r) => nav(PG.COUNTY, {fips:r.fips})}
       />
     </div>

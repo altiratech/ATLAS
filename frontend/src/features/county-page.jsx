@@ -116,6 +116,26 @@ export function CountyPage({addToast, params, nav}) {
     assetType: 'agriculture_land',
     targetUseCase: 'farmland_investment',
   };
+  const fairValue = m.fair_value;
+  const benchmarkValue = m.benchmark_value;
+  const valueSpreadPct = fairValue != null && benchmarkValue != null && benchmarkValue > 0
+    ? ((fairValue - benchmarkValue) / benchmarkValue) * 100
+    : null;
+  const valueSignal = valueSpreadPct == null
+    ? { label: 'INSUFFICIENT', className: 'badge-a', summary: 'Atlas does not yet have enough fully modeled context to express a valuation read here.' }
+    : valueSpreadPct >= 10
+      ? { label: 'UNDERVALUED', className: 'badge-g', summary: 'Model fair value is materially above observed benchmark value.' }
+      : valueSpreadPct <= -10
+        ? { label: 'OVERVALUED', className: 'badge-r', summary: 'Observed benchmark value is running ahead of model fair value.' }
+        : { label: 'NEAR FAIR', className: 'badge-a', summary: 'Model fair value and observed benchmark value are broadly aligned.' };
+  const underwritingStatus = m.implied_cap_rate != null && m.noi_per_acre != null && m.access_score != null
+    ? { label: 'RESEARCH-READY', className: 'badge-g', summary: 'Core underwriting fields are populated for this county.' }
+    : data.source_quality === 'proxy'
+      ? { label: 'TRIAGE-ONLY', className: 'badge-b', summary: 'This county is still useful for triage, but some underwriting fields are proxy-backed or missing.' }
+      : { label: 'PARTIAL', className: 'badge-a', summary: 'Some core underwriting fields remain incomplete and need extra diligence.' };
+  const nextAction = data.source_quality === 'proxy'
+    ? 'Use Scenario Lab to pressure test the thesis, then confirm the county belongs in research despite proxy-driven inputs.'
+    : 'Move this county into Research Workspace, record the thesis, and run a downside scenario before presenting it.';
 
   return <div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
@@ -128,6 +148,31 @@ export function CountyPage({addToast, params, nav}) {
         <button className="btn" onClick={() => nav(PG.RESEARCH, workflowParams)}>Research</button>
         <button className="btn" onClick={() => nav(PG.SCENARIO, workflowParams)}>Scenario</button>
         <button className="btn" onClick={() => nav(PG.COMPARE,{fips:data.geo_key})}>Compare</button>
+      </div>
+    </div>
+
+    <div className="card" style={{marginBottom:'1rem'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1.4fr 1fr 1fr',gap:'.75rem',alignItems:'stretch'}}>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Analyst Summary</div>
+          <div className="sc-v" style={{fontSize:'1rem',marginBottom:'.35rem'}}>{valueSpreadPct != null ? $chg(valueSpreadPct) : 'N/A'} vs market</div>
+          <div className="sc-c">{valueSignal.summary}</div>
+          <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',marginTop:'.55rem'}}>
+            <span className={`badge ${valueSignal.className}`}>{valueSignal.label}</span>
+            <span className={`badge ${underwritingStatus.className}`}>{underwritingStatus.label}</span>
+            <span className={`badge ${sourceBand(data.source_quality).className}`}>{sourceBand(data.source_quality).label}</span>
+          </div>
+        </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Model Basis</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{data.benchmark_method === 'rent_multiple_proxy' ? 'RENT MULTIPLE PROXY' : 'DIRECT BENCHMARK'}</div>
+          <div className="sc-c">{data.benchmark_method_detail || data.source_quality_detail || 'Benchmark method detail unavailable.'}</div>
+        </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Next Best Action</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{underwritingStatus.label}</div>
+          <div className="sc-c">{nextAction}</div>
+        </div>
       </div>
     </div>
 
