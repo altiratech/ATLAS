@@ -9,6 +9,7 @@ export function Dashboard({addToast, nav}) {
   const [coverage, setCoverage] = React.useState(null);
   const [agIndex, setAgIndex] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
+  const [secondaryLoading, setSecondaryLoading] = React.useState(false);
   const [err, setErr] = React.useState(null);
   const workflowParams = React.useCallback((row, sourcePage = 'dashboard') => ({
     fips: row.fips,
@@ -20,19 +21,32 @@ export function Dashboard({addToast, nav}) {
   }), []);
 
   const load = () => {
-    setLoading(true); setErr(null);
-    Promise.all([
-      api('/dashboard'),
-      api('/data/coverage').catch(() => null),
-      api('/ag-index').catch(() => null),
-    ])
-      .then(([dashboardData, coverageData, agIndexData]) => {
+    setLoading(true);
+    setSecondaryLoading(false);
+    setErr(null);
+    setCoverage(null);
+    setAgIndex(null);
+
+    api('/dashboard')
+      .then((dashboardData) => {
         setData(dashboardData);
-        setCoverage(coverageData);
-        setAgIndex(agIndexData);
+        setLoading(false);
+        setSecondaryLoading(true);
+        return Promise.allSettled([
+          api('/data/coverage'),
+          api('/ag-index'),
+        ]).then(([coverageResult, agIndexResult]) => {
+          setCoverage(coverageResult.status === 'fulfilled' ? coverageResult.value : null);
+          setAgIndex(agIndexResult.status === 'fulfilled' ? agIndexResult.value : null);
+        });
       })
-      .catch(e => setErr(e.message))
-      .finally(() => setLoading(false));
+      .catch(e => {
+        setErr(e.message);
+        setLoading(false);
+      })
+      .finally(() => {
+        setSecondaryLoading(false);
+      });
   };
   React.useEffect(load, []);
 
@@ -70,6 +84,7 @@ export function Dashboard({addToast, nav}) {
           {coveragePct != null && <span className={`badge ${coveragePct >= 70 ? 'badge-g' : 'badge-r'}`}>COVERAGE {coveragePct}%</span>}
           {productivity.total_count > 0 && <span className={`badge ${productivityBadge.className}`}>{productivityBadge.label}</span>}
           {freshnessRows.length > 0 && <span className="badge badge-a">FRESHNESS {freshnessRows[0].last_updated || '--'}</span>}
+          {secondaryLoading && <span className="badge badge-a">LOADING CONTEXT...</span>}
           {warnings.map(w => <span key={w} className="badge badge-r">{w}</span>)}
         </div>
       </div>
