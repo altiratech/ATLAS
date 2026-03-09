@@ -10,6 +10,14 @@ export function Dashboard({addToast, nav}) {
   const [agIndex, setAgIndex] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState(null);
+  const workflowParams = React.useCallback((row, sourcePage = 'dashboard') => ({
+    fips: row.fips,
+    countyName: row.county,
+    state: row.state,
+    sourcePage,
+    assetType: 'agriculture_land',
+    targetUseCase: 'farmland_investment',
+  }), []);
 
   const load = () => {
     setLoading(true); setErr(null);
@@ -51,14 +59,6 @@ export function Dashboard({addToast, nav}) {
   const charts = data.charts || {};
   const productivity = data.productivity_summary || {};
   const productivityBadge = productivitySummaryBand(productivity);
-  const workflowParams = React.useCallback((row, sourcePage = 'dashboard') => ({
-    fips: row.fips,
-    countyName: row.county,
-    state: row.state,
-    sourcePage,
-    assetType: 'agriculture_land',
-    targetUseCase: 'farmland_investment',
-  }), []);
 
   const capBuckets = data.cap_rate_distribution || [];
 
