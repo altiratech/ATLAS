@@ -20,6 +20,12 @@ export function MissionPage({nav}) {
     {tool:'Portfolio', why:'Quantify concentration risk and unrealized value gaps.', next:'Create one model portfolio and assess HHI.'},
     {tool:'Data Sources', why:'Verify where every input comes from and how often it updates.', next:'Confirm cadence before presenting outputs.'},
   ];
+  const buildout = [
+    {status:'Live', title:'Farmland Discovery + Modeling', body:'Dashboard, Screener, County Detail, Research Workspace, Scenario Lab, and Backtest now run on real Atlas data and model logic.'},
+    {status:'In Build', title:'Workflow Closure', body:'Atlas is actively being tightened so counties can move cleanly from discovery into research, scenarios, and historical testing without manual context resets.'},
+    {status:'Partial', title:'Industrial Land Signals', body:'Data-center suitability is scaffolded with live power-cost evidence. More infrastructure and hazard layers are still missing and remain clearly marked as such.'},
+    {status:'Planned', title:'Portfolio Risk Dashboard', body:'County-normalized portfolio aggregation, hazard overlays, and hotspot views are planned next as a dedicated risk lens, not as fake live analytics.'},
+  ];
 
   return <div>
     <div className="card hero-card">
@@ -50,10 +56,26 @@ export function MissionPage({nav}) {
         </div>)}
       </div>
     </div>
+
+    <div className="card">
+      <h3 style={{fontSize:'.94rem',marginBottom:'.55rem'}}>Current Buildout</h3>
+      <div className="why-grid">
+        {buildout.map(item => <div key={item.title} className="why-row">
+          <div className="why-tool"><span className={`badge ${item.status === 'Live' ? 'badge-g' : item.status === 'In Build' ? 'badge-b' : item.status === 'Partial' ? 'badge-a' : 'badge-r'}`}>{item.status}</span></div>
+          <div className="why-why" style={{fontWeight:600,color:'var(--text1)'}}>{item.title}</div>
+          <div className="why-next">{item.body}</div>
+        </div>)}
+      </div>
+    </div>
   </div>;
 }
 
 export function AboutPage() {
+  const roadmap = [
+    {phase:'Now', body:'Farmland research, screening, valuation, scenario modeling, and workflow closure.'},
+    {phase:'Next', body:'Industrial/data-center site evidence using real power, flood, slope, and connectivity layers with explicit missing-data states.'},
+    {phase:'Later', body:'Portfolio risk and insurance workflows for concentration, hazard aggregation, and explainable hotspot detection.'},
+  ];
   return <div>
     <div className="card hero-card" style={{marginBottom:'.8rem'}}>
       <div className="hero-k">About</div>
@@ -84,6 +106,16 @@ export function AboutPage() {
       <h3 style={{fontSize:'.94rem',marginBottom:'.45rem'}}>Product Description</h3>
       <p className="about-p" style={{marginBottom:'.5rem'}}>Altira Atlas helps users answer three practical questions: where should we focus, what could happen under different conditions, and which opportunities are strong enough to act on. The design emphasizes data density, traceability, and fast iteration.</p>
       <p className="about-p">For a standalone company projects homepage concept, open <a className="lnk" href="/altiratech-home" target="_blank" rel="noreferrer">/altiratech-home</a>.</p>
+    </div>
+
+    <div className="card" style={{marginTop:'.8rem'}}>
+      <h3 style={{fontSize:'.94rem',marginBottom:'.45rem'}}>Build Sequence</h3>
+      <div className="why-grid">
+        {roadmap.map(item => <div key={item.phase} className="why-row">
+          <div className="why-tool">{item.phase}</div>
+          <div className="why-next">{item.body}</div>
+        </div>)}
+      </div>
     </div>
   </div>;
 }

@@ -36,10 +36,16 @@ export function Screener({addToast, nav}) {
   const [zRentMax, setZRentMax] = React.useState('');
   const [screens, setScreens] = React.useState([]);
   const [selScreen, setSelScreen] = React.useState('');
+  const [screenName, setScreenName] = React.useState('');
+  const [savingScreen, setSavingScreen] = React.useState(false);
 
-  React.useEffect(() => {
+  const loadScreens = React.useCallback(() => {
     api('/screens').then(d => setScreens(d)).catch(() => {});
   }, []);
+
+  React.useEffect(() => {
+    loadScreens();
+  }, [loadScreens]);
 
   const run = React.useCallback(() => {
     setLoading(true);
@@ -102,6 +108,64 @@ export function Screener({addToast, nav}) {
     assetType: 'agriculture_land',
     targetUseCase: 'farmland_investment',
   }), []);
+  const reusableFilters = React.useMemo(() => {
+    const filters = [];
+    if (minCap) filters.push({ metric: 'implied_cap_rate', op: '>', value: Number(minCap) });
+    if (maxRentMult) filters.push({ metric: 'rent_multiple', op: '<', value: Number(maxRentMult) });
+    if (minAccess) filters.push({ metric: 'access_score', op: '>', value: Number(minAccess) });
+    return filters.filter((filter) => Number.isFinite(filter.value));
+  }, [maxRentMult, minAccess, minCap]);
+  const liveOnlyFilters = React.useMemo(() => {
+    const filters = [];
+    if (state) filters.push(`state=${state.toUpperCase()}`);
+    if (minPowerIndex) filters.push(`min power index ${minPowerIndex}`);
+    if (maxPowerPrice) filters.push(`max power price ${maxPowerPrice}`);
+    if (zCapMin || zCapMax) filters.push('cap z-score');
+    if (zFairMin || zFairMax) filters.push('fair value z-score');
+    if (zRentMin || zRentMax) filters.push('cash rent z-score');
+    return filters;
+  }, [maxPowerPrice, minPowerIndex, state, zCapMax, zCapMin, zFairMax, zFairMin, zRentMax, zRentMin]);
+
+  const persistScreen = async (openBacktest = false) => {
+    if (reusableFilters.length === 0) {
+      addToast(toast('Add at least one reusable core filter before saving a screen', 'err'));
+      return;
+    }
+    setSavingScreen(true);
+    const trimmedName = screenName.trim();
+    const derivedName = trimmedName || `${state ? state.toUpperCase() + ' ' : ''}Screen ${new Date().toLocaleDateString('en-US')}`;
+    try {
+      const created = await api('/screens', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: derivedName,
+          filters: reusableFilters,
+          ranking: {
+            sort_by: sortBy,
+            sort_dir: sortDir,
+            source: 'screener',
+          },
+        }),
+      });
+      await loadScreens();
+      setSelScreen(String(created.id));
+      setScreenName(created.name);
+      addToast(toast(openBacktest ? 'Screen saved and sent to backtest' : 'Screen saved', 'ok'));
+      if (openBacktest) {
+        nav(PG.BACKTEST, {
+          screen_id: String(created.id),
+          screen_name: created.name,
+          sourcePage: 'screener',
+          autorun: true,
+        });
+      }
+    } catch (e) {
+      addToast(toast('Failed to save screen', 'err'));
+    } finally {
+      setSavingScreen(false);
+    }
+  };
 
   return <div>
     <div className="card" style={{marginBottom:'1.5rem'}}>
@@ -143,6 +207,33 @@ export function Screener({addToast, nav}) {
             <option value="">None</option>
             {screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
+        </div>
+      </div>
+      <div style={{marginTop:'.85rem',paddingTop:'.85rem',borderTop:'1px solid var(--line)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.75rem',flexWrap:'wrap',marginBottom:'.55rem'}}>
+          <div>
+            <div style={{fontSize:'.78rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.18rem'}}>Reusable Screen</div>
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>Save the core filter logic that Atlas can reuse and backtest today.</div>
+          </div>
+          <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
+            <button className="btn btn-sm" onClick={() => persistScreen(false)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save Screen'}</button>
+            <button className="btn btn-sm btn-p" onClick={() => persistScreen(true)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save + Backtest'}</button>
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'minmax(220px,1.4fr) 1fr',gap:'.75rem',alignItems:'start'}}>
+          <div className="fg" style={{margin:0}}>
+            <label>Screen Name</label>
+            <input type="text" value={screenName} onChange={e => setScreenName(e.target.value)} placeholder="e.g. Defensive Midwest Cap-Rate Screen"/>
+          </div>
+          <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center'}}>
+            {reusableFilters.length > 0
+              ? reusableFilters.map((filter, idx) => <span key={`${filter.metric}-${idx}`} className="badge badge-g">{filter.metric} {filter.op} {filter.value}</span>)
+              : <span className="badge badge-r">NO REUSABLE CORE FILTERS SET</span>}
+            {liveOnlyFilters.length > 0 && <span className="badge badge-a">LIVE-ONLY: {liveOnlyFilters.join(' • ')}</span>}
+          </div>
+        </div>
+        <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.45rem'}}>
+          Saved screens currently persist reusable valuation filters for Atlas and Backtest. State, z-score, and industrial power filters remain live-only until the next closure pass.
         </div>
       </div>
     </div>

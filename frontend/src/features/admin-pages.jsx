@@ -1,8 +1,9 @@
+import { PG } from '../config.js';
 import { api } from '../auth.js';
 import { Loading } from '../shared/system.jsx';
 import { STable } from '../shared/data-ui.jsx';
 
-export function ScreensMgr() {
+export function ScreensMgr({ nav, params }) {
   const [screens, setScreens] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -16,13 +17,28 @@ export function ScreensMgr() {
   if (loading) return <Loading/>;
 
   return <div className="card">
-    <h3 style={{fontSize:'1rem',marginBottom:'1rem'}}>Saved Screens</h3>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1rem'}}>
+      <div>
+        <h3 style={{fontSize:'1rem',marginBottom:'.2rem'}}>Saved Screens</h3>
+        <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Reusable screen definitions for Screener and Backtest.</div>
+      </div>
+      <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
+        <button className="btn btn-sm" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
+        <button className="btn btn-sm" onClick={() => nav(PG.BACKTEST, params?.screen_id ? { screen_id: params.screen_id, sourcePage: 'screens_mgr' } : {})}>Open Backtest</button>
+      </div>
+    </div>
     {screens.length === 0 ? <div className="empty"><p>No screens saved. Create one from the Screener page.</p></div>
      : <div style={{display:'grid',gap:'.75rem'}}>
         {screens.map(s => <div key={s.id} className="sc">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-            <div><div style={{fontWeight:600,marginBottom:'.125rem'}}>{s.name}</div><div style={{fontSize:'.75rem',color:'var(--text2)'}}>v{s.version} | {(s.filters || []).length} filters</div></div>
-            <span className="badge badge-b">ID: {s.id}</span>
+            <div>
+              <div style={{fontWeight:600,marginBottom:'.125rem'}}>{s.name}</div>
+              <div style={{fontSize:'.75rem',color:'var(--text2)'}}>v{s.version} | {(s.filters || []).length} reusable filters</div>
+            </div>
+            <div style={{display:'flex',gap:'.35rem',alignItems:'center',flexWrap:'wrap',justifyContent:'flex-end'}}>
+              <span className="badge badge-b">ID: {s.id}</span>
+              <button className="btn btn-sm" onClick={() => nav(PG.BACKTEST, { screen_id: String(s.id), screen_name: s.name, sourcePage: 'screens_mgr' })}>Backtest</button>
+            </div>
           </div>
           {s.filters && s.filters.length > 0 && <div style={{marginTop:'.5rem',fontSize:'.8rem',color:'var(--text2)'}}>
             {s.filters.map((f, i) => <span key={i} className="badge badge-a" style={{marginRight:'.375rem'}}>{f.metric} {f.op} {f.value}</span>)}

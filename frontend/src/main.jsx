@@ -114,9 +114,9 @@ function App() {
       case PG.WATCH: return <Watchlist addToast={addToast} nav={nav}/>;
       case PG.COMPARE: return <Comparison addToast={addToast} params={pp}/>;
       case PG.SCENARIO: return <ScenarioLab addToast={addToast} nav={nav} params={pp} researchUser={researchUser}/>;
-      case PG.BACKTEST: return <Backtest addToast={addToast}/>;
+      case PG.BACKTEST: return <Backtest addToast={addToast} nav={nav} params={pp}/>;
       case PG.PORTFOLIO: return <PortfolioPage addToast={addToast}/>;
-      case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast}/>;
+      case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast} nav={nav} params={pp}/>;
       case PG.ASSUME: return <AssumptionsMgr addToast={addToast}/>;
       case PG.SOURCES: return <SourcesPage addToast={addToast}/>;
       default: return <Dashboard addToast={addToast} nav={nav}/>;

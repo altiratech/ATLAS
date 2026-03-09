@@ -125,20 +125,27 @@ export function Comparison({addToast, params}) {
   </div>;
 }
 
-export function Backtest({addToast}) {
+export function Backtest({addToast, nav, params}) {
   const [screens, setScreens] = React.useState([]);
-  const [selScreen, setSelScreen] = React.useState('');
-  const [startYear, setStartYear] = React.useState('2018');
-  const [evalYears, setEvalYears] = React.useState(3);
+  const [selScreen, setSelScreen] = React.useState(params?.screen_id ? String(params.screen_id) : '');
+  const [startYear, setStartYear] = React.useState(params?.start_year || '2018');
+  const [evalYears, setEvalYears] = React.useState(params?.eval_years ? Number(params.eval_years) : 3);
   const [result, setResult] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
+  const autoRunRef = React.useRef('');
 
   React.useEffect(() => {
     api('/screens').then(d => setScreens(d)).catch(() => {});
   }, []);
 
-  const run = async () => {
-    if (!selScreen) {
+  React.useEffect(() => {
+    if (params?.screen_id) setSelScreen(String(params.screen_id));
+    if (params?.start_year) setStartYear(String(params.start_year));
+    if (params?.eval_years) setEvalYears(Number(params.eval_years));
+  }, [params?.eval_years, params?.screen_id, params?.start_year]);
+
+  const run = async (screenOverride = selScreen) => {
+    if (!screenOverride) {
       addToast(toast('Select a screen', 'err'));
       return;
     }
@@ -147,7 +154,7 @@ export function Backtest({addToast}) {
       const d = await api('/run/backtest', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({screen_id: parseInt(selScreen), start_year: startYear, eval_years: evalYears}),
+        body: JSON.stringify({screen_id: parseInt(screenOverride), start_year: startYear, eval_years: evalYears}),
       });
       setResult(d);
     } catch (e) {
@@ -157,7 +164,36 @@ export function Backtest({addToast}) {
     }
   };
 
+  React.useEffect(() => {
+    const key = params?.autorun && params?.screen_id ? `${params.screen_id}:${startYear}:${evalYears}` : '';
+    if (!key || autoRunRef.current === key) return;
+    autoRunRef.current = key;
+    run(String(params.screen_id));
+  }, [evalYears, params?.autorun, params?.screen_id, startYear]);
+
+  const activeScreen = screens.find((screen) => String(screen.id) === String(selScreen));
+  const workflowSourceLabel = params?.sourcePage === 'screener'
+    ? 'Screener'
+    : params?.sourcePage === 'screens_mgr'
+      ? 'Saved Screens'
+      : '';
+
   return <div>
+    {selScreen && <div className="card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Backtest Context</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{params?.screen_name || activeScreen?.name || `Screen ${selScreen}`}</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+            {workflowSourceLabel ? `Opened from ${workflowSourceLabel}. ` : ''}Backtest replays the saved reusable screen filters against historical county data.
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR, {screen_id: selScreen})}>Saved Screens</button>
+        </div>
+      </div>
+    </div>}
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Backtest Configuration</h3>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.75rem'}}>
@@ -192,6 +228,7 @@ export function Backtest({addToast}) {
           ]}
           rows={result.results || []}
           initSort={['total_return_est','desc']}
+          onRow={r => nav(PG.COUNTY, {fips:r.fips})}
         />
       </div>
     </div>}
