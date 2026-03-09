@@ -1,10 +1,11 @@
 import { api } from '../auth.js';
 import { $, $$, $pct, zBand, productivitySummaryBand, sourceBand, productivityBand, $chg } from '../formatting.js';
+import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
 import { Loading, ErrBox } from '../shared/system.jsx';
 import { LineChart, MiniBar, STable } from '../shared/data-ui.jsx';
 import { PG } from '../config.js';
 
-export function Dashboard({addToast, nav}) {
+export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [data, setData] = React.useState(null);
   const [coverage, setCoverage] = React.useState(null);
   const [agIndex, setAgIndex] = React.useState(null);
@@ -27,7 +28,7 @@ export function Dashboard({addToast, nav}) {
     setCoverage(null);
     setAgIndex(null);
 
-    api('/dashboard')
+    api(appendAssumptionParam('/dashboard', activeAssumptionSetId))
       .then((dashboardData) => {
         setData(dashboardData);
         setLoading(false);
@@ -48,7 +49,7 @@ export function Dashboard({addToast, nav}) {
         setSecondaryLoading(false);
       });
   };
-  React.useEffect(load, []);
+  React.useEffect(load, [activeAssumptionSetId]);
 
   if (loading) return <Loading/>;
   if (err) return <ErrBox title="Dashboard Error" msg={err} onRetry={load}/>;
@@ -80,6 +81,14 @@ export function Dashboard({addToast, nav}) {
   const signalMovers = movers.filter((row) => !decisionReadyMovers.includes(row));
 
   return <div>
+    <AssumptionContextBar
+      assumptionSets={assumptionSets}
+      activeAssumptionSetId={activeAssumptionSetId}
+      activeAssumptionSet={activeAssumptionSet}
+      onChange={setActiveAssumptionSetId}
+      title="Active Model Basis"
+      description="Dashboard medians, county shortlist, and valuation rankings all use this saved assumption set."
+    />
     <div className="card" style={{marginBottom:'1rem',padding:'.65rem .75rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'.5rem'}}>
         <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',alignItems:'center'}}>

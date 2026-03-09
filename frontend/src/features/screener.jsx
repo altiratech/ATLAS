@@ -13,10 +13,11 @@ import {
   zBand,
 } from '../formatting.js';
 import { api } from '../auth.js';
+import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
 import { ErrBox } from '../shared/system.jsx';
 import { STable } from '../shared/data-ui.jsx';
 
-export function Screener({addToast, nav}) {
+export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [results, setResults] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState(null);
@@ -64,7 +65,7 @@ export function Screener({addToast, nav}) {
     if (zFairMax) qs += `&z_fair_value_max=${zFairMax}`;
     if (zRentMin) qs += `&z_cash_rent_min=${zRentMin}`;
     if (zRentMax) qs += `&z_cash_rent_max=${zRentMax}`;
-    api('/screener' + qs)
+    api(appendAssumptionParam('/screener' + qs, activeAssumptionSetId))
       .then(d => setResults(d))
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
@@ -78,6 +79,7 @@ export function Screener({addToast, nav}) {
     sortBy,
     sortDir,
     state,
+    activeAssumptionSetId,
     zCapMax,
     zCapMin,
     zFairMax,
@@ -87,7 +89,8 @@ export function Screener({addToast, nav}) {
   ]);
 
   const exportCSV = () => {
-    const asOf = results?.as_of ? `?as_of=${encodeURIComponent(results.as_of)}` : '';
+    let asOf = results?.as_of ? `?as_of=${encodeURIComponent(results.as_of)}` : '';
+    if (activeAssumptionSetId) asOf += `${asOf ? '&' : '?'}assumption_set_id=${encodeURIComponent(String(activeAssumptionSetId))}`;
     window.open(API + '/export/screener' + asOf, '_blank');
     addToast(toast('CSV export started', 'ok'));
   };
@@ -168,6 +171,14 @@ export function Screener({addToast, nav}) {
   };
 
   return <div>
+    <AssumptionContextBar
+      assumptionSets={assumptionSets}
+      activeAssumptionSetId={activeAssumptionSetId}
+      activeAssumptionSet={activeAssumptionSet}
+      onChange={setActiveAssumptionSetId}
+      title="Screening Assumptions"
+      description="Screener results, saved exports, and any downstream backtests use this active assumption set."
+    />
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
         <h3 style={{fontSize:'1rem'}}>Filter Builder</h3>

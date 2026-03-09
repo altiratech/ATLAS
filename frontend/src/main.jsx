@@ -1,8 +1,9 @@
-import { PG } from './config.js';
+import { ACTIVE_ASSUMPTION_SET_KEY, PG } from './config.js';
 import {
   toast,
 } from './formatting.js';
 import {
+  api,
   bootstrapAuth,
   clearAuthState,
   logoutAuth,
@@ -29,6 +30,14 @@ function App() {
   const [authState, setAuthState] = React.useState(null);
   const [authErr, setAuthErr] = React.useState('');
   const [authRequiresLogin, setAuthRequiresLogin] = React.useState(false);
+  const [assumptionSets, setAssumptionSets] = React.useState([]);
+  const [activeAssumptionSetId, setActiveAssumptionSetId] = React.useState(() => {
+    try {
+      return window.localStorage.getItem(ACTIVE_ASSUMPTION_SET_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
 
   const runAuthBootstrap = React.useCallback(async (force = false) => {
     setAuthReady(false);
@@ -77,10 +86,41 @@ function App() {
     runAuthBootstrap().catch(() => {});
   }, [runAuthBootstrap]);
 
+  const reloadAssumptionSets = React.useCallback(async () => {
+    const sets = await api('/assumptions');
+    setAssumptionSets(sets);
+    const activeExists = sets.some((set) => String(set.id) === String(activeAssumptionSetId));
+    if (activeExists) return sets;
+    const defaultSet = sets.find((set) => set.name === 'Default') || sets[0] || null;
+    if (defaultSet) {
+      setActiveAssumptionSetId(String(defaultSet.id));
+    }
+    return sets;
+  }, [activeAssumptionSetId]);
+
+  React.useEffect(() => {
+    if (!authReady || authRequiresLogin || authErr) return;
+    reloadAssumptionSets().catch(() => {});
+  }, [authReady, authErr, authRequiresLogin, reloadAssumptionSets]);
+
+  React.useEffect(() => {
+    try {
+      if (activeAssumptionSetId) window.localStorage.setItem(ACTIVE_ASSUMPTION_SET_KEY, String(activeAssumptionSetId));
+    } catch {}
+  }, [activeAssumptionSetId]);
+
   const addToast = t => setToasts(ts=>[...ts,t]);
   const nav = (p,params={}) => { setPg(p); setPp(params); setCmdOpen(false); };
   const researchUser = authState?.user_key || '';
   const authSource = authState?.source || '--';
+  const activeAssumptionSet = assumptionSets.find((set) => String(set.id) === String(activeAssumptionSetId)) || null;
+  const assumptionProps = {
+    assumptionSets,
+    activeAssumptionSetId,
+    activeAssumptionSet,
+    setActiveAssumptionSetId,
+    reloadAssumptionSets,
+  };
 
   const resetSession = async () => {
     await logoutAuth();
@@ -108,18 +148,18 @@ function App() {
       case PG.MISSION: return <MissionPage nav={nav}/>;
       case PG.ABOUT: return <AboutPage/>;
       case PG.RESEARCH: return <ResearchWorkspace addToast={addToast} nav={nav} params={pp} researchUser={researchUser}/>;
-      case PG.DASH: return <Dashboard addToast={addToast} nav={nav}/>;
-      case PG.SCREEN: return <Screener addToast={addToast} nav={nav}/>;
-      case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav}/>;
+      case PG.DASH: return <Dashboard addToast={addToast} nav={nav} {...assumptionProps}/>;
+      case PG.SCREEN: return <Screener addToast={addToast} nav={nav} {...assumptionProps}/>;
+      case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav} {...assumptionProps}/>;
       case PG.WATCH: return <Watchlist addToast={addToast} nav={nav}/>;
-      case PG.COMPARE: return <Comparison addToast={addToast} params={pp}/>;
-      case PG.SCENARIO: return <ScenarioLab addToast={addToast} nav={nav} params={pp} researchUser={researchUser}/>;
-      case PG.BACKTEST: return <Backtest addToast={addToast} nav={nav} params={pp}/>;
+      case PG.COMPARE: return <Comparison addToast={addToast} params={pp} {...assumptionProps}/>;
+      case PG.SCENARIO: return <ScenarioLab addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps}/>;
+      case PG.BACKTEST: return <Backtest addToast={addToast} nav={nav} params={pp} {...assumptionProps}/>;
       case PG.PORTFOLIO: return <PortfolioPage addToast={addToast}/>;
       case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast} nav={nav} params={pp}/>;
-      case PG.ASSUME: return <AssumptionsMgr addToast={addToast}/>;
+      case PG.ASSUME: return <AssumptionsMgr addToast={addToast} nav={nav} {...assumptionProps}/>;
       case PG.SOURCES: return <SourcesPage addToast={addToast}/>;
-      default: return <Dashboard addToast={addToast} nav={nav}/>;
+      default: return <Dashboard addToast={addToast} nav={nav} {...assumptionProps}/>;
     }
   };
 

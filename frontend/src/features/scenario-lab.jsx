@@ -9,6 +9,7 @@ import {
   api,
   fetchResearchWorkspace,
 } from '../auth.js';
+import { AssumptionContextBar, assumptionSetLabel } from '../shared/assumptions-ui.jsx';
 import { CountyPicker, MiniBar } from '../shared/data-ui.jsx';
 
 const SCENARIO_PRESETS = [
@@ -19,7 +20,7 @@ const SCENARIO_PRESETS = [
   { key: 'credit_stress', label: 'Credit Stress', description: 'Higher premium, lower growth, rent downside', rp: 6.0, gr: 1.0, rs: -10 },
 ];
 
-export function ScenarioLab({addToast, nav, params, researchUser}) {
+export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [county, setCounty] = React.useState(params?.fips || '');
   const [rp, setRp] = React.useState(4.5);
   const [gr, setGr] = React.useState(2.0);
@@ -93,6 +94,7 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
         body: JSON.stringify({
           geo_key: county,
           as_of: 'latest',
+          assumption_set_id: activeAssumptionSetId ? Number(activeAssumptionSetId) : undefined,
           overrides: baseOverrides,
           scenario_sets: scenarioSets,
           vary_params: [
@@ -109,7 +111,11 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
           body: JSON.stringify({
             scenario_name: `${(SCENARIO_PRESETS.find((preset) => preset.key === presetKey)?.label || 'Custom')} Snapshot`,
             as_of_date: d.as_of || 'latest',
-            assumptions: baseOverrides,
+            assumptions: {
+              base_assumption_set_id: activeAssumptionSetId ? Number(activeAssumptionSetId) : null,
+              base_assumption_set_label: assumptionSetLabel(activeAssumptionSet),
+              overrides: baseOverrides,
+            },
             comparison: {
               comparison_table: d.comparison_table || [],
               driver_decomposition: d.driver_decomposition || [],
@@ -178,6 +184,14 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
   };
 
   return <div>
+    <AssumptionContextBar
+      assumptionSets={assumptionSets}
+      activeAssumptionSetId={activeAssumptionSetId}
+      activeAssumptionSet={activeAssumptionSet}
+      onChange={setActiveAssumptionSetId}
+      title="Scenario Base Assumptions"
+      description="Scenario Lab starts from this saved assumption set, then applies the slider overrides for risk premium, growth, and rent shock."
+    />
     {county && <div className="card" style={{marginBottom:'.7rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
         <div>
@@ -197,6 +211,7 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Scenario Parameters</h3>
       <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty}/></div>
       <div style={{fontSize:'.7rem',color:'var(--text2)',marginBottom:'.5rem'}}>Session User: {researchUser || '--'}</div>
+      <div style={{fontSize:'.74rem',color:'var(--text2)',marginBottom:'.6rem'}}>Base set: {assumptionSetLabel(activeAssumptionSet)}. Scenario controls below override only risk premium, growth, and near-term rent shock.</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
         <div className="fg"><label>Risk Premium: {rp}%</label><input type="range" min="2" max="8" step="0.25" value={rp} onChange={e=>setRp(parseFloat(e.target.value))}/></div>
         <div className="fg"><label>Growth Rate: {gr}%</label><input type="range" min="0" max="5" step="0.25" value={gr} onChange={e=>setGr(parseFloat(e.target.value))}/></div>

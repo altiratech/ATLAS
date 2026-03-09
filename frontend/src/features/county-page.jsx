@@ -12,6 +12,7 @@ import {
   zBand,
 } from '../formatting.js';
 import { api } from '../auth.js';
+import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { MiniBar, Spark } from '../shared/data-ui.jsx';
 
@@ -23,7 +24,7 @@ function confidenceBand(level) {
   }
 }
 
-export function CountyPage({addToast, params, nav}) {
+export function CountyPage({addToast, params, nav, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [data, setData] = React.useState(null);
   const [industrial, setIndustrial] = React.useState(null);
   const [ts, setTs] = React.useState([]);
@@ -41,8 +42,8 @@ export function CountyPage({addToast, params, nav}) {
     setLoading(true);
     setErr(null);
     Promise.all([
-      api(`/geo/${params.fips}/summary`),
-      api(`/geo/${params.fips}/timeseries?metrics=cash_rent,benchmark_value,implied_cap_rate,fair_value,noi_per_acre`),
+      api(appendAssumptionParam(`/geo/${params.fips}/summary`, activeAssumptionSetId)),
+      api(appendAssumptionParam(`/geo/${params.fips}/timeseries?metrics=cash_rent,benchmark_value,implied_cap_rate,fair_value,noi_per_acre`, activeAssumptionSetId)),
       api(`/notes/${params.fips}`),
       api('/watchlist').then(wl => (wl.items || []).some(w => w.fips === params.fips)),
       api(`/industrial/scorecard/${params.fips}`).catch(() => null),
@@ -55,7 +56,8 @@ export function CountyPage({addToast, params, nav}) {
       setWatched(w);
     }).catch(e => setErr(e.message)).finally(() => setLoading(false));
   };
-  React.useEffect(load, [params.fips]);
+  React.useEffect(() => { setSens(null); }, [params.fips, activeAssumptionSetId]);
+  React.useEffect(load, [params.fips, activeAssumptionSetId]);
 
   const toggleWatch = async () => {
     try {
@@ -98,7 +100,7 @@ export function CountyPage({addToast, params, nav}) {
   const loadSens = async () => {
     if (sens) return;
     try {
-      const s = await api(`/geo/${params.fips}/sensitivity`);
+      const s = await api(appendAssumptionParam(`/geo/${params.fips}/sensitivity`, activeAssumptionSetId));
       setSens(s);
     } catch (e) {
       addToast(toast('Error loading sensitivity','err'));
@@ -184,6 +186,14 @@ export function CountyPage({addToast, params, nav}) {
   ];
 
   return <div>
+    <AssumptionContextBar
+      assumptionSets={assumptionSets}
+      activeAssumptionSetId={activeAssumptionSetId}
+      activeAssumptionSet={activeAssumptionSet}
+      onChange={setActiveAssumptionSetId}
+      title="County Modeling Assumptions"
+      description="County valuation, fair value, time series, and sensitivity analysis on this page all use the active assumption set."
+    />
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
       <div>
         <h2 style={{fontSize:'1.35rem',marginBottom:'.25rem'}}>{data.county_name}, {data.state}</h2>

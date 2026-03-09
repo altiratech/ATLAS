@@ -7,6 +7,7 @@ import {
   toast,
 } from '../formatting.js';
 import { api } from '../auth.js';
+import { appendAssumptionParam, AssumptionContextBar, assumptionSetLabel } from '../shared/assumptions-ui.jsx';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, STable } from '../shared/data-ui.jsx';
 
@@ -68,7 +69,7 @@ export function Watchlist({addToast, nav}) {
   </div>;
 }
 
-export function Comparison({addToast, params}) {
+export function Comparison({addToast, params, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [selected, setSelected] = React.useState(params?.fips ? [params.fips] : []);
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
@@ -79,7 +80,7 @@ export function Comparison({addToast, params}) {
       return;
     }
     setLoading(true);
-    api(`/compare?fips=${selected.filter(Boolean).join(',')}`)
+    api(appendAssumptionParam(`/compare?fips=${selected.filter(Boolean).join(',')}`, activeAssumptionSetId))
       .then(d => setData(d))
       .catch(() => addToast(toast('Comparison failed', 'err')))
       .finally(() => setLoading(false));
@@ -87,7 +88,7 @@ export function Comparison({addToast, params}) {
 
   React.useEffect(() => {
     if (selected.filter(Boolean).length >= 2) compare();
-  }, []);
+  }, [activeAssumptionSetId]);
 
   const metricRows = [
     {key:'cash_rent',label:'Cash Rent ($/ac)',fmt:v => $$(v)},
@@ -104,6 +105,14 @@ export function Comparison({addToast, params}) {
   ];
 
   return <div>
+    <AssumptionContextBar
+      assumptionSets={assumptionSets}
+      activeAssumptionSetId={activeAssumptionSetId}
+      activeAssumptionSet={activeAssumptionSet}
+      onChange={setActiveAssumptionSetId}
+      title="Comparison Assumptions"
+      description="Every county in this comparison uses the same active assumption set so spreads and fair values stay comparable."
+    />
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Select Counties to Compare (up to 6)</h3>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:'.75rem',marginBottom:'1rem'}}>
@@ -125,7 +134,7 @@ export function Comparison({addToast, params}) {
   </div>;
 }
 
-export function Backtest({addToast, nav, params}) {
+export function Backtest({addToast, nav, params, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [screens, setScreens] = React.useState([]);
   const [selScreen, setSelScreen] = React.useState(params?.screen_id ? String(params.screen_id) : '');
   const [startYear, setStartYear] = React.useState(params?.start_year || '2018');
@@ -154,7 +163,12 @@ export function Backtest({addToast, nav, params}) {
       const d = await api('/run/backtest', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({screen_id: parseInt(screenOverride), start_year: startYear, eval_years: evalYears}),
+        body: JSON.stringify({
+          screen_id: parseInt(screenOverride),
+          start_year: startYear,
+          eval_years: evalYears,
+          assumption_set_id: activeAssumptionSetId ? Number(activeAssumptionSetId) : undefined,
+        }),
       });
       setResult(d);
     } catch (e) {
@@ -179,6 +193,14 @@ export function Backtest({addToast, nav, params}) {
       : '';
 
   return <div>
+    <AssumptionContextBar
+      assumptionSets={assumptionSets}
+      activeAssumptionSetId={activeAssumptionSetId}
+      activeAssumptionSet={activeAssumptionSet}
+      onChange={setActiveAssumptionSetId}
+      title="Backtest Assumptions"
+      description="Backtest replay uses this saved assumption set for modeled valuation and return outputs."
+    />
     {selScreen && <div className="card" style={{marginBottom:'.7rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
         <div>
@@ -215,6 +237,7 @@ export function Backtest({addToast, nav, params}) {
         <div className="sc"><div className="sc-l">Counties Screened</div><div className="sc-v">{result.counties_screened}</div></div>
         <div className="sc"><div className="sc-l">Counties Flagged</div><div className="sc-v">{result.counties_flagged}</div></div>
         <div className="sc"><div className="sc-l">Period</div><div className="sc-v" style={{fontSize:'1rem'}}>{result.start_year} + {result.eval_years}yr</div></div>
+        <div className="sc"><div className="sc-l">Assumption Set</div><div className="sc-v" style={{fontSize:'1rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div></div>
       </div>
       <div className="card">
         <h3 style={{fontSize:'1rem',marginBottom:'.5rem'}}>Backtest Results</h3>
