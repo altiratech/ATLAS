@@ -133,6 +133,19 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
   );
 
   const active = county ? normalizeResearchRecord(store[county]) : defaultResearchRecord();
+  const latestScenarioRun = scenarioRuns[0] || null;
+  const latestComparisonTable = Array.isArray(latestScenarioRun?.comparison?.comparison_table) ? latestScenarioRun.comparison.comparison_table : [];
+  const latestBaseScenario = latestComparisonTable.find((row) => /base/i.test(row.scenario || '')) || latestComparisonTable[0] || null;
+  const latestBestScenario = latestComparisonTable.length
+    ? [...latestComparisonTable].sort((a, b) => (b.delta_fair_value_vs_base ?? Number.NEGATIVE_INFINITY) - (a.delta_fair_value_vs_base ?? Number.NEGATIVE_INFINITY))[0]
+    : null;
+  const latestWorstScenario = latestComparisonTable.length
+    ? [...latestComparisonTable].sort((a, b) => (a.delta_fair_value_vs_base ?? Number.POSITIVE_INFINITY) - (b.delta_fair_value_vs_base ?? Number.POSITIVE_INFINITY))[0]
+    : null;
+  const latestDriverDecomposition = Array.isArray(latestScenarioRun?.comparison?.driver_decomposition) ? latestScenarioRun.comparison.driver_decomposition : [];
+  const latestTopDriver = latestDriverDecomposition
+    .map((entry) => ({ scenario: entry.scenario, driver: Array.isArray(entry.drivers) ? entry.drivers[0] : null }))
+    .find((entry) => entry.driver?.driver && entry.driver?.delta != null) || null;
   const selectedCountyLabel = county
     ? (countyMap[county] || (params?.countyName ? `${params.countyName}${params?.state ? `, ${params.state}` : ''}` : county))
     : 'None';
@@ -335,6 +348,38 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Research Notes</div><div className="sc-v">{active.notes.length}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Last Update</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.updated_at ? new Date(active.updated_at).toLocaleString() : '--'}</div></div>
       </div>
+    </div>
+
+    <div className="card" style={{marginBottom:'.7rem'}}>
+      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Latest Scenario Snapshot</h3>
+      {!latestScenarioRun ? <div className="empty"><p>No saved scenario compare snapshot yet.</p></div> : <div>
+        <div className="sc"><div className="sc-l">Snapshot</div><div className="sc-v" style={{fontSize:'.9rem'}}>{latestScenarioRun.scenario_name || 'Scenario Snapshot'}</div><div className="sc-c">{latestScenarioRun.created_at ? new Date(latestScenarioRun.created_at).toLocaleString() : '--'} • As of {latestScenarioRun.as_of_date || '--'}</div></div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.55rem',marginTop:'.6rem'}}>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Base Fair Value</div>
+            <div className="sc-v">{$$(latestBaseScenario?.fair_value)}</div>
+            <div className="sc-c">Base case from latest saved compare run.</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Best Delta</div>
+            <div className="sc-v">{latestBestScenario?.delta_fair_value_vs_base != null ? `${latestBestScenario.scenario}: ${latestBestScenario.delta_fair_value_vs_base > 0 ? '+' : ''}${$$(latestBestScenario.delta_fair_value_vs_base)}` : 'N/A'}</div>
+            <div className="sc-c">Largest upside move vs base in the saved compare run.</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Worst Delta</div>
+            <div className="sc-v">{latestWorstScenario?.delta_fair_value_vs_base != null ? `${latestWorstScenario.scenario}: ${latestWorstScenario.delta_fair_value_vs_base > 0 ? '+' : ''}${$$(latestWorstScenario.delta_fair_value_vs_base)}` : 'N/A'}</div>
+            <div className="sc-c">Largest downside move vs base in the saved compare run.</div>
+          </div>
+        </div>
+        <div className="sc" style={{marginTop:'.6rem'}}>
+          <div className="sc-l">Primary Driver</div>
+          <div className="sc-v" style={{fontSize:'.88rem'}}>{latestTopDriver ? `${latestTopDriver.scenario}: ${latestTopDriver.driver.driver}` : 'N/A'}</div>
+          <div className="sc-c">{latestTopDriver ? `Top one-at-a-time driver delta: ${$(latestTopDriver.driver.delta, 2)}` : 'Driver decomposition is not available for the latest snapshot.'}</div>
+        </div>
+        <div className="rw-actions">
+          {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: params?.countyName, state: params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>}
+        </div>
+      </div>}
     </div>
 
     <div className="card" style={{marginBottom:'.7rem'}}>

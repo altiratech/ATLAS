@@ -15,6 +15,14 @@ import { api } from '../auth.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { MiniBar, Spark } from '../shared/data-ui.jsx';
 
+function confidenceBand(level) {
+  switch (level) {
+    case 'high': return { label: 'HIGH CONFIDENCE', className: 'badge-g' };
+    case 'medium': return { label: 'MEDIUM CONFIDENCE', className: 'badge-a' };
+    default: return { label: 'LOW CONFIDENCE', className: 'badge-r' };
+  }
+}
+
 export function CountyPage({addToast, params, nav}) {
   const [data, setData] = React.useState(null);
   const [industrial, setIndustrial] = React.useState(null);
@@ -136,6 +144,44 @@ export function CountyPage({addToast, params, nav}) {
   const nextAction = data.source_quality === 'proxy'
     ? 'Use Scenario Lab to pressure test the thesis, then confirm the county belongs in research despite proxy-driven inputs.'
     : 'Move this county into Research Workspace, record the thesis, and run a downside scenario before presenting it.';
+  const confidenceLevel = (() => {
+    if (data.source_quality === 'county' && data.productivity_active && m.implied_cap_rate != null && m.noi_per_acre != null && m.access_score != null) return 'high';
+    if (['county', 'proxy', 'mixed'].includes(data.source_quality) && m.implied_cap_rate != null && m.noi_per_acre != null) return 'medium';
+    return 'low';
+  })();
+  const confidence = confidenceBand(confidenceLevel);
+  const confidenceReasons = [
+    data.source_quality === 'county'
+      ? 'Observed county land value anchors the benchmark.'
+      : data.source_quality === 'proxy'
+        ? 'Benchmark is proxy-derived from county cash rent × state rent multiple.'
+        : data.source_quality === 'mixed'
+          ? 'Valuation mixes county and state inputs.'
+          : data.source_quality === 'state'
+            ? 'Valuation is primarily state-backed rather than county-observed.'
+            : 'Valuation lineage is weak or incomplete.',
+    data.productivity_active
+      ? (data.yield_productivity_detail || 'County yield basis is active inside the fair value model.')
+      : 'No county yield basis is active for the selected year.',
+    m.access_score != null
+      ? `Access score is loaded at ${$(m.access_score, 1)} / 100.`
+      : 'Access score is not loaded yet, so market-readiness context is still partial.',
+    m.implied_cap_rate != null && m.noi_per_acre != null
+      ? 'Core valuation outputs are present: NOI and implied cap rate are populated.'
+      : 'Core valuation outputs are incomplete, so treat this as directional rather than decision-grade.',
+  ];
+  const surfacedReasons = [
+    valueSpreadPct != null
+      ? `Fair value is ${$chg(valueSpreadPct)} versus benchmark value.`
+      : 'Spread to benchmark is not available for the selected year.',
+    typeof m.cap_spread_to_10y === 'number'
+      ? `Cap spread to the 10Y is ${$(m.cap_spread_to_10y, 0)} bps.`
+      : 'Cap spread to the 10Y is not available.',
+    data.productivity_active && typeof m.yield_productivity_factor === 'number'
+      ? `County productivity factor is ${$x(m.yield_productivity_factor)}.`
+      : 'No county productivity uplift is active in the current fair value.',
+    data.benchmark_method_detail || 'Benchmark method detail unavailable.',
+  ];
 
   return <div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
@@ -172,6 +218,32 @@ export function CountyPage({addToast, params, nav}) {
           <div className="sc-l">Next Best Action</div>
           <div className="sc-v" style={{fontSize:'.95rem'}}>{underwritingStatus.label}</div>
           <div className="sc-c">{nextAction}</div>
+        </div>
+      </div>
+    </div>
+
+    <div className="card" style={{marginBottom:'1rem'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',alignItems:'stretch'}}>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Model Confidence</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{confidence.label}</div>
+          <div className="sc-c">Confidence reflects benchmark lineage, productivity basis, core valuation completeness, and whether access context is loaded.</div>
+          <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',marginTop:'.55rem'}}>
+            <span className={`badge ${confidence.className}`}>{confidence.label}</span>
+            <span className={`badge ${sourceBand(data.source_quality).className}`}>{sourceBand(data.source_quality).label}</span>
+            <span className={`badge ${countyProductivity.className}`}>{countyProductivity.label}</span>
+          </div>
+          <div style={{marginTop:'.65rem',fontSize:'.78rem',color:'var(--text2)',display:'grid',gap:'.35rem'}}>
+            {confidenceReasons.map((reason, idx) => <div key={idx}>• {reason}</div>)}
+          </div>
+        </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Why Atlas Surfaced This County</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{valueSignal.label}</div>
+          <div className="sc-c">This is the current model read on why the county is showing up in Atlas workflow surfaces.</div>
+          <div style={{marginTop:'.65rem',fontSize:'.78rem',color:'var(--text2)',display:'grid',gap:'.35rem'}}>
+            {surfacedReasons.map((reason, idx) => <div key={idx}>• {reason}</div>)}
+          </div>
         </div>
       </div>
     </div>

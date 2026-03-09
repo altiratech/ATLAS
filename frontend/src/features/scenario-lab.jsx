@@ -11,6 +11,14 @@ import {
 } from '../auth.js';
 import { CountyPicker, MiniBar } from '../shared/data-ui.jsx';
 
+const SCENARIO_PRESETS = [
+  { key: 'base', label: 'Base', description: 'Current central case', rp: 4.5, gr: 2.0, rs: 0 },
+  { key: 'rate_shock', label: 'Rate Shock', description: 'Higher discount rate, softer growth', rp: 5.5, gr: 1.5, rs: -5 },
+  { key: 'rent_downside', label: 'Rent Downside', description: 'Sharper rent reset with modest growth', rp: 4.75, gr: 1.5, rs: -10 },
+  { key: 'bull_case', label: 'Bull Case', description: 'Lower premium, better growth, rent upside', rp: 4.0, gr: 3.0, rs: 5 },
+  { key: 'credit_stress', label: 'Credit Stress', description: 'Higher premium, lower growth, rent downside', rp: 6.0, gr: 1.0, rs: -10 },
+];
+
 export function ScenarioLab({addToast, nav, params, researchUser}) {
   const [county, setCounty] = React.useState(params?.fips || '');
   const [rp, setRp] = React.useState(4.5);
@@ -22,6 +30,7 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
   const [packs, setPacks] = React.useState([]);
   const [packsLoading, setPacksLoading] = React.useState(false);
   const navPackRef = React.useRef('');
+  const [presetKey, setPresetKey] = React.useState('base');
 
   const loadPacks = React.useCallback((fips) => {
     if (!fips) {
@@ -45,6 +54,10 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
   React.useEffect(() => { navPackRef.current = ''; }, [county]);
   React.useEffect(() => { if (params?.fips) setCounty(params.fips); }, [params?.fips]);
   React.useEffect(() => {
+    const matchedPreset = SCENARIO_PRESETS.find((preset) => preset.rp === Number(rp) && preset.gr === Number(gr) && preset.rs === Number(rs));
+    setPresetKey(matchedPreset?.key || 'custom');
+  }, [rp, gr, rs]);
+  React.useEffect(() => {
     const packId = params?.pack_id ? String(params.pack_id) : '';
     if (!packId || !county || navPackRef.current === packId) return;
     const found = packs.find(p => String(p.id) === packId);
@@ -55,6 +68,14 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
     navPackRef.current = String(packId);
     addToast(toast(`Loaded pack: ${found.name}`, 'ok'));
   }, [params?.pack_id, county, packs, addToast]);
+
+  const applyPreset = (preset) => {
+    setRp(preset.rp);
+    setGr(preset.gr);
+    setRs(preset.rs);
+    setPresetKey(preset.key);
+    addToast(toast(`Loaded preset: ${preset.label}`, 'ok'));
+  };
 
   const run = async () => {
     if (!county) { addToast(toast('Select a county','err')); return; }
@@ -86,7 +107,7 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            scenario_name: 'Best/Base/Worst Snapshot',
+            scenario_name: `${(SCENARIO_PRESETS.find((preset) => preset.key === presetKey)?.label || 'Custom')} Snapshot`,
             as_of_date: d.as_of || 'latest',
             assumptions: baseOverrides,
             comparison: {
@@ -180,6 +201,22 @@ export function ScenarioLab({addToast, nav, params, researchUser}) {
         <div className="fg"><label>Risk Premium: {rp}%</label><input type="range" min="2" max="8" step="0.25" value={rp} onChange={e=>setRp(parseFloat(e.target.value))}/></div>
         <div className="fg"><label>Growth Rate: {gr}%</label><input type="range" min="0" max="5" step="0.25" value={gr} onChange={e=>setGr(parseFloat(e.target.value))}/></div>
         <div className="fg"><label>Rent Shock: {rs}%</label><input type="range" min="-20" max="20" step="1" value={rs} onChange={e=>setRs(parseFloat(e.target.value))}/></div>
+      </div>
+      <div style={{marginTop:'.7rem',borderTop:'1px solid var(--line)',paddingTop:'.6rem'}}>
+        <h4 style={{fontSize:'.78rem',marginBottom:'.45rem',letterSpacing:'.12em',textTransform:'uppercase'}}>Scenario Presets</h4>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'.45rem'}}>
+          {SCENARIO_PRESETS.map((preset) => <button
+            key={preset.key}
+            className={`btn btn-sm ${presetKey === preset.key ? 'btn-p' : ''}`}
+            onClick={() => applyPreset(preset)}
+            title={preset.description}
+          >
+            {preset.label}
+          </button>)}
+        </div>
+        <div style={{fontSize:'.74rem',color:'var(--text2)',marginTop:'.45rem'}}>
+          {SCENARIO_PRESETS.find((preset) => preset.key === presetKey)?.description || 'Custom parameter mix. Save it as a pack if it becomes part of your workflow.'}
+        </div>
       </div>
       <div className="rw-actions">
         <button className="btn btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Scenario'}</button>

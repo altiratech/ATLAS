@@ -75,8 +75,8 @@ export function Dashboard({addToast, nav}) {
   const productivityBadge = productivitySummaryBand(productivity);
 
   const capBuckets = data.cap_rate_distribution || [];
-  const hasCoreCountyMetrics = (row) => row?.benchmark_value != null && row?.fair_value != null && row?.implied_cap_rate != null && row?.noi_per_acre != null && row?.access_score != null;
-  const decisionReadyMovers = movers.filter((row) => hasCoreCountyMetrics(row) && row.source_quality !== 'national');
+  const hasValuationReadyMetrics = (row) => row?.benchmark_value != null && row?.fair_value != null && (row?.implied_cap_rate ?? row?.implied_cap) != null && (row?.noi_per_acre ?? row?.noi) != null;
+  const decisionReadyMovers = movers.filter((row) => hasValuationReadyMetrics(row) && row.source_quality !== 'national');
   const signalMovers = movers.filter((row) => !decisionReadyMovers.includes(row));
 
   return <div>
@@ -125,7 +125,12 @@ export function Dashboard({addToast, nav}) {
     </div>}
 
     <div className="card" style={{marginBottom:'1.5rem'}}>
-      <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Historical Context</h3>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
+        <div>
+          <h3 style={{fontSize:'1rem',marginBottom:'.25rem'}}>Historical Context</h3>
+          <div style={{fontSize:'.72rem',color:'var(--text2)'}}>Atlas-computed county medians across available modeled counties by year. Use for regime context, not as a transaction-backed index.</div>
+        </div>
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
         <LineChart title="Median Cap Rate" series={charts.cap_rate_median_by_year || []} color="var(--accent)" unitFormatter={(v)=>$pct(v)} />
         <LineChart title="Median Fair Value" series={charts.fair_value_median_by_year || []} color="var(--accent-2)" unitFormatter={(v)=>$$(v)} />
@@ -138,7 +143,7 @@ export function Dashboard({addToast, nav}) {
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
         <div>
           <h3 style={{fontSize:'1rem'}}>Decision-Ready County Candidates</h3>
-          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>Only counties with full valuation support on this page: land value, fair value, cap rate, NOI, and access. Use these first for live research and scenarios.</div>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.2rem'}}>Counties with the core valuation stack populated on this page: land value, fair value, cap rate, and NOI. Access may still be pending in some rows; use county detail for the full trust read.</div>
         </div>
         <span className="badge badge-b">{decisionReadyMovers.length} ready now</span>
       </div>
@@ -156,8 +161,8 @@ export function Dashboard({addToast, nav}) {
           {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
           {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
           {key:'spread_pct',label:'Spread',num:true,fmt:v=>v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},
-          {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:v=>$pct(v)},
-          {key:'noi_per_acre',label:'NOI/ac',num:true,fmt:v=>$$(v)},
+          {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:(_,r)=>$pct(r.implied_cap_rate ?? r.implied_cap)},
+          {key:'noi_per_acre',label:'NOI/ac',num:true,fmt:(_,r)=>$$(r.noi_per_acre ?? r.noi)},
           {key:'access_score',label:'Access',num:true,fmt:v=>$(v,1)},
           {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r)=><div style={{display:'flex',gap:'.3rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
             <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research</button>
@@ -186,8 +191,8 @@ export function Dashboard({addToast, nav}) {
           {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
           {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
           {key:'spread_pct',label:'Spread',num:true,fmt:v=>v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},
-          {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:v=>$pct(v)},
-          {key:'noi_per_acre',label:'NOI/ac',num:true,fmt:v=>$$(v)},
+          {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:(_,r)=>$pct(r.implied_cap_rate ?? r.implied_cap)},
+          {key:'noi_per_acre',label:'NOI/ac',num:true,fmt:(_,r)=>$$(r.noi_per_acre ?? r.noi)},
           {key:'access_score',label:'Access',num:true,fmt:v=>$(v,1)},
           {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r)=><div style={{display:'flex',gap:'.3rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
             <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.COUNTY, {fips:r.fips}); }}>Inspect</button>
@@ -216,7 +221,7 @@ export function Dashboard({addToast, nav}) {
       <div className="card">
         <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Cap Rate Distribution</h3>
         {capBuckets.length === 0 ? <div className="empty"><p>No data</p></div> : <div>
-          <MiniBar items={capBuckets.map(bucket => ({ label: bucket.label || `${bucket.bucket_min}-${bucket.bucket_max}`, value: bucket.count || 0 }))} height={120}/>
+          <MiniBar items={capBuckets.map(bucket => ({ label: bucket.label || `${bucket.bucket_min}-${bucket.bucket_max}`, value: bucket.count ?? bucket.value ?? 0 }))} height={120}/>
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.5rem',marginTop:'.75rem'}}>
             <div className="sc"><div className="sc-l">P25</div><div className="sc-v" style={{fontSize:'.95rem'}}>{$pct(data.distribution_stats?.p25)}</div><div className="sc-c">Mean: {$pct(data.distribution_stats?.mean)}</div></div>
             <div className="sc"><div className="sc-l">P75</div><div className="sc-v" style={{fontSize:'.95rem'}}>{$pct(data.distribution_stats?.p75)}</div><div className="sc-c">Median: {$pct(data.distribution_stats?.median)}</div></div>

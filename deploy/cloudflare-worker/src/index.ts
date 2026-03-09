@@ -2423,8 +2423,10 @@ app.get('/api/v1/dashboard', async (c) => {
         benchmark_value: Math.round(bv),
         spread_pct: Math.round(spread * 10) / 10,
         implied_cap: roundNullable(d.metrics.implied_cap_rate),
+        implied_cap_rate: roundNullable(d.metrics.implied_cap_rate),
         access_score: roundNullable(d.metrics.access_score, 1),
         noi: roundNullable(d.metrics.noi_per_acre, 0),
+        noi_per_acre: roundNullable(d.metrics.noi_per_acre, 0),
         benchmark_method: d.benchmark_method,
         benchmark_method_detail: d.benchmark_method_detail,
         benchmark_proxy_ratio: d.benchmark_proxy_ratio,
@@ -2541,6 +2543,7 @@ app.get('/api/v1/dashboard', async (c) => {
   ].map((bucket) => ({
     label: bucket.label,
     value: caps.filter((cap) => cap >= bucket.min && cap < bucket.max).length,
+    count: caps.filter((cap) => cap >= bucket.min && cap < bucket.max).length,
   }));
 
   const payload = {
@@ -2575,6 +2578,7 @@ app.get('/api/v1/dashboard', async (c) => {
       treasury_10y_by_year: chartRows.map((row) => ({ year: row.year, value: row.treasury_10y })),
     },
     cap_rate_distribution: capRateDistribution,
+    distribution_stats: stats(caps),
     treasury_10y: treasury10y,
     productivity_summary: summarizeProductivity(allData),
     top_movers: rankedMovers,
