@@ -94,6 +94,14 @@ export function Screener({addToast, nav}) {
   const screenerProductivityBadge = productivitySummaryBand(screenerProductivity);
   const screenerIndustrial = results?.industrial_summary || {};
   const screenerIndustrialBadge = industrialPowerSummaryBand(screenerIndustrial);
+  const workflowParams = React.useCallback((row, sourcePage = 'screener') => ({
+    fips: row.fips,
+    countyName: row.county,
+    state: row.state,
+    sourcePage,
+    assetType: 'agriculture_land',
+    targetUseCase: 'farmland_investment',
+  }), []);
 
   return <div>
     <div className="card" style={{marginBottom:'1.5rem'}}>
@@ -196,6 +204,11 @@ export function Screener({addToast, nav}) {
             const badge = zBand(r.zscores?.cash_rent || {});
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
+          {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r) => <div style={{display:'flex',gap:'.3rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
+            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.COUNTY, {fips:r.fips}); }}>View</button>
+            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research</button>
+            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.SCENARIO, workflowParams(r)); }}>Scenario</button>
+          </div>},
         ]}
         rows={(results.results || []).map(r => {
           const fair = r.metrics?.fair_value;
@@ -219,6 +232,7 @@ export function Screener({addToast, nav}) {
             _zcap:r.zscores?.implied_cap_rate?.zscore,
             _zfv:r.zscores?.fair_value?.zscore,
             _zrent:r.zscores?.cash_rent?.zscore,
+            _workflow:r.fips,
           };
         })}
         onRow={r => nav(PG.COUNTY, {fips:r.fips})}

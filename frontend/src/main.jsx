@@ -113,7 +113,7 @@ function App() {
       case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav}/>;
       case PG.WATCH: return <Watchlist addToast={addToast} nav={nav}/>;
       case PG.COMPARE: return <Comparison addToast={addToast} params={pp}/>;
-      case PG.SCENARIO: return <ScenarioLab addToast={addToast} params={pp} researchUser={researchUser}/>;
+      case PG.SCENARIO: return <ScenarioLab addToast={addToast} nav={nav} params={pp} researchUser={researchUser}/>;
       case PG.BACKTEST: return <Backtest addToast={addToast}/>;
       case PG.PORTFOLIO: return <PortfolioPage addToast={addToast}/>;
       case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast}/>;

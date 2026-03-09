@@ -51,6 +51,14 @@ export function Dashboard({addToast, nav}) {
   const charts = data.charts || {};
   const productivity = data.productivity_summary || {};
   const productivityBadge = productivitySummaryBand(productivity);
+  const workflowParams = React.useCallback((row, sourcePage = 'dashboard') => ({
+    fips: row.fips,
+    countyName: row.county,
+    state: row.state,
+    sourcePage,
+    assetType: 'agriculture_land',
+    targetUseCase: 'farmland_investment',
+  }), []);
 
   const capBuckets = data.cap_rate_distribution || [];
 
@@ -128,8 +136,12 @@ export function Dashboard({addToast, nav}) {
           {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:v=>$pct(v)},
           {key:'noi_per_acre',label:'NOI/ac',num:true,fmt:v=>$$(v)},
           {key:'access_score',label:'Access',num:true,fmt:v=>$(v,1)},
+          {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r)=><div style={{display:'flex',gap:'.3rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
+            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research</button>
+            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.SCENARIO, workflowParams(r)); }}>Scenario</button>
+          </div>},
         ]}
-        rows={movers}
+        rows={movers.map(r => ({ ...r, _workflow: r.fips }))}
         onRow={(r) => nav(PG.COUNTY, {fips:r.fips})}
       />
     </div>

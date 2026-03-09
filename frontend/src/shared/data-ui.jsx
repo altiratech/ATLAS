@@ -68,9 +68,13 @@ export function STable({cols, rows, onRow, initSort}) {
       return dir === 'asc' ? (av < bv ? -1 : av > bv ? 1 : 0) : (av > bv ? -1 : av < bv ? 1 : 0);
     });
   }, [rows, sort]);
-  const toggle = (k) => setSort(sort && sort[0]===k ? [k, sort[1]==='asc'?'desc':'asc'] : [k,'desc']);
+  const toggle = (col) => {
+    if (col.sortable === false) return;
+    const k = col.key;
+    setSort(sort && sort[0]===k ? [k, sort[1]==='asc'?'desc':'asc'] : [k,'desc']);
+  };
   return <div className="tc"><table>
-    <thead><tr>{cols.map(c => <th key={c.key} onClick={()=>toggle(c.key)} className={sort&&sort[0]===c.key?(sort[1]==='asc'?'s-a':'s-d'):''}>{c.label}</th>)}</tr></thead>
+    <thead><tr>{cols.map(c => <th key={c.key} onClick={()=>toggle(c)} className={c.sortable === false ? '' : (sort && sort[0]===c.key ? (sort[1]==='asc' ? 's-a' : 's-d') : '')}>{c.label}</th>)}</tr></thead>
     <tbody>{sorted.map((r,i) => <tr key={i} onClick={()=>onRow&&onRow(r)}>{cols.map(c => <td key={c.key} className={c.num?'n':''}>{c.fmt ? c.fmt(r[c.key],r) : r[c.key]}</td>)}</tr>)}</tbody>
   </table></div>;
 }

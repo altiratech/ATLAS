@@ -1,3 +1,4 @@
+import { PG } from '../config.js';
 import {
   $,
   $$,
@@ -10,7 +11,7 @@ import {
 } from '../auth.js';
 import { CountyPicker, MiniBar } from '../shared/data-ui.jsx';
 
-export function ScenarioLab({addToast, params, researchUser}) {
+export function ScenarioLab({addToast, nav, params, researchUser}) {
   const [county, setCounty] = React.useState(params?.fips || '');
   const [rp, setRp] = React.useState(4.5);
   const [gr, setGr] = React.useState(2.0);
@@ -104,6 +105,16 @@ export function ScenarioLab({addToast, params, researchUser}) {
 
   const base = result?.base;
   const bm = base?.metrics || {};
+  const selectedCountyLabel = params?.countyName
+    ? `${params.countyName}${params?.state ? `, ${params.state}` : ''}`
+    : (county || 'None');
+  const sourceLabel = params?.sourcePage === 'screener'
+    ? 'Screener'
+    : params?.sourcePage === 'county'
+      ? 'County Detail'
+      : params?.sourcePage === 'research'
+        ? 'Research Workspace'
+        : '';
 
   const savePack = async () => {
     if (!county) { addToast(toast('Select a county first', 'err')); return; }
@@ -146,6 +157,21 @@ export function ScenarioLab({addToast, params, researchUser}) {
   };
 
   return <div>
+    {county && <div className="card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Modeling Context</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{selectedCountyLabel}</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+            {sourceLabel ? `Opened from ${sourceLabel}. ` : ''}Scenario inputs will run against the selected county without requiring another lookup step.
+          </div>
+        </div>
+        <div className="rw-actions" style={{margin:0}}>
+          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, {fips: county, countyName: params?.countyName, state: params?.state, sourcePage: 'scenario', assetType: 'agriculture_land', targetUseCase: 'farmland_investment'})}>Open Research Workspace</button>
+        </div>
+      </div>
+    </div>}
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Scenario Parameters</h3>
       <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty}/></div>

@@ -108,6 +108,14 @@ export function CountyPage({addToast, params, nav}) {
   const zscores = data.zscores || {};
   const countyProductivity = productivityBand(data.productivity_active);
   const industrialConfidence = industrialConfidenceBand(industrial?.confidence);
+  const workflowParams = {
+    fips: data.geo_key,
+    countyName: data.county_name,
+    state: data.state,
+    sourcePage: 'county',
+    assetType: 'agriculture_land',
+    targetUseCase: 'farmland_investment',
+  };
 
   return <div>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'1.5rem'}}>
@@ -115,8 +123,10 @@ export function CountyPage({addToast, params, nav}) {
         <h2 style={{fontSize:'1.35rem',marginBottom:'.25rem'}}>{data.county_name}, {data.state}</h2>
         <div style={{color:'var(--text2)',fontSize:'.8rem'}}>FIPS: {data.geo_key} | As of: {data.as_of}</div>
       </div>
-      <div style={{display:'flex',gap:'.5rem'}}>
+      <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
         <button className={`btn ${watched?'btn-p':''}`} onClick={toggleWatch}>{watched?'★ Watching':'☆ Watch'}</button>
+        <button className="btn" onClick={() => nav(PG.RESEARCH, workflowParams)}>Research</button>
+        <button className="btn" onClick={() => nav(PG.SCENARIO, workflowParams)}>Scenario</button>
         <button className="btn" onClick={() => nav(PG.COMPARE,{fips:data.geo_key})}>Compare</button>
       </div>
     </div>

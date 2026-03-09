@@ -83,6 +83,25 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
       setScenarioRuns([]);
       return;
     }
+    if (!store[county]) {
+      const base = defaultResearchRecord();
+      setThesis(base.thesis);
+      setTagsInput('');
+      setStatus(base.status);
+      setConviction(base.conviction);
+      setNoteInput('');
+      setBullCase(base.analysis.bull_case);
+      setBearCase(base.analysis.bear_case);
+      setKeyRisksInput(base.analysis.key_risks.join(', '));
+      setCatalystsInput(base.analysis.catalysts.join(', '));
+      setDecisionState(base.analysis.decision_state);
+      setAssetType(params?.assetType || 'agriculture_land');
+      setTargetUseCase(params?.targetUseCase || 'farmland_investment');
+      setCriticalDependenciesInput(base.analysis.critical_dependencies.join(', '));
+      setMissingDataNotesInput(base.analysis.missing_data_notes.join(', '));
+      setApprovalState(base.analysis.approval_state);
+      return;
+    }
     const rec = normalizeResearchRecord(store[county]);
     setThesis(rec.thesis);
     setTagsInput(rec.tags.join(', '));
@@ -99,7 +118,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
     setCriticalDependenciesInput((rec.analysis?.critical_dependencies || []).join(', '));
     setMissingDataNotesInput((rec.analysis?.missing_data_notes || []).join(', '));
     setApprovalState(rec.analysis?.approval_state || '');
-  }, [county, store]);
+  }, [county, store, params?.assetType, params?.targetUseCase]);
 
   React.useEffect(() => {
     if (!county) return;
@@ -114,6 +133,15 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
   );
 
   const active = county ? normalizeResearchRecord(store[county]) : defaultResearchRecord();
+  const selectedCountyLabel = county
+    ? (countyMap[county] || (params?.countyName ? `${params.countyName}${params?.state ? `, ${params.state}` : ''}` : county))
+    : 'None';
+  const sourceLabel = params?.sourcePage === 'screener'
+    ? 'Screener'
+    : params?.sourcePage === 'county'
+      ? 'County Detail'
+      : '';
+  const hasSavedWorkspace = county ? Object.prototype.hasOwnProperty.call(store, county) : false;
 
   const saveWorkspace = async () => {
     if (!county) { addToast(toast('Select a county first', 'err')); return; }
@@ -202,6 +230,21 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
 
   return <div>
     {storeErr && <ErrBox title="Research Sync Error" msg={storeErr} onRetry={loadStore}/>}
+    {county && <div className="card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Workflow Context</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{selectedCountyLabel}</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+            {sourceLabel ? `Carried forward from ${sourceLabel}. ` : ''}{hasSavedWorkspace ? 'Existing research workspace loaded.' : 'New research workspace ready to capture thesis and next steps.'}
+          </div>
+        </div>
+        <div className="rw-actions" style={{margin:0}}>
+          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: params?.countyName, state: params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>
+        </div>
+      </div>
+    </div>}
     <div className="rw-grid">
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Research Workspace</h3>
@@ -284,7 +327,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser}) {
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Workspace Snapshot</h3>
         <div className="sc"><div className="sc-l">Session User</div><div className="sc-v" style={{fontSize:'.82rem'}}>{researchUser || '--'}</div></div>
-        <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{county ? (countyMap[county] || county) : 'None'}</div></div>
+        <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{selectedCountyLabel}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Asset Type</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.analysis?.asset_type || '--'}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Target Use Case</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.analysis?.target_use_case || '--'}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
