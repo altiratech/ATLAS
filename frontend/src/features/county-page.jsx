@@ -2,6 +2,7 @@ import { PG } from '../config.js';
 import {
   $,
   $$,
+  $chg,
   $pct,
   $x,
   industrialConfidenceBand,

@@ -339,7 +339,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     <div className="rw-grid">
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Research Workspace</h3>
-        <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} placeholder="Select county for research workspace..."/></div>
+        <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} placeholder="Select county for research workspace..." selectedLabel={selectedCountyLabel}/></div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
           <div className="fg"><label>Decision Status</label>
             <select value={status} onChange={e => setStatus(e.target.value)}>
@@ -411,7 +411,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div className="fg"><label>Missing Data Notes (comma separated)</label><input type="text" value={missingDataNotesInput} onChange={e => setMissingDataNotesInput(e.target.value)} placeholder="parcel zoning unknown, substation capacity unknown"/></div>
         <div className="rw-actions">
           <button className="btn btn-p" onClick={saveWorkspace}>Save Workspace</button>
-          {county && <button className="btn" onClick={() => nav(PG.SCENARIO, {fips: county})}>Open Scenario Lab</button>}
+          {county && <button className="btn" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>}
         </div>
       </div>
 
@@ -420,8 +420,8 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div className="sc"><div className="sc-l">Session User</div><div className="sc-v" style={{fontSize:'.82rem'}}>{researchUser || '--'}</div></div>
         <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{selectedCountyLabel}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Active Assumption Set</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Asset Type</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.analysis?.asset_type || '--'}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Target Use Case</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.analysis?.target_use_case || '--'}</div></div>
+        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Asset Type</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assetType || active.analysis?.asset_type || '--'}</div></div>
+        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Target Use Case</div><div className="sc-v" style={{fontSize:'.82rem'}}>{targetUseCase || active.analysis?.target_use_case || '--'}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Runs</div><div className="sc-v">{scenarioRuns.length}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Research Notes</div><div className="sc-v">{active.notes.length}</div></div>
@@ -480,7 +480,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
           <div className="sc-c">{latestTopDriver ? `Top one-at-a-time driver delta: ${$(latestTopDriver.driver.delta, 2)}` : 'Driver decomposition is not available for the latest snapshot.'}</div>
         </div>
         <div className="rw-actions">
-          {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: params?.countyName, state: params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>}
+          {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>}
         </div>
       </div>}
     </div>
@@ -509,7 +509,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
           <div style={{fontSize:'.8rem',fontWeight:600,marginBottom:'.18rem'}}>{pack.name}</div>
           <div style={{fontSize:'.74rem',color:'var(--text2)'}}>Risk Premium {pack.risk_premium}% | Growth {pack.growth_rate}% | Rent Shock {pack.rent_shock}%</div>
         </div>
-        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county,pack_id:pack.id})}>Open</button>
+        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county,pack_id:pack.id, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open</button>
       </div>)}
     </div>
 
@@ -527,7 +527,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
               {assumptionSummary.overrideCount > 0 ? ` • overrides: ${assumptionSummary.overrideKeys.join(', ')}` : ' • no stored overrides'}
             </div>
           </div>
-          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county})}>Open</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open</button>
         </div>;
       })}
     </div>

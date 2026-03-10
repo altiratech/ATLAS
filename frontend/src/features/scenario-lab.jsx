@@ -209,7 +209,7 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
     </div>}
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Scenario Parameters</h3>
-      <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty}/></div>
+      <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} selectedLabel={selectedCountyLabel}/></div>
       <div style={{fontSize:'.7rem',color:'var(--text2)',marginBottom:'.5rem'}}>Session User: {researchUser || '--'}</div>
       <div style={{fontSize:'.74rem',color:'var(--text2)',marginBottom:'.6rem'}}>Base set: {assumptionSetLabel(activeAssumptionSet)}. Scenario controls below override only risk premium, growth, and near-term rent shock.</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>

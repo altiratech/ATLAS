@@ -79,7 +79,7 @@ export function STable({cols, rows, onRow, initSort}) {
   </table></div>;
 }
 
-export function CountyPicker({value, onChange, placeholder='Select county...'}) {
+export function CountyPicker({value, onChange, placeholder='Select county...', selectedLabel=''}) {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState('');
   const [list, setList] = React.useState([]);
@@ -94,7 +94,7 @@ export function CountyPicker({value, onChange, placeholder='Select county...'}) 
   const sel = list.find(c => c.fips === value);
   return <div className="dd">
     <button className="btn" onClick={()=>setOpen(!open)} style={{width:'100%',textAlign:'left'}}>
-      {sel ? `${sel.name}, ${sel.state}` : placeholder}
+      {sel ? `${sel.name}, ${sel.state}` : (selectedLabel || placeholder)}
     </button>
     {open && <div className="dd-menu">
       <div style={{padding:'.5rem'}}><input type="text" placeholder="Search..." value={q} onChange={e=>setQ(e.target.value)} onClick={e=>e.stopPropagation()} style={{fontSize:'.85rem'}}/></div>

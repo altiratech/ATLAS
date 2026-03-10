@@ -14,6 +14,7 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
   const [secondaryLoading, setSecondaryLoading] = React.useState(false);
   const [impactLoading, setImpactLoading] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  const loadSeqRef = React.useRef(0);
   const defaultAssumptionSet = React.useMemo(() => findDefaultAssumptionSet(assumptionSets), [assumptionSets]);
   const compareAgainstDefault = !!defaultAssumptionSet && !!activeAssumptionSetId && String(defaultAssumptionSet.id) !== String(activeAssumptionSetId);
   const workflowParams = React.useCallback((row, sourcePage = 'dashboard') => ({
@@ -26,6 +27,7 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
   }), []);
 
   const load = React.useCallback(() => {
+    const loadSeq = ++loadSeqRef.current;
     setLoading(true);
     setSecondaryLoading(false);
     setImpactLoading(false);
@@ -36,29 +38,42 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
 
     api(appendAssumptionParam('/dashboard', activeAssumptionSetId))
       .then((dashboardData) => {
+        if (loadSeq !== loadSeqRef.current) return;
         setData(dashboardData);
         setLoading(false);
         setSecondaryLoading(true);
         if (compareAgainstDefault) {
           setImpactLoading(true);
           api(appendAssumptionParam('/dashboard', defaultAssumptionSet.id))
-            .then((baseline) => setBaselineData(baseline))
-            .catch(() => setBaselineData(null))
-            .finally(() => setImpactLoading(false));
+            .then((baseline) => {
+              if (loadSeq !== loadSeqRef.current) return;
+              setBaselineData(baseline);
+            })
+            .catch(() => {
+              if (loadSeq !== loadSeqRef.current) return;
+              setBaselineData(null);
+            })
+            .finally(() => {
+              if (loadSeq !== loadSeqRef.current) return;
+              setImpactLoading(false);
+            });
         }
         return Promise.allSettled([
           api('/data/coverage'),
           api('/ag-index'),
         ]).then(([coverageResult, agIndexResult]) => {
+          if (loadSeq !== loadSeqRef.current) return;
           setCoverage(coverageResult.status === 'fulfilled' ? coverageResult.value : null);
           setAgIndex(agIndexResult.status === 'fulfilled' ? agIndexResult.value : null);
         });
       })
       .catch(e => {
+        if (loadSeq !== loadSeqRef.current) return;
         setErr(e.message);
         setLoading(false);
       })
       .finally(() => {
+        if (loadSeq !== loadSeqRef.current) return;
         setSecondaryLoading(false);
       });
   }, [activeAssumptionSetId, compareAgainstDefault, defaultAssumptionSet?.id]);
