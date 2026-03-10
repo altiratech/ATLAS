@@ -157,6 +157,26 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
       ? 'County Detail'
       : '';
   const hasSavedWorkspace = county ? Object.prototype.hasOwnProperty.call(store, county) : false;
+  const thesisPreview = thesis.trim() || active.thesis || 'No written thesis yet. Use this workspace to turn screening output into a defendable investment view.';
+  const keyRisks = parseTags(keyRisksInput);
+  const catalysts = parseTags(catalystsInput);
+  const criticalDependencies = parseTags(criticalDependenciesInput);
+  const missingDataNotes = parseTags(missingDataNotesInput);
+  const memoStatus = approvalState || decisionState || status;
+  const memoVerdict = approvalState === 'pursue' || approvalState === 'approved' || decisionState === 'approved'
+    ? 'PURSUE'
+    : approvalState === 'pass' || decisionState === 'rejected' || status === 'pass'
+      ? 'PASS'
+      : decisionState === 'investment_committee'
+        ? 'IC REVIEW'
+        : status === 'high_conviction'
+          ? 'HIGH CONVICTION'
+          : 'IN PROGRESS';
+  const memoScenarioText = !latestScenarioRun
+    ? 'No saved scenario compare snapshot yet.'
+    : latestBestScenario?.delta_fair_value_vs_base != null || latestWorstScenario?.delta_fair_value_vs_base != null
+      ? `Latest scenario snapshot: base fair value ${latestBaseScenario?.fair_value != null ? `$${Math.round(latestBaseScenario.fair_value).toLocaleString('en-US')}` : 'N/A'}, upside ${latestBestScenario?.delta_fair_value_vs_base != null ? `${latestBestScenario.scenario} ${latestBestScenario.delta_fair_value_vs_base > 0 ? '+' : ''}$${Math.round(Math.abs(latestBestScenario.delta_fair_value_vs_base)).toLocaleString('en-US')}` : 'N/A'}, downside ${latestWorstScenario?.delta_fair_value_vs_base != null ? `${latestWorstScenario.scenario} ${latestWorstScenario.delta_fair_value_vs_base > 0 ? '+' : ''}$${Math.round(Math.abs(latestWorstScenario.delta_fair_value_vs_base)).toLocaleString('en-US')}` : 'N/A'}.`
+      : 'Latest scenario snapshot is saved, but compare deltas are not available.';
 
   const saveWorkspace = async () => {
     if (!county) { addToast(toast('Select a county first', 'err')); return; }
@@ -257,6 +277,48 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div className="rw-actions" style={{margin:0}}>
           <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
           <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: params?.countyName, state: params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>
+        </div>
+      </div>
+    </div>}
+    {county && <div className="card hero-card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap',marginBottom:'.7rem'}}>
+        <div>
+          <div className="hero-k">Investment Memo Snapshot</div>
+          <div className="hero-h" style={{fontSize:'1.05rem',marginBottom:'.25rem'}}>{memoVerdict} | {selectedCountyLabel}</div>
+          <div className="hero-p" style={{maxWidth:'920px',fontSize:'.82rem'}}>
+            {thesisPreview}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
+          <span className="badge badge-a">{String(memoStatus || 'exploring').replace(/_/g, ' ').toUpperCase()}</span>
+          <span className={`badge ${conviction >= 75 ? 'badge-g' : conviction >= 45 ? 'badge-a' : 'badge-r'}`}>CONVICTION {Math.round(conviction)}/100</span>
+          {assetType && <span className="badge badge-b">{assetType.replace(/_/g, ' ').toUpperCase()}</span>}
+          {targetUseCase && <span className="badge badge-b">{targetUseCase.replace(/_/g, ' ').toUpperCase()}</span>}
+        </div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr 1fr',gap:'.75rem'}}>
+        <div className="workflow-card">
+          <div className="workflow-step">Core View</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.32rem'}}><strong>Thesis:</strong> {thesisPreview}</div>
+            <div><strong>Scenario read:</strong> {memoScenarioText}</div>
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">Upside / Risks</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.32rem'}}><strong>Bull:</strong> {bullCase.trim() || 'Bull case not yet written.'}</div>
+            <div><strong>Bear:</strong> {bearCase.trim() || 'Bear case not yet written.'}</div>
+            {keyRisks.length > 0 && <div style={{marginTop:'.35rem'}}><strong>Key risks:</strong> {keyRisks.join(', ')}</div>}
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">What Still Needs Work</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.32rem'}}><strong>Catalysts:</strong> {catalysts.length ? catalysts.join(', ') : 'No catalysts recorded yet.'}</div>
+            <div style={{marginBottom:'.32rem'}}><strong>Dependencies:</strong> {criticalDependencies.length ? criticalDependencies.join(', ') : 'No critical dependencies recorded yet.'}</div>
+            <div><strong>Missing data:</strong> {missingDataNotes.length ? missingDataNotes.join(', ') : 'No missing-data notes recorded yet.'}</div>
+          </div>
         </div>
       </div>
     </div>}
