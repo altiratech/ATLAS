@@ -28,6 +28,17 @@ export function sourceBand(sourceQuality) {
   }
 }
 
+export function benchmarkMethodBand(method) {
+  switch (method) {
+    case 'county_observed': return {label:'COUNTY OBS', className:'badge-g'};
+    case 'rent_multiple_proxy': return {label:'RENT PROXY', className:'badge-b'};
+    case 'mixed_fallback': return {label:'MIXED', className:'badge-a'};
+    case 'state_fallback': return {label:'STATE', className:'badge-b'};
+    case 'national_fallback': return {label:'NATIONAL', className:'badge-r'};
+    default: return {label:'UNKNOWN', className:'badge-a'};
+  }
+}
+
 export function sourceText(level) {
   switch (level) {
     case 'county': return 'county source';

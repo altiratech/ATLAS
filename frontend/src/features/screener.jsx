@@ -4,6 +4,7 @@ import {
   $$,
   $chg,
   $pct,
+  benchmarkMethodBand,
   industrialLineageBand,
   industrialPowerSummaryBand,
   productivityBand,
@@ -27,6 +28,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   const [minPowerIndex, setMinPowerIndex] = React.useState('');
   const [maxPowerPrice, setMaxPowerPrice] = React.useState('');
   const [state, setState] = React.useState('');
+  const [basisFilter, setBasisFilter] = React.useState('');
   const [sortBy, setSortBy] = React.useState('implied_cap_rate');
   const [sortDir, setSortDir] = React.useState('desc');
   const [zCapMin, setZCapMin] = React.useState('');
@@ -121,6 +123,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   const liveOnlyFilters = React.useMemo(() => {
     const filters = [];
     if (state) filters.push(`state=${state.toUpperCase()}`);
+    if (basisFilter) filters.push(`basis=${basisFilter.replace(/_/g, ' ')}`);
     if (minPowerIndex) filters.push(`min power index ${minPowerIndex}`);
     if (maxPowerPrice) filters.push(`max power price ${maxPowerPrice}`);
     if (zCapMin || zCapMax) filters.push('cap z-score');
@@ -170,6 +173,12 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
     }
   };
 
+  const visibleRows = React.useMemo(() => {
+    const rows = results?.results || [];
+    if (!basisFilter) return rows;
+    return rows.filter((row) => row.benchmark_method === basisFilter);
+  }, [basisFilter, results]);
+
   return <div>
     <AssumptionContextBar
       assumptionSets={assumptionSets}
@@ -200,6 +209,16 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
         <div className="fg"><label>Z Rent Min</label><input type="number" step="0.1" value={zRentMin} onChange={e => setZRentMin(e.target.value)} placeholder="e.g. -0.5"/></div>
         <div className="fg"><label>Z Rent Max</label><input type="number" step="0.1" value={zRentMax} onChange={e => setZRentMax(e.target.value)} placeholder="e.g. 1.5"/></div>
         <div className="fg"><label>State</label><input type="text" value={state} onChange={e => setState(e.target.value)} placeholder="e.g. IA"/></div>
+        <div className="fg"><label>Benchmark Basis</label>
+          <select value={basisFilter} onChange={e => setBasisFilter(e.target.value)}>
+            <option value="">All basis types</option>
+            <option value="county_observed">County observed</option>
+            <option value="rent_multiple_proxy">Rent multiple proxy</option>
+            <option value="mixed_fallback">Mixed county/state</option>
+            <option value="state_fallback">State fallback</option>
+            <option value="national_fallback">National fallback</option>
+          </select>
+        </div>
         <div className="fg"><label>Sort By</label>
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
             <option value="implied_cap_rate">Cap Rate</option>
@@ -253,7 +272,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
 
     {results && <div className="card">
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.5rem'}}>
-        <h3 style={{fontSize:'1rem'}}>Results ({results.count} counties)</h3>
+        <h3 style={{fontSize:'1rem'}}>Results ({basisFilter ? `${visibleRows.length} of ${results.count}` : results.count} counties)</h3>
         <span className="badge badge-b">as of {results.as_of}</span>
       </div>
       <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.45rem',maxWidth:'980px'}}>
@@ -275,6 +294,10 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
           {key:'source_quality',label:'Data',fmt:(v,r) => {
             const badge = sourceBand(v);
             return <span className={`badge ${badge.className}`} title={r.benchmark_method_detail || r.source_quality_detail || 'Source quality detail unavailable.'}>{badge.label}</span>;
+          }},
+          {key:'benchmark_method',label:'Basis',fmt:(v,r) => {
+            const badge = benchmarkMethodBand(v);
+            return <span className={`badge ${badge.className}`} title={r.benchmark_method_detail || 'Benchmark method detail unavailable.'}>{badge.label}</span>;
           }},
           {key:'_industrial_lineage',label:'Ind',fmt:(_,r) => {
             const badge = industrialLineageBand(r.industrial?.lineage);
@@ -315,7 +338,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.SCENARIO, workflowParams(r)); }}>Scenario</button>
           </div>},
         ]}
-        rows={(results.results || []).map(r => {
+        rows={visibleRows.map(r => {
           const fair = r.metrics?.fair_value;
           const benchmark = r.metrics?.benchmark_value;
           const spread = fair != null && benchmark != null && benchmark > 0
