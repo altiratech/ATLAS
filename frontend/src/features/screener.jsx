@@ -256,6 +256,9 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
         <h3 style={{fontSize:'1rem'}}>Results ({results.count} counties)</h3>
         <span className="badge badge-b">as of {results.as_of}</span>
       </div>
+      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.45rem',maxWidth:'980px'}}>
+        Atlas is showing a land-underwriting benchmark for each county, not a whole-county urban land appraisal. Rows tagged <strong style={{color:'var(--text1)'}}>PROXY</strong> derive benchmark value from county cash rent multiplied by the state land-value rent multiple when direct county land value is unavailable.
+      </div>
       {results.as_of_meta && <div style={{marginBottom:'.55rem',display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
         <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>
           COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
@@ -269,9 +272,9 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
         cols={[
           {key:'county',label:'County'},
           {key:'state',label:'ST'},
-          {key:'source_quality',label:'Data',fmt:v => {
+          {key:'source_quality',label:'Data',fmt:(v,r) => {
             const badge = sourceBand(v);
-            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
+            return <span className={`badge ${badge.className}`} title={r.benchmark_method_detail || r.source_quality_detail || 'Source quality detail unavailable.'}>{badge.label}</span>;
           }},
           {key:'_industrial_lineage',label:'Ind',fmt:(_,r) => {
             const badge = industrialLineageBand(r.industrial?.lineage);
@@ -282,7 +285,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
           {key:'_cash_rent',label:'Cash Rent',num:true,fmt:(_,r) => $$(r.metrics?.cash_rent)},
-          {key:'_bv',label:'Land Value',num:true,fmt:(_,r) => $$(r.metrics?.benchmark_value)},
+          {key:'_bv',label:'Land Value',num:true,fmt:(_,r) => <span title={r.benchmark_method_detail || 'Benchmark method detail unavailable.'}>{$$(r.metrics?.benchmark_value)}</span>},
           {key:'_noi',label:'NOI/ac',num:true,fmt:(_,r) => $$(r.metrics?.noi_per_acre)},
           {key:'_cap',label:'Cap Rate',num:true,fmt:(_,r) => $pct(r.metrics?.implied_cap_rate)},
           {key:'_fv',label:'Fair Value',num:true,fmt:(_,r) => $$(r.metrics?.fair_value)},
@@ -337,6 +340,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             _workflow:r.fips,
           };
         })}
+        stickyHeader={true}
         onRow={r => nav(PG.COUNTY, {fips:r.fips})}
       />
     </div>}
