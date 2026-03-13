@@ -4,6 +4,9 @@ import {
   $$,
   $chg,
   $pct,
+  benchmarkMethodBand,
+  productivityBand,
+  sourceBand,
   toast,
 } from '../formatting.js';
 import { api } from '../auth.js';
@@ -123,7 +126,29 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
 
     {data && data.counties && data.counties.length > 0 && <div className="card">
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Side-by-Side Comparison</h3>
-      <div className="tc"><table>
+      <div style={{fontSize:'.8rem',color:'var(--text2)',marginBottom:'.7rem',maxWidth:'920px'}}>
+        Atlas is comparing the same modeled metric stack across each county using the active assumption set. Benchmark basis and source quality are shown explicitly so proxy counties do not look equivalent to county-observed benchmarks.
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:`repeat(${data.counties.length}, minmax(180px, 1fr))`,gap:'.65rem',marginBottom:'.85rem'}}>
+        {data.counties.map(c => {
+          const sourceBadge = sourceBand(c.source_quality);
+          const basisBadge = benchmarkMethodBand(c.benchmark_method);
+          const prodBadge = productivityBand(c.productivity_active);
+          return <div key={c.geo_key} className="sc">
+            <div className="sc-l">County</div>
+            <div className="sc-v" style={{fontSize:'.95rem'}}>{c.county_name}, {c.state}</div>
+            <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',marginBottom:'.45rem'}}>
+              <span className={`badge ${sourceBadge.className}`} title={c.source_quality_detail || 'Source quality detail unavailable.'}>{sourceBadge.label}</span>
+              <span className={`badge ${basisBadge.className}`} title={c.benchmark_method_detail || 'Benchmark method detail unavailable.'}>{basisBadge.label}</span>
+              <span className={`badge ${prodBadge.className}`} title={c.yield_productivity_detail || 'Productivity detail unavailable.'}>{prodBadge.label}</span>
+            </div>
+            <div style={{fontSize:'.76rem',color:'var(--text2)',lineHeight:1.35}}>
+              {c.benchmark_method_detail || 'Benchmark method detail unavailable.'}
+            </div>
+          </div>;
+        })}
+      </div>
+      <div className="tc tc-sticky"><table>
         <thead><tr><th>Metric</th>{data.counties.map(c => <th key={c.geo_key}>{c.county_name}, {c.state}</th>)}</tr></thead>
         <tbody>{metricRows.map(mr => <tr key={mr.key}>
           <td style={{fontWeight:500}}>{mr.label}</td>
