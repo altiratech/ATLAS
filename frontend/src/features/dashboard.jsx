@@ -251,6 +251,10 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
           {key:'state',label:'ST'},
           {key:'source_quality',label:'Data',fmt:v=>{ const badge = sourceBand(v); return <span className={`badge ${badge.className}`}>{badge.label}</span>; }},
           {key:'productivity_active',label:'Prod',fmt:v=>{ const badge = productivityBand(v); return <span className={`badge ${badge.className}`}>{badge.label}</span>; }},
+          {key:'primary_driver_label',label:'Why',fmt:(_,r)=><div>
+            <div style={{fontSize:'.75rem',fontWeight:600}}>{r.primary_driver_label || '--'}</div>
+            <div style={{fontSize:'.68rem',color:'var(--text2)'}}>{r.driver_summary || '--'}</div>
+          </div>},
           {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
           {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
           {key:'spread_pct',label:'Spread',num:true,fmt:v=>v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},
@@ -281,6 +285,10 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
           {key:'state',label:'ST'},
           {key:'source_quality',label:'Data',fmt:v=>{ const badge = sourceBand(v); return <span className={`badge ${badge.className}`}>{badge.label}</span>; }},
           {key:'productivity_active',label:'Prod',fmt:v=>{ const badge = productivityBand(v); return <span className={`badge ${badge.className}`}>{badge.label}</span>; }},
+          {key:'primary_driver_label',label:'Why',fmt:(_,r)=><div>
+            <div style={{fontSize:'.75rem',fontWeight:600}}>{r.primary_driver_label || '--'}</div>
+            <div style={{fontSize:'.68rem',color:'var(--text2)'}}>{r.driver_summary || '--'}</div>
+          </div>},
           {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
           {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
           {key:'spread_pct',label:'Spread',num:true,fmt:v=>v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},

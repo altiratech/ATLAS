@@ -582,6 +582,106 @@ function clusterMoverRows<T extends {
   return Array.from(clustered.values());
 }
 
+function formatSignedPercent(value: number, decimals = 1) {
+  const rounded = roundNullable(value, decimals);
+  if (rounded == null) return null;
+  return `${rounded >= 0 ? '+' : ''}${rounded}%`;
+}
+
+function formatSignedBps(value: number) {
+  const rounded = roundNullable(value, 0);
+  if (rounded == null) return null;
+  return `${rounded >= 0 ? '+' : ''}${rounded} bps`;
+}
+
+function deriveMoverDriverSummary(row: {
+  benchmark_method?: BenchmarkMethod | null;
+  benchmark_proxy_ratio?: number | null;
+  productivity_active?: boolean | null;
+  yield_productivity_factor?: number | null;
+  source_quality: SourceQualityLabel;
+  cap_spread_to_10y?: number | null;
+  required_return?: number | null;
+}) {
+  const support: string[] = [];
+  let primaryKey = 'valuation_gap';
+  let primaryLabel = 'Modeled value gap';
+
+  switch (row.benchmark_method) {
+    case 'county_observed':
+      primaryKey = 'county_observed';
+      primaryLabel = 'County-observed benchmark';
+      support.push('Observed county land value anchor');
+      break;
+    case 'rent_multiple_proxy':
+      primaryKey = 'proxy_regime';
+      primaryLabel = 'Proxy rent-multiple regime';
+      if (row.benchmark_proxy_ratio != null) {
+        support.push(`State rent multiple ${roundNullable(row.benchmark_proxy_ratio, 1)}x`);
+      }
+      break;
+    case 'mixed_fallback':
+      primaryKey = 'mixed_fallback';
+      primaryLabel = 'Mixed county/state benchmark';
+      support.push('County/state input mix');
+      break;
+    case 'state_fallback':
+      primaryKey = 'state_fallback';
+      primaryLabel = 'State-backed benchmark';
+      support.push('State rent and land value anchor');
+      break;
+    case 'national_fallback':
+      primaryKey = 'national_fallback';
+      primaryLabel = 'National fallback';
+      support.push('National valuation fallback');
+      break;
+    default:
+      primaryKey = 'unknown';
+      primaryLabel = 'Incomplete benchmark basis';
+      support.push('Benchmark basis needs review');
+      break;
+  }
+
+  const productivityFactor = row.yield_productivity_factor;
+  if (row.productivity_active && productivityFactor != null) {
+    const upliftPct = (productivityFactor - 1) * 100;
+    const upliftLabel = formatSignedPercent(upliftPct, 1);
+    if (upliftLabel && Math.abs(upliftPct) >= 1) {
+      support.push(`Yield uplift ${upliftLabel}`);
+    }
+    if (
+      !['proxy_regime', 'state_fallback', 'national_fallback'].includes(primaryKey)
+      && Math.abs(upliftPct) >= 7
+    ) {
+      primaryKey = 'productivity_uplift';
+      primaryLabel = 'County productivity uplift';
+    }
+  }
+
+  if (row.cap_spread_to_10y != null) {
+    const capSpreadLabel = formatSignedBps(row.cap_spread_to_10y);
+    if (capSpreadLabel) support.push(`Cap spread ${capSpreadLabel}`);
+    if (
+      !['proxy_regime', 'state_fallback', 'national_fallback', 'productivity_uplift'].includes(primaryKey)
+      && row.cap_spread_to_10y >= 150
+    ) {
+      primaryKey = 'cap_spread';
+      primaryLabel = 'Wide cap spread vs 10Y';
+    }
+  }
+
+  if (row.required_return != null) {
+    support.push(`Req. return ${roundNullable(row.required_return, 2)}%`);
+  }
+
+  return {
+    primary_driver_key: primaryKey,
+    primary_driver_label: primaryLabel,
+    driver_summary: support.slice(0, 3).join(' • '),
+    driver_flags: support.slice(0, 3),
+  };
+}
+
 function parseOptionalYear(value: string | undefined): number | undefined {
   if (!value) return undefined;
   const parsed = Number.parseInt(value, 10);
@@ -2431,11 +2531,23 @@ app.get('/api/v1/dashboard', async (c) => {
         benchmark_method_detail: d.benchmark_method_detail,
         benchmark_proxy_ratio: d.benchmark_proxy_ratio,
         productivity_active: d.productivity_active,
+        yield_productivity_factor: roundNullable(d.metrics.yield_productivity_factor, 4),
         yield_productivity_detail: d.yield_productivity_detail,
+        cap_spread_to_10y: roundNullable(d.metrics.cap_spread_to_10y, 0),
+        required_return: roundNullable(d.metrics.required_return, 2),
         input_lineage: d.input_lineage,
         source_quality: d.source_quality,
         source_quality_score: d.source_quality_score,
         source_quality_detail: d.source_quality_detail,
+        ...deriveMoverDriverSummary({
+          benchmark_method: d.benchmark_method,
+          benchmark_proxy_ratio: d.benchmark_proxy_ratio,
+          productivity_active: d.productivity_active,
+          yield_productivity_factor: d.metrics.yield_productivity_factor,
+          source_quality: d.source_quality,
+          cap_spread_to_10y: d.metrics.cap_spread_to_10y,
+          required_return: d.metrics.required_return,
+        }),
       });
     }
   }
