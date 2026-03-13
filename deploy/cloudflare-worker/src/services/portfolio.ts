@@ -36,7 +36,10 @@ export interface PortfolioResult {
 
 interface HoldingDetail {
   geo_key: string;
+  county_name: string;
   acres: number;
+  purchase_price_per_acre: number | null;
+  purchase_year: string | null;
   weight_pct: number;
   current_value: number;
   fair_value: number;
@@ -105,7 +108,10 @@ export function computePortfolioMetrics(
 
     holdingDetails.push({
       geo_key: h.geo_key,
+      county_name: data.county_name ?? h.geo_key,
       acres: h.acres,
+      purchase_price_per_acre: h.purchase_price_per_acre,
+      purchase_year: h.purchase_year,
       weight_pct: round2((h.acres / totalAcres) * 100),
       current_value: round2(currentVal),
       fair_value: round2(fairVal),
