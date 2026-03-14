@@ -6,6 +6,7 @@ import {
   $pct,
   $x,
   benchmarkMethodBand,
+  droughtRiskBand,
   industrialConfidenceBand,
   productivityBand,
   sourceBand,
@@ -151,6 +152,8 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
   const zscores = data.zscores || {};
   const countyProductivity = productivityBand(data.productivity_active);
   const industrialConfidence = industrialConfidenceBand(industrial?.confidence);
+  const drought = data.drought || null;
+  const droughtBadge = droughtRiskBand(drought);
   const workflowParams = {
     fips: data.geo_key,
     countyName: data.county_name,
@@ -250,6 +253,9 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       : null,
     credit?.combined_stress_dscr != null && credit.combined_stress_dscr < 1
       ? 'Combined rent/rate stress pushes DSCR below 1.0x.'
+      : null,
+    drought?.risk_score != null && drought.risk_score >= 80
+      ? `FEMA drought risk is elevated at ${$(drought.risk_score, 1)} / 100.`
       : null,
   ].filter(Boolean).slice(0, 3);
 
@@ -419,6 +425,39 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       </div>
     </div>
 
+    <div className="card" style={{marginBottom:'1rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Physical / Agronomic Risk</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>FEMA drought evidence for this county</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
+            This layer comes from FEMA National Risk Index county drought services. The score is FEMA’s 0-100 drought hazard score, where higher indicates higher risk. Atlas is surfacing it directly rather than folding it into fair value silently.
+          </div>
+        </div>
+        <span className={`badge ${droughtBadge.className}`}>{droughtBadge.label}</span>
+      </div>
+      <div className="sg">
+        <div className="sc">
+          <div className="sc-l">Drought Risk Score</div>
+          <div className="sc-v">{drought?.risk_score != null ? `${$(drought.risk_score, 1)} / 100` : 'N/A'}</div>
+          <div className="sc-c">{drought?.risk_rating_label || 'Official FEMA rating unavailable'}</div>
+        </div>
+        <div className="sc">
+          <div className="sc-l">Ag Loss Rate</div>
+          <div className="sc-v">{$pct(drought?.ag_loss_rate_pct)}</div>
+          <div className="sc-c">Expected annual agriculture loss rate from FEMA NRI</div>
+        </div>
+        <div className="sc">
+          <div className="sc-l">Evidence Basis</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{drought?.lineage ? String(drought.lineage).toUpperCase() : 'N/A'}</div>
+          <div className="sc-c">{drought?.summary || 'Drought evidence has not been loaded for this county yet.'}</div>
+        </div>
+      </div>
+      <div style={{marginTop:'.75rem',fontSize:'.78rem',color:'var(--text2)',display:'grid',gap:'.35rem'}}>
+        {(drought?.notes || ['FEMA drought evidence has not been loaded yet.']).map((note, idx) => <div key={idx}>• {note}</div>)}
+      </div>
+    </div>
+
     {acquisition && <div className="card" style={{marginBottom:'1rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
         <div>
@@ -561,6 +600,11 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
         <div className="sc-l">Data Quality</div>
         <div className="sc-v" style={{fontSize:'.95rem'}}>{sourceBand(data.source_quality).label}</div>
         <div className="sc-c">{data.source_quality_detail || 'Valuation input lineage unavailable'}</div>
+      </div>
+      <div className="sc">
+        <div className="sc-l">Drought Risk</div>
+        <div className="sc-v" style={{fontSize:'.95rem'}}>{drought?.risk_score != null ? `${$(drought.risk_score,1)} / 100` : 'N/A'}</div>
+        <div className="sc-c">{drought?.risk_rating_label || 'FEMA drought evidence unavailable'}</div>
       </div>
       <div className="sc">
         <div className="sc-l">Productivity Adj.</div>

@@ -1,0 +1,69 @@
+name: Ingest FEMA Drought Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: First Atlas year to stamp with FEMA drought evidence (YYYY)
+        required: true
+        default: '2023'
+      end_year:
+        description: Last Atlas year to stamp with FEMA drought evidence (YYYY)
+        required: true
+        default: '2025'
+      states_csv:
+        description: Optional comma-separated state list (blank = all states)
+        required: false
+        default: ''
+
+jobs:
+  ingest-fema-drought:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: deploy/cloudflare-worker/package-lock.json
+
+      - name: Install worker dependencies
+        working-directory: deploy/cloudflare-worker
+        run: npm ci
+
+      - name: Generate staged SQL from FEMA drought services
+        working-directory: deploy/cloudflare-worker
+        run: |
+          set -euo pipefail
+          SQL_PATH="${RUNNER_TEMP}/atlas-fema-drought.sql"
+          SUMMARY_PATH="${RUNNER_TEMP}/atlas-fema-drought-summary.json"
+          echo "SQL_PATH=${SQL_PATH}" >> "${GITHUB_ENV}"
+          echo "SUMMARY_PATH=${SUMMARY_PATH}" >> "${GITHUB_ENV}"
+          node ./scripts/ingest-fema-drought.mjs \
+            --start_year "${{ inputs.start_year }}" \
+            --end_year "${{ inputs.end_year }}" \
+            --states "${{ inputs.states_csv }}" \
+            --sql_file "${SQL_PATH}" \
+            --summary_json "${SUMMARY_PATH}"
+
+      - name: Import staged SQL into D1
+        working-directory: deploy/cloudflare-worker
+        env:
+          CLOUDFLARE_DEPLOY_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_D1_IMPORT_TOKEN: ${{ secrets.CLOUDFLARE_D1_IMPORT_TOKEN }}
+        run: |
+          set -euo pipefail
+          export CLOUDFLARE_API_TOKEN="${CLOUDFLARE_D1_IMPORT_TOKEN:-${CLOUDFLARE_DEPLOY_TOKEN}}"
+          npx wrangler d1 execute farmland-terminal-db --remote --file "${SQL_PATH}"
+
+      - name: Upload FEMA drought ingest summary artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: atlas-fema-drought-summary
+          path: ${{ env.SUMMARY_PATH }}
+          if-no-files-found: ignore

@@ -39,6 +39,9 @@ import {
 import {
   computeCreditStress,
 } from './services/credit';
+import {
+  computeDroughtEvidence,
+} from './services/drought';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -234,6 +237,7 @@ async function computeCounty(
   }
 
   const county = await getCounty(db, geoKey);
+  const drought = computeDroughtEvidence(series, snapshot.lineage);
 
   return {
     geo_key: geoKey,
@@ -260,6 +264,7 @@ async function computeCounty(
     source_quality_detail: benchmarkMethod.detail,
     access_details: accessData?.distances ?? {},
     access_density: accessData?.density ?? {},
+    drought,
   };
 }
 
@@ -298,6 +303,7 @@ function computeCountyFromSeries(
   const ctx = createContext(county.fips, asOf, hydratedSeries, assumptions);
   computeAll(ctx);
   const sourceQuality = getSourceQuality(benchmarkMethod.method);
+  const drought = computeDroughtEvidence(hydratedSeries, lineage);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     ctx.explains.benchmark_value = {
       ...(ctx.explains.benchmark_value ?? {}),
@@ -343,6 +349,7 @@ function computeCountyFromSeries(
     source_quality: sourceQuality.label,
     source_quality_score: sourceQuality.score,
     source_quality_detail: benchmarkMethod.detail,
+    drought,
   };
 }
 
@@ -1945,6 +1952,7 @@ app.get('/api/v1/screener', async (c) => {
   const minAccess = c.req.query('min_access');
   const minPowerIndex = c.req.query('min_power_index');
   const maxPowerPrice = c.req.query('max_power_price');
+  const maxDroughtRisk = c.req.query('max_drought_risk');
   const state = c.req.query('state');
   const sortBy = c.req.query('sort_by') ?? 'implied_cap_rate';
   const sortDir = c.req.query('sort_dir') ?? 'desc';
@@ -2102,6 +2110,12 @@ app.get('/api/v1/screener', async (c) => {
           passes = false;
         }
       }
+      if (passes && maxDroughtRisk) {
+        const ceiling = Number(maxDroughtRisk);
+        if (!Number.isNaN(ceiling) && ((data.drought?.risk_score ?? Infinity) > ceiling)) {
+          passes = false;
+        }
+      }
     }
 
     if (passes) {
@@ -2120,6 +2134,7 @@ app.get('/api/v1/screener', async (c) => {
         source_quality: data.source_quality,
         source_quality_score: data.source_quality_score,
         source_quality_detail: data.source_quality_detail,
+        drought: data.drought,
         metrics: Object.fromEntries(
           Object.entries(m).map(([k, v]) => [k, v != null ? Math.round((v as number) * 100) / 100 : null]),
         ),
@@ -2133,14 +2148,18 @@ app.get('/api/v1/screener', async (c) => {
       ? (a.industrial?.power_cost_index ?? null)
       : sortBy === 'industrial_power_price'
         ? (a.industrial?.industrial_power_price ?? null)
+        : sortBy === 'drought_risk_score'
+          ? (a.drought?.risk_score ?? null)
         : (a.metrics[sortBy] ?? 0);
     const bv = sortBy === 'power_cost_index'
       ? (b.industrial?.power_cost_index ?? null)
       : sortBy === 'industrial_power_price'
         ? (b.industrial?.industrial_power_price ?? null)
+        : sortBy === 'drought_risk_score'
+          ? (b.drought?.risk_score ?? null)
         : (b.metrics[sortBy] ?? 0);
 
-    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price')) {
+    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price' || sortBy === 'drought_risk_score')) {
       if (av == null && bv != null) return 1;
       if (av != null && bv == null) return -1;
       if (av == null && bv == null) {
