@@ -43,10 +43,14 @@ jobs:
           SUMMARY_PATH="${RUNNER_TEMP}/atlas-fema-drought-summary.json"
           echo "SQL_PATH=${SQL_PATH}" >> "${GITHUB_ENV}"
           echo "SUMMARY_PATH=${SUMMARY_PATH}" >> "${GITHUB_ENV}"
+          EXTRA_ARGS=()
+          if [ -n "${{ inputs.states_csv }}" ]; then
+            EXTRA_ARGS+=(--states "${{ inputs.states_csv }}")
+          fi
           node ./scripts/ingest-fema-drought.mjs \
             --start_year "${{ inputs.start_year }}" \
             --end_year "${{ inputs.end_year }}" \
-            --states "${{ inputs.states_csv }}" \
+            "${EXTRA_ARGS[@]}" \
             --sql_file "${SQL_PATH}" \
             --summary_json "${SUMMARY_PATH}"
 
