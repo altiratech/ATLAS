@@ -30,6 +30,8 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
   const [exitCapRate, setExitCapRate] = React.useState('');
   const [saleCostPct, setSaleCostPct] = React.useState('2');
   const [acres, setAcres] = React.useState('500');
+  const [creditRentStressPct, setCreditRentStressPct] = React.useState('-10');
+  const [creditRateShockBps, setCreditRateShockBps] = React.useState('100');
   const [result, setResult] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [packName, setPackName] = React.useState('');
@@ -68,6 +70,12 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
     setSaleCostPct(acquisitionInputs.sale_cost_pct != null ? String(acquisitionInputs.sale_cost_pct) : '2');
     setAcres(acquisitionInputs.acres != null ? String(acquisitionInputs.acres) : '500');
   }, [params?.acquisitionInputs]);
+  React.useEffect(() => {
+    const creditInputs = params?.creditInputs;
+    if (!creditInputs || typeof creditInputs !== 'object') return;
+    setCreditRentStressPct(creditInputs.rent_stress_pct != null ? String(creditInputs.rent_stress_pct) : '-10');
+    setCreditRateShockBps(creditInputs.rate_shock_bps != null ? String(creditInputs.rate_shock_bps) : '100');
+  }, [params?.creditInputs]);
   React.useEffect(() => {
     const matchedPreset = SCENARIO_PRESETS.find((preset) => preset.rp === Number(rp) && preset.gr === Number(gr) && preset.rs === Number(rs));
     setPresetKey(matchedPreset?.key || 'custom');
@@ -117,6 +125,10 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
             sale_cost_pct: saleCostPct === '' ? null : Number(saleCostPct),
             acres: acres === '' ? null : Number(acres),
           },
+          credit: {
+            rent_stress_pct: creditRentStressPct === '' ? null : Number(creditRentStressPct),
+            rate_shock_bps: creditRateShockBps === '' ? null : Number(creditRateShockBps),
+          },
           scenario_sets: scenarioSets,
           vary_params: [
             {param:'risk_premium', values:[2,3,4,4.5,5,5.5,6,7], target_metric:'fair_value'},
@@ -143,11 +155,16 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
                 sale_cost_pct: saleCostPct === '' ? null : Number(saleCostPct),
                 acres: acres === '' ? null : Number(acres),
               },
+              credit: {
+                rent_stress_pct: creditRentStressPct === '' ? null : Number(creditRentStressPct),
+                rate_shock_bps: creditRateShockBps === '' ? null : Number(creditRateShockBps),
+              },
             },
             comparison: {
               comparison_table: d.comparison_table || [],
               driver_decomposition: d.driver_decomposition || [],
               acquisition_snapshot: d.base?.acquisition || null,
+              credit_snapshot: d.base?.credit || null,
             },
           }),
         });
@@ -162,6 +179,7 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
   const base = result?.base;
   const bm = base?.metrics || {};
   const acquisition = base?.acquisition;
+  const credit = base?.credit;
   const selectedCountyLabel = params?.countyName
     ? `${params.countyName}${params?.state ? `, ${params.state}` : ''}`
     : (county || 'None');
@@ -291,6 +309,22 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
           </div>
         </div>
       </div>
+      <div style={{marginTop:'.7rem',borderTop:'1px solid var(--line)',paddingTop:'.6rem'}}>
+        <h4 style={{fontSize:'.78rem',marginBottom:'.45rem',letterSpacing:'.12em',textTransform:'uppercase'}}>Lender / Credit Stress</h4>
+        <div style={{fontSize:'.74rem',color:'var(--text2)',marginBottom:'.6rem'}}>
+          Atlas uses the active LTV, loan rate, and term from the current assumption set, then applies the rent and rate shocks below to show downside debt-service resilience.
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'.75rem'}}>
+          <div className="fg" style={{margin:0}}>
+            <label>Rent Stress %</label>
+            <input type="number" min="-50" max="25" step="1" value={creditRentStressPct} onChange={e=>setCreditRentStressPct(e.target.value)}/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Rate Shock (bps)</label>
+            <input type="number" min="0" max="1000" step="25" value={creditRateShockBps} onChange={e=>setCreditRateShockBps(e.target.value)}/>
+          </div>
+        </div>
+      </div>
       <div className="rw-actions">
         <button className="btn btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Scenario'}</button>
       </div>
@@ -354,6 +388,41 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
           </div>
         </div>
       </div>}
+      {credit && <div className="card">
+        <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Lender / Credit Stress</h3>
+        <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.65rem'}}>
+          Debt stress uses the active leverage assumptions and tests how current NOI holds up under rent and refinancing pressure.
+        </div>
+        <div className="sg">
+          <div className="sc"><div className="sc-l">Base DSCR</div><div className="sc-v">{$(credit.base_dscr,2)}x</div><div className="sc-c">Current NOI / annual debt service</div></div>
+          <div className="sc"><div className="sc-l">Rent Stress DSCR</div><div className="sc-v">{$(credit.rent_stress_dscr,2)}x</div><div className="sc-c">{credit.rent_stress_pct != null ? `${$(credit.rent_stress_pct,1)}% NOI shock` : 'Rent stress unavailable'}</div></div>
+          <div className="sc"><div className="sc-l">Rate Stress DSCR</div><div className="sc-v">{$(credit.rate_stress_dscr,2)}x</div><div className="sc-c">{credit.rate_shock_bps != null ? `+${$(credit.rate_shock_bps,0)} bps loan rate` : 'Rate stress unavailable'}</div></div>
+          <div className="sc"><div className="sc-l">Combined Stress DSCR</div><div className="sc-v">{$(credit.combined_stress_dscr,2)}x</div><div className="sc-c">Rent + rate stress together</div></div>
+          <div className="sc"><div className="sc-l">Debt Yield</div><div className="sc-v">{$pct(credit.debt_yield_pct)}</div><div className="sc-c">NOI / debt basis</div></div>
+          <div className="sc"><div className="sc-l">Break-even Rent</div><div className="sc-v">{$$(credit.break_even_rent)}</div><div className="sc-c">Rent needed to clear required return</div></div>
+          <div className="sc"><div className="sc-l">Debt / Acre</div><div className="sc-v">{$$(credit.debt_per_acre)}</div><div className="sc-c">{credit.ltv != null ? `${$(credit.ltv,1)}% LTV` : 'LTV unavailable'}</div></div>
+          <div className="sc"><div className="sc-l">Annual Debt Service</div><div className="sc-v">{$$(credit.annual_debt_service_per_acre)}</div><div className="sc-c">{credit.loan_rate_pct != null ? `${$(credit.loan_rate_pct,2)}% / ${credit.loan_term_years}y` : 'Debt terms unavailable'}</div></div>
+          <div className="sc"><div className="sc-l">Value Cushion</div><div className="sc-v">{$pct(credit.value_decline_to_100_ltv_pct)}</div><div className="sc-c">Benchmark decline before 100% LTV</div></div>
+          <div className="sc"><div className="sc-l">Fair Value LTV</div><div className="sc-v">{$pct(credit.fair_value_ltv_pct)}</div><div className="sc-c">{credit.fair_value_equity_cushion_pct != null ? `${$pct(credit.fair_value_equity_cushion_pct)} equity cushion at fair value` : 'Fair value cushion unavailable'}</div></div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginTop:'.75rem'}}>
+          <div className="workflow-card">
+            <div className="workflow-step">Stress Inputs</div>
+            <div className="workflow-p">
+              <div style={{marginBottom:'.28rem'}}><strong>Base loan rate:</strong> {$pct(credit.loan_rate_pct)}</div>
+              <div style={{marginBottom:'.28rem'}}><strong>Term / leverage:</strong> {credit.loan_term_years} years • {$pct(credit.ltv)}</div>
+              <div style={{marginBottom:'.28rem'}}><strong>Rent stress:</strong> {$pct(credit.rent_stress_pct)}</div>
+              <div><strong>Rate shock:</strong> {credit.rate_shock_bps != null ? `${$(credit.rate_shock_bps,0)} bps` : 'N/A'}</div>
+            </div>
+          </div>
+          <div className="workflow-card">
+            <div className="workflow-step">Credit Read</div>
+            <div className="workflow-p">
+              {(credit.notes || []).map((note, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {note}</div>)}
+            </div>
+          </div>
+        </div>
+      </div>}
       {result.sensitivities && Object.keys(result.sensitivities).length > 0 && <div className="card">
         <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Sensitivity Analysis</h3>
         {Object.entries(result.sensitivities).map(([param, values]) => <div key={param} style={{marginBottom:'1rem'}}>
@@ -364,7 +433,7 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
       {result.comparison_table && result.comparison_table.length > 0 && <div className="card">
         <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Scenario Compare</h3>
         <div className="tc"><table>
-          <thead><tr><th>Scenario</th><th>Fair Value</th><th>Cap Rate</th><th>NOI</th><th>IRR</th><th>MOIC</th><th>Δ vs Base</th></tr></thead>
+          <thead><tr><th>Scenario</th><th>Fair Value</th><th>Cap Rate</th><th>NOI</th><th>IRR</th><th>MOIC</th><th>DSCR</th><th>Stress DSCR</th><th>Δ vs Base</th></tr></thead>
           <tbody>{result.comparison_table.map(row => <tr key={row.scenario}>
             <td>{row.scenario}</td>
             <td className="n">{$$(row.fair_value)}</td>
@@ -372,6 +441,8 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
             <td className="n">{$$(row.noi_per_acre)}</td>
             <td className="n">{$pct(row.irr_pct)}</td>
             <td className="n">{row.moic != null ? `${$(row.moic,2)}x` : 'N/A'}</td>
+            <td className="n">{row.dscr != null ? `${$(row.dscr,2)}x` : 'N/A'}</td>
+            <td className="n">{row.combined_stress_dscr != null ? `${$(row.combined_stress_dscr,2)}x` : 'N/A'}</td>
             <td className="n">{row.delta_fair_value_vs_base != null ? $$(row.delta_fair_value_vs_base) : 'N/A'}</td>
           </tr>)}</tbody>
         </table></div>

@@ -141,6 +141,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
 
   const m = data.metrics || {};
   const acquisition = data.acquisition || null;
+  const credit = data.credit || null;
   const baselineMetrics = baselineSummary?.metrics || {};
   const rentHist = ts.map(t => t.cash_rent).filter(v => v != null);
   const valHist = ts.map(t => t.benchmark_value).filter(v => v != null);
@@ -245,6 +246,9 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       : 'Access score is still missing, so market-readiness is only partially underwritten.',
     industrial?.missing_critical_data?.length
       ? `Industrial lane still has missing evidence: ${industrial.missing_critical_data.slice(0, 2).join(', ')}${industrial.missing_critical_data.length > 2 ? '...' : ''}`
+      : null,
+    credit?.combined_stress_dscr != null && credit.combined_stress_dscr < 1
+      ? 'Combined rent/rate stress pushes DSCR below 1.0x.'
       : null,
   ].filter(Boolean).slice(0, 3);
 
@@ -441,6 +445,48 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           <div className="workflow-step">Model Notes</div>
           <div className="workflow-p">
             {(acquisition.notes || []).map((note, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {note}</div>)}
+          </div>
+        </div>
+      </div>
+    </div>}
+
+    {credit && <div className="card" style={{marginBottom:'1rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Lender / Credit Stress</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>Default debt downside view for this county</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
+            Atlas is stress-testing the current county debt basis using the active assumption-set leverage terms, a {$(credit.rent_stress_pct,1)}% NOI shock, and a +{$(credit.rate_shock_bps,0)} bps loan-rate shock.
+          </div>
+        </div>
+        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, workflowParams)}>Open in Scenario Lab</button>
+      </div>
+      <div className="sg">
+        <div className="sc"><div className="sc-l">Base DSCR</div><div className="sc-v">{credit.base_dscr != null ? `${$(credit.base_dscr,2)}x` : 'N/A'}</div><div className="sc-c">Current NOI / annual debt service</div></div>
+        <div className="sc"><div className="sc-l">Rent Stress DSCR</div><div className="sc-v">{credit.rent_stress_dscr != null ? `${$(credit.rent_stress_dscr,2)}x` : 'N/A'}</div><div className="sc-c">{$(credit.rent_stress_pct,1)}% NOI stress</div></div>
+        <div className="sc"><div className="sc-l">Rate Stress DSCR</div><div className="sc-v">{credit.rate_stress_dscr != null ? `${$(credit.rate_stress_dscr,2)}x` : 'N/A'}</div><div className="sc-c">+{$(credit.rate_shock_bps,0)} bps loan rate</div></div>
+        <div className="sc"><div className="sc-l">Combined Stress DSCR</div><div className="sc-v">{credit.combined_stress_dscr != null ? `${$(credit.combined_stress_dscr,2)}x` : 'N/A'}</div><div className="sc-c">Rent + rate stress together</div></div>
+        <div className="sc"><div className="sc-l">Debt Yield</div><div className="sc-v">{$pct(credit.debt_yield_pct)}</div><div className="sc-c">NOI / debt basis</div></div>
+        <div className="sc"><div className="sc-l">Break-even Rent</div><div className="sc-v">{$$(credit.break_even_rent)}</div><div className="sc-c">Rent needed to clear required return</div></div>
+        <div className="sc"><div className="sc-l">Debt / Acre</div><div className="sc-v">{$$(credit.debt_per_acre)}</div><div className="sc-c">{credit.ltv != null ? `${$(credit.ltv,1)}% LTV` : 'LTV unavailable'}</div></div>
+        <div className="sc"><div className="sc-l">Annual Debt Service</div><div className="sc-v">{$$(credit.annual_debt_service_per_acre)}</div><div className="sc-c">{credit.loan_rate_pct != null ? `${$(credit.loan_rate_pct,2)}% / ${credit.loan_term_years}y` : 'Debt terms unavailable'}</div></div>
+        <div className="sc"><div className="sc-l">Value Cushion</div><div className="sc-v">{$pct(credit.value_decline_to_100_ltv_pct)}</div><div className="sc-c">Benchmark decline before 100% LTV</div></div>
+        <div className="sc"><div className="sc-l">Fair Value LTV</div><div className="sc-v">{$pct(credit.fair_value_ltv_pct)}</div><div className="sc-c">{credit.fair_value_equity_cushion_pct != null ? `${$pct(credit.fair_value_equity_cushion_pct)} equity cushion at fair value` : 'Fair value cushion unavailable'}</div></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginTop:'.75rem'}}>
+        <div className="workflow-card">
+          <div className="workflow-step">Credit Inputs</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.28rem'}}><strong>Base loan rate:</strong> {$pct(credit.loan_rate_pct)}</div>
+            <div style={{marginBottom:'.28rem'}}><strong>Term / leverage:</strong> {credit.loan_term_years} years • {$pct(credit.ltv)}</div>
+            <div style={{marginBottom:'.28rem'}}><strong>Rent stress:</strong> {$pct(credit.rent_stress_pct)}</div>
+            <div><strong>Rate shock:</strong> +{$(credit.rate_shock_bps,0)} bps</div>
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">Credit Read</div>
+          <div className="workflow-p">
+            {(credit.notes || []).map((note, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {note}</div>)}
           </div>
         </div>
       </div>

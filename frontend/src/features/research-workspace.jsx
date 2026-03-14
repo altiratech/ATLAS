@@ -145,6 +145,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     : null;
   const latestDriverDecomposition = Array.isArray(latestScenarioRun?.comparison?.driver_decomposition) ? latestScenarioRun.comparison.driver_decomposition : [];
   const latestScenarioAcquisitionInputs = readAcquisitionInputs(latestScenarioRun);
+  const latestScenarioCreditInputs = readCreditInputs(latestScenarioRun);
   const latestScenarioAcquisition = readAcquisitionSnapshot(latestScenarioRun, latestBaseScenario);
   const latestTopDriver = latestDriverDecomposition
     .map((entry) => ({ scenario: entry.scenario, driver: Array.isArray(entry.drivers) ? entry.drivers[0] : null }))
@@ -190,6 +191,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     state: currentState,
     sourcePage: 'research',
     acquisitionInputs: readAcquisitionInputs(scenarioRun) || latestScenarioAcquisitionInputs || undefined,
+    creditInputs: readCreditInputs(scenarioRun) || latestScenarioCreditInputs || undefined,
   });
 
   const saveWorkspace = async () => {
@@ -615,6 +617,11 @@ function readAcquisitionSnapshot(run, fallbackBaseScenario) {
     moic: fallbackBaseScenario.moic ?? null,
     year1_cash_yield_pct: fallbackBaseScenario.year1_cash_yield_pct ?? null,
   };
+}
+
+function readCreditInputs(run) {
+  const credit = run?.assumptions?.credit;
+  return credit && typeof credit === 'object' ? credit : null;
 }
 
 function formatAcquisitionBasis(basis, kind) {

@@ -36,6 +36,9 @@ import {
 import {
   computeAcquisitionUnderwriting,
 } from './services/acquisition';
+import {
+  computeCreditStress,
+} from './services/credit';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -1674,6 +1677,7 @@ app.get('/api/v1/geo/:geoKey/summary', async (c) => {
   const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const result = await computeCounty(db, geoKey, resolved.asOf, assumptions);
   const acquisition = computeAcquisitionUnderwriting(result.metrics, assumptions);
+  const credit = computeCreditStress(result.metrics, assumptions);
   const zscores = await computeMetricZscoresForCounty(
     db,
     geoKey,
@@ -1684,6 +1688,7 @@ app.get('/api/v1/geo/:geoKey/summary', async (c) => {
   return c.json({
     ...result,
     acquisition,
+    credit,
     zscores,
     as_of_meta: resolved.meta,
   });
@@ -2178,6 +2183,10 @@ app.post('/api/v1/run/scenario', async (c) => {
       sale_cost_pct?: number;
       acres?: number;
     };
+    credit?: {
+      rent_stress_pct?: number;
+      rate_shock_bps?: number;
+    };
   }>();
 
   const normalizedVaryParams: Array<{ param: string; values: number[]; target_metric?: string }> = [];
@@ -2233,6 +2242,7 @@ app.post('/api/v1/run/scenario', async (c) => {
 
   const base = await computeCounty(db, body.geo_key, resolved.asOf, assumptions);
   const baseAcquisition = computeAcquisitionUnderwriting(base.metrics, assumptions, body.acquisition);
+  const baseCredit = computeCreditStress(base.metrics, assumptions, body.credit);
   const sensitivities: Record<string, any> = {};
 
   if (normalizedVaryParams.length) {
@@ -2256,11 +2266,13 @@ app.post('/api/v1/run/scenario', async (c) => {
       const scenarioAssumptions = { ...assumptions, ...setOverrides };
       const scenario = await computeCounty(db, body.geo_key, resolved.asOf, scenarioAssumptions);
       const acquisition = computeAcquisitionUnderwriting(scenario.metrics, scenarioAssumptions, body.acquisition);
+      const credit = computeCreditStress(scenario.metrics, scenarioAssumptions, body.credit);
       scenarioResults.push({
         name,
         assumptions: scenarioAssumptions,
         result: scenario,
         acquisition,
+        credit,
       });
 
       const fairValue = scenario.metrics.fair_value ?? null;
@@ -2276,6 +2288,8 @@ app.post('/api/v1/run/scenario', async (c) => {
         irr_pct: acquisition.irr_pct,
         moic: acquisition.moic,
         year1_cash_yield_pct: acquisition.year1_cash_yield_pct,
+        dscr: scenario.metrics.dscr ?? null,
+        combined_stress_dscr: credit.combined_stress_dscr,
       });
 
       const deltas: Record<string, number> = {};
@@ -2319,6 +2333,7 @@ app.post('/api/v1/run/scenario', async (c) => {
     base: {
       ...base,
       acquisition: baseAcquisition,
+      credit: baseCredit,
     },
     sensitivities,
     scenarios: scenarioResults,
