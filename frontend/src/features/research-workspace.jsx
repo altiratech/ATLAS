@@ -182,7 +182,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
       : 'Latest scenario snapshot is saved, but compare deltas are not available.';
   const memoAcquisitionText = !latestScenarioAcquisition
     ? 'No saved acquisition underwrite is attached to the latest scenario snapshot yet.'
-    : `Latest underwrite: ${latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'}-year hold on ${Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres at ${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac -> ${$pct(latestScenarioAcquisition.irr_pct)} unlevered IRR, ${$pct(latestScenarioAcquisition.levered_irr_pct)} levered IRR, ${$pct(latestScenarioAcquisition.year1_cash_on_cash_yield_pct)} year 1 cash-on-cash, ${latestScenarioAcquisition.ltv_pct != null ? `${$(latestScenarioAcquisition.ltv_pct, 1)}% leverage` : 'no leverage detail'}.`;
+    : `Latest underwrite: ${latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'}-year hold on ${Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres at ${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac -> ${$pct(latestScenarioAcquisition.irr_pct)} unlevered IRR, ${$pct(latestScenarioAcquisition.levered_irr_pct)} levered IRR, ${$pct(latestScenarioAcquisition.year1_cash_on_cash_yield_pct)} year 1 cash-on-cash, ${latestScenarioAcquisition.ltv_pct != null ? `${$(latestScenarioAcquisition.ltv_pct, 1)}% leverage` : 'no leverage detail'}, ${latestScenarioAcquisition.refinance_mode === 'modeled' ? `refi year ${latestScenarioAcquisition.refinance_year} with ${$$(latestScenarioAcquisition.refinance_cash_out_total)} cash out` : 'no refinance modeled'}.`;
   const currentCountyName = countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName;
   const currentState = countyMap[county] ? countyMap[county].split(', ')[1] : params?.state;
   const buildScenarioNavParams = (scenarioRun = null) => ({
@@ -515,6 +515,21 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
             <div className="sc-c">{latestScenarioAcquisition.levered_total_profit != null ? `${$$(latestScenarioAcquisition.levered_total_profit)} levered profit` : 'Profit unavailable'} • {formatAcquisitionBasis(latestScenarioAcquisition.exit_cap_basis, 'exit')}</div>
           </div>
         </div>}
+        {latestScenarioAcquisition && <div className="sc" style={{marginTop:'.6rem'}}>
+          <div className="sc-l">Refinance / Roll-Forward</div>
+          <div className="sc-v" style={{fontSize:'.88rem'}}>
+            {latestScenarioAcquisition.refinance_mode === 'modeled'
+              ? `Year ${latestScenarioAcquisition.refinance_year} refinance`
+              : 'No refinance modeled'}
+          </div>
+          <div className="sc-c">
+            {latestScenarioAcquisition.refinance_mode === 'modeled'
+              ? `${$$(latestScenarioAcquisition.refinance_cash_out_total)} cash out • ${latestScenarioAcquisition.refinance_dscr != null ? `${$(latestScenarioAcquisition.refinance_dscr, 2)}x` : 'N/A'} refi DSCR • ${$$(latestScenarioAcquisition.exit_remaining_balance_after_refi_total)} exit balance after refi`
+              : (latestScenarioAcquisition.balance_roll_forward || []).length
+                ? latestScenarioAcquisition.balance_roll_forward.map((point) => `Y${point.year} ${$$(point.balance_per_acre)}`).join(' • ')
+                : 'Debt roll-forward unavailable for the latest saved underwrite.'}
+          </div>
+        </div>}
         <div className="rw-actions">
           {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(latestScenarioRun))}>Open Scenario Lab</button>}
         </div>
@@ -567,7 +582,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
               {assumptionSummary.overrideCount > 0 ? ` • overrides: ${assumptionSummary.overrideKeys.join(', ')}` : ' • no stored overrides'}
             </div>
             {runAcquisition && <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.18rem'}}>
-              Underwrite: {$pct(runAcquisition.levered_irr_pct ?? runAcquisition.irr_pct)} {runAcquisition.levered_irr_pct != null ? 'levered IRR' : 'IRR'} • {$pct(runAcquisition.year1_cash_on_cash_yield_pct ?? runAcquisition.year1_cash_yield_pct)} {runAcquisition.year1_cash_on_cash_yield_pct != null ? 'cash-on-cash' : 'cash yield'} • {runAcquisitionInputs?.hold_years ?? runAcquisition.hold_years ?? '--'}y hold • {runAcquisition.ltv_pct != null ? `${$(runAcquisition.ltv_pct, 1)}% leverage` : 'leverage unavailable'}
+              Underwrite: {$pct(runAcquisition.levered_irr_pct ?? runAcquisition.irr_pct)} {runAcquisition.levered_irr_pct != null ? 'levered IRR' : 'IRR'} • {$pct(runAcquisition.year1_cash_on_cash_yield_pct ?? runAcquisition.year1_cash_yield_pct)} {runAcquisition.year1_cash_on_cash_yield_pct != null ? 'cash-on-cash' : 'cash yield'} • {runAcquisitionInputs?.hold_years ?? runAcquisition.hold_years ?? '--'}y hold • {runAcquisition.ltv_pct != null ? `${$(runAcquisition.ltv_pct, 1)}% leverage` : 'leverage unavailable'} • {runAcquisition.refinance_mode === 'modeled' ? `refi Y${runAcquisition.refinance_year}` : 'no refi'}
             </div>}
           </div>
           <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(run))}>Open</button>

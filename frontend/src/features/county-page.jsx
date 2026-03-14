@@ -425,7 +425,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Acquisition Underwrite</div>
           <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>Default deal view for this county</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
-            Atlas is running unlevered and levered underwriting snapshots using the current Atlas benchmark value as the default entry price, a {acquisition.hold_years}-year hold, and the active assumption-set leverage terms unless you override them in Scenario Lab.
+            Atlas is running unlevered and levered underwriting snapshots using the current Atlas benchmark value as the default entry price, a {acquisition.hold_years}-year hold, and the active assumption-set leverage terms unless you override them in Scenario Lab. Refinance stays optional.
           </div>
         </div>
         <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, workflowParams)}>Open in Scenario Lab</button>
@@ -457,6 +457,32 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           <div className="workflow-step">Model Notes</div>
           <div className="workflow-p">
             {(acquisition.notes || []).map((note, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {note}</div>)}
+          </div>
+        </div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginTop:'.75rem'}}>
+        <div className="workflow-card">
+          <div className="workflow-step">Debt Roll-Forward</div>
+          <div className="workflow-p">
+            {(acquisition.balance_roll_forward || []).length === 0
+              ? 'Debt roll-forward is unavailable for this county view.'
+              : acquisition.balance_roll_forward.map((point) => <div key={point.year} style={{marginBottom:'.28rem'}}>• Year {point.year}: {$$(point.balance_per_acre)} / ac balance</div>)}
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">Refinance View</div>
+          <div className="workflow-p">
+            {acquisition.refinance_mode === 'modeled'
+              ? <>
+                  <div style={{marginBottom:'.28rem'}}><strong>Refi Year:</strong> {acquisition.refinance_year}</div>
+                  <div style={{marginBottom:'.28rem'}}><strong>Refi Value / ac:</strong> {$$(acquisition.refinance_value_per_acre)}</div>
+                  <div style={{marginBottom:'.28rem'}}><strong>Cash Out / ac:</strong> {$$(acquisition.refinance_cash_out_per_acre)}</div>
+                  <div style={{marginBottom:'.28rem'}}><strong>Refi DSCR:</strong> {acquisition.refinance_dscr != null ? `${$(acquisition.refinance_dscr,2)}x` : 'N/A'}</div>
+                  <div><strong>Exit Balance After Refi:</strong> {$$(acquisition.exit_remaining_balance_after_refi_per_acre)}</div>
+                </>
+              : acquisition.refinance_mode === 'invalid'
+                ? 'Refinance inputs are invalid for the selected hold. Adjust them in Scenario Lab to restore refinance outputs.'
+                : 'No refinance is modeled by default. Open Scenario Lab to add a refinance assumption while the debt roll-forward above still shows balance paydown through exit.'}
           </div>
         </div>
       </div>

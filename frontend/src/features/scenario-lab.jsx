@@ -33,6 +33,11 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
   const [leverageLtvPct, setLeverageLtvPct] = React.useState('');
   const [leverageLoanRatePct, setLeverageLoanRatePct] = React.useState('');
   const [leverageLoanTermYears, setLeverageLoanTermYears] = React.useState('');
+  const [refinanceYear, setRefinanceYear] = React.useState('');
+  const [refinanceCapRate, setRefinanceCapRate] = React.useState('');
+  const [refinanceLtvPct, setRefinanceLtvPct] = React.useState('');
+  const [refinanceLoanRatePct, setRefinanceLoanRatePct] = React.useState('');
+  const [refinanceLoanTermYears, setRefinanceLoanTermYears] = React.useState('');
   const [creditRentStressPct, setCreditRentStressPct] = React.useState('-10');
   const [creditRateShockBps, setCreditRateShockBps] = React.useState('100');
   const [result, setResult] = React.useState(null);
@@ -75,6 +80,11 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
     setLeverageLtvPct(acquisitionInputs.leverage_ltv_pct != null ? String(acquisitionInputs.leverage_ltv_pct) : '');
     setLeverageLoanRatePct(acquisitionInputs.leverage_loan_rate_pct != null ? String(acquisitionInputs.leverage_loan_rate_pct) : '');
     setLeverageLoanTermYears(acquisitionInputs.leverage_loan_term_years != null ? String(acquisitionInputs.leverage_loan_term_years) : '');
+    setRefinanceYear(acquisitionInputs.refinance_year != null ? String(acquisitionInputs.refinance_year) : '');
+    setRefinanceCapRate(acquisitionInputs.refinance_cap_rate != null ? String(acquisitionInputs.refinance_cap_rate) : '');
+    setRefinanceLtvPct(acquisitionInputs.refinance_ltv_pct != null ? String(acquisitionInputs.refinance_ltv_pct) : '');
+    setRefinanceLoanRatePct(acquisitionInputs.refinance_loan_rate_pct != null ? String(acquisitionInputs.refinance_loan_rate_pct) : '');
+    setRefinanceLoanTermYears(acquisitionInputs.refinance_loan_term_years != null ? String(acquisitionInputs.refinance_loan_term_years) : '');
   }, [params?.acquisitionInputs]);
   React.useEffect(() => {
     const creditInputs = params?.creditInputs;
@@ -133,6 +143,11 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
             leverage_ltv_pct: leverageLtvPct === '' ? null : Number(leverageLtvPct),
             leverage_loan_rate_pct: leverageLoanRatePct === '' ? null : Number(leverageLoanRatePct),
             leverage_loan_term_years: leverageLoanTermYears === '' ? null : Number(leverageLoanTermYears),
+            refinance_year: refinanceYear === '' ? null : Number(refinanceYear),
+            refinance_cap_rate: refinanceCapRate === '' ? null : Number(refinanceCapRate),
+            refinance_ltv_pct: refinanceLtvPct === '' ? null : Number(refinanceLtvPct),
+            refinance_loan_rate_pct: refinanceLoanRatePct === '' ? null : Number(refinanceLoanRatePct),
+            refinance_loan_term_years: refinanceLoanTermYears === '' ? null : Number(refinanceLoanTermYears),
           },
           credit: {
             rent_stress_pct: creditRentStressPct === '' ? null : Number(creditRentStressPct),
@@ -166,6 +181,11 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
                 leverage_ltv_pct: leverageLtvPct === '' ? null : Number(leverageLtvPct),
                 leverage_loan_rate_pct: leverageLoanRatePct === '' ? null : Number(leverageLoanRatePct),
                 leverage_loan_term_years: leverageLoanTermYears === '' ? null : Number(leverageLoanTermYears),
+                refinance_year: refinanceYear === '' ? null : Number(refinanceYear),
+                refinance_cap_rate: refinanceCapRate === '' ? null : Number(refinanceCapRate),
+                refinance_ltv_pct: refinanceLtvPct === '' ? null : Number(refinanceLtvPct),
+                refinance_loan_rate_pct: refinanceLoanRatePct === '' ? null : Number(refinanceLoanRatePct),
+                refinance_loan_term_years: refinanceLoanTermYears === '' ? null : Number(refinanceLoanTermYears),
               },
               credit: {
                 rent_stress_pct: creditRentStressPct === '' ? null : Number(creditRentStressPct),
@@ -332,6 +352,31 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
             <input type="number" min="1" max="40" step="1" value={leverageLoanTermYears} onChange={e=>setLeverageLoanTermYears(e.target.value)} placeholder="Assumption-set default"/>
           </div>
         </div>
+        <div style={{marginTop:'.65rem',fontSize:'.74rem',color:'var(--text2)',marginBottom:'.45rem'}}>
+          Refinance is optional. If you leave the fields below blank, Atlas will keep the original debt through exit and still show the debt roll-forward schedule.
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'.75rem'}}>
+          <div className="fg" style={{margin:0}}>
+            <label>Refi Year</label>
+            <input type="number" min="1" max="15" step="1" value={refinanceYear} onChange={e=>setRefinanceYear(e.target.value)} placeholder="Optional"/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Refi Cap %</label>
+            <input type="number" min="0.1" max="25" step="0.1" value={refinanceCapRate} onChange={e=>setRefinanceCapRate(e.target.value)} placeholder="Exit cap default"/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Refi LTV %</label>
+            <input type="number" min="0" max="95" step="0.5" value={refinanceLtvPct} onChange={e=>setRefinanceLtvPct(e.target.value)} placeholder="Deal LTV default"/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Refi Loan Rate %</label>
+            <input type="number" min="0" max="20" step="0.1" value={refinanceLoanRatePct} onChange={e=>setRefinanceLoanRatePct(e.target.value)} placeholder="Deal loan-rate default"/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Refi Loan Term</label>
+            <input type="number" min="1" max="40" step="1" value={refinanceLoanTermYears} onChange={e=>setRefinanceLoanTermYears(e.target.value)} placeholder="Deal loan-term default"/>
+          </div>
+        </div>
       </div>
       <div style={{marginTop:'.7rem',borderTop:'1px solid var(--line)',paddingTop:'.6rem'}}>
         <h4 style={{fontSize:'.78rem',marginBottom:'.45rem',letterSpacing:'.12em',textTransform:'uppercase'}}>Lender / Credit Stress</h4>
@@ -383,7 +428,7 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
       {acquisition && <div className="card">
         <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Acquisition Underwrite</h3>
         <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.65rem'}}>
-          Atlas is showing unlevered and levered deal views using the active scenario NOI path. Entry defaults to the Atlas benchmark, exit cap defaults to the current implied cap, and leverage defaults to the active assumption set unless you override them above.
+          Atlas is showing unlevered and levered deal views using the active scenario NOI path. Entry defaults to the Atlas benchmark, exit cap defaults to the current implied cap, leverage defaults to the active assumption set unless you override it, and refinance stays optional.
         </div>
         <div className="sg">
           <div className="sc"><div className="sc-l">Entry $/ac</div><div className="sc-v">{$$(acquisition.entry_price_per_acre)}</div><div className="sc-c">{formatAcquisitionBasis(acquisition.entry_price_basis, 'entry')}</div></div>
@@ -413,6 +458,32 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
             <div className="workflow-step">Deal Read</div>
             <div className="workflow-p">
               {(acquisition.notes || []).map((note, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {note}</div>)}
+            </div>
+          </div>
+        </div>
+        <div style={{marginTop:'.75rem',display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
+          <div className="workflow-card">
+            <div className="workflow-step">Debt Roll-Forward</div>
+            <div className="workflow-p">
+              {(acquisition.balance_roll_forward || []).length === 0
+                ? 'Debt roll-forward is unavailable for this deal view.'
+                : acquisition.balance_roll_forward.map((point) => <div key={point.year} style={{marginBottom:'.28rem'}}>• Year {point.year}: {$$(point.balance_per_acre)} / ac balance</div>)}
+            </div>
+          </div>
+          <div className="workflow-card">
+            <div className="workflow-step">Refinance View</div>
+            <div className="workflow-p">
+              {acquisition.refinance_mode === 'modeled'
+                ? <>
+                    <div style={{marginBottom:'.28rem'}}><strong>Refi Year:</strong> {acquisition.refinance_year}</div>
+                    <div style={{marginBottom:'.28rem'}}><strong>Refi Value / ac:</strong> {$$(acquisition.refinance_value_per_acre)}</div>
+                    <div style={{marginBottom:'.28rem'}}><strong>Cash Out / ac:</strong> {$$(acquisition.refinance_cash_out_per_acre)}</div>
+                    <div style={{marginBottom:'.28rem'}}><strong>Refi DSCR:</strong> {acquisition.refinance_dscr != null ? `${$(acquisition.refinance_dscr,2)}x` : 'N/A'}</div>
+                    <div><strong>Exit Balance After Refi:</strong> {$$(acquisition.exit_remaining_balance_after_refi_per_acre)}</div>
+                  </>
+                : acquisition.refinance_mode === 'invalid'
+                  ? 'Refinance inputs are invalid for the selected hold. Clear or adjust them to restore refinance outputs.'
+                  : 'No refinance modeled. Atlas is holding the original debt through exit while still showing debt paydown above.'}
             </div>
           </div>
         </div>

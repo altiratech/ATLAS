@@ -9,6 +9,16 @@ export type AcquisitionUnderwritingInputs = {
   leverage_ltv_pct?: number | null;
   leverage_loan_rate_pct?: number | null;
   leverage_loan_term_years?: number | null;
+  refinance_year?: number | null;
+  refinance_cap_rate?: number | null;
+  refinance_ltv_pct?: number | null;
+  refinance_loan_rate_pct?: number | null;
+  refinance_loan_term_years?: number | null;
+};
+
+export type BalanceRollForwardPoint = {
+  year: number;
+  balance_per_acre: number | null;
 };
 
 export type AcquisitionUnderwritingResult = {
@@ -58,6 +68,25 @@ export type AcquisitionUnderwritingResult = {
   remaining_loan_balance_total: number | null;
   net_exit_equity_total: number | null;
   levered_total_profit: number | null;
+  balance_roll_forward: BalanceRollForwardPoint[];
+  refinance_mode: 'not_modeled' | 'modeled' | 'invalid';
+  refinance_year: number | null;
+  refinance_cap_rate: number | null;
+  refinance_cap_basis: 'exit_cap_rate' | 'custom' | 'missing';
+  refinance_ltv_pct: number | null;
+  refinance_loan_rate_pct: number | null;
+  refinance_loan_term_years: number | null;
+  refinance_noi_per_acre: number | null;
+  refinance_value_per_acre: number | null;
+  refinance_proceeds_per_acre: number | null;
+  refinance_cash_out_per_acre: number | null;
+  refinance_annual_debt_service_per_acre: number | null;
+  refinance_dscr: number | null;
+  exit_remaining_balance_after_refi_per_acre: number | null;
+  net_exit_equity_after_refi_per_acre: number | null;
+  refinance_cash_out_total: number | null;
+  exit_remaining_balance_after_refi_total: number | null;
+  net_exit_equity_after_refi_total: number | null;
   notes: string[];
 };
 
@@ -108,6 +137,22 @@ function remainingLoanBalance(principal: number, rateDec: number, termYears: num
     principal * Math.pow(1 + mr, periodsElapsed) -
     monthlyPayment * ((Math.pow(1 + mr, periodsElapsed) - 1) / mr);
   return Math.max(0, remaining);
+}
+
+function buildBalanceRollForward(
+  principal: number | null,
+  rateDec: number,
+  termYears: number,
+  holdYears: number,
+): BalanceRollForwardPoint[] {
+  const years = Array.from(new Set([1, 3, 5, holdYears].filter((year) => year > 0 && year <= holdYears))).sort((a, b) => a - b);
+  return years.map((year) => ({
+    year,
+    balance_per_acre:
+      principal == null
+        ? null
+        : remainingLoanBalance(principal, rateDec, termYears, year),
+  }));
 }
 
 function computeIrr(cashFlows: number[]): number | null {
@@ -185,6 +230,8 @@ export function computeAcquisitionUnderwriting(
       : ltvPct >= 100 || loanRatePct < 0 || loanTermYears <= 0
         ? 'invalid'
         : 'levered';
+  const refinanceYearRaw = Number.isFinite(inputs.refinance_year) ? Number(inputs.refinance_year) : null;
+  const refinanceYear = refinanceYearRaw != null ? Math.round(refinanceYearRaw) : null;
 
   const entryPricePerAcre = Number.isFinite(inputs.entry_price_per_acre)
     ? Number(inputs.entry_price_per_acre)
@@ -206,6 +253,37 @@ export function computeAcquisitionUnderwriting(
       : requiredReturn != null
         ? 'required_return'
         : 'missing';
+  const refinanceCapRate = Number.isFinite(inputs.refinance_cap_rate)
+    ? Number(inputs.refinance_cap_rate)
+    : exitCapRate;
+  const refinanceCapBasis: AcquisitionUnderwritingResult['refinance_cap_basis'] = Number.isFinite(inputs.refinance_cap_rate)
+    ? 'custom'
+    : exitCapRate != null
+      ? 'exit_cap_rate'
+      : 'missing';
+  const refinanceLtvPct = Number.isFinite(inputs.refinance_ltv_pct)
+    ? Number(inputs.refinance_ltv_pct)
+    : ltvPct;
+  const refinanceLoanRatePct = Number.isFinite(inputs.refinance_loan_rate_pct)
+    ? Number(inputs.refinance_loan_rate_pct)
+    : loanRatePct;
+  const refinanceLoanTermYears = Math.max(1, Math.round(
+    Number.isFinite(inputs.refinance_loan_term_years)
+      ? Number(inputs.refinance_loan_term_years)
+      : loanTermYears,
+  ));
+  const refinanceMode: AcquisitionUnderwritingResult['refinance_mode'] =
+    refinanceYear == null || refinanceYear <= 0
+      ? 'not_modeled'
+      : refinanceYear >= holdYears
+        || refinanceCapRate == null
+        || refinanceCapRate <= 0
+        || refinanceLtvPct < 0
+        || refinanceLtvPct >= 100
+        || refinanceLoanRatePct < 0
+        || refinanceLoanTermYears <= 0
+          ? 'invalid'
+          : 'modeled';
 
   const notes: string[] = [];
   if (entryPriceBasis === 'benchmark_value') {
@@ -226,6 +304,13 @@ export function computeAcquisitionUnderwriting(
     notes.push('No leverage is applied; levered outputs collapse to the cash deal view.');
   } else if (leverageMode === 'invalid') {
     notes.push('Leverage inputs are invalid for a deal model. Levered outputs are suppressed until LTV is below 100% and debt terms are valid.');
+  }
+  if (refinanceMode === 'modeled') {
+    notes.push(`Refinance is modeled in year ${refinanceYear} using ${round2(refinanceLtvPct)}% LTV and ${round2(refinanceLoanRatePct)}% debt terms.`);
+  } else if (refinanceMode === 'invalid') {
+    notes.push('Refinance inputs are present but invalid for the selected hold. Refinance outputs are suppressed until refinance year and debt terms are valid.');
+  } else {
+    notes.push('No refinance is modeled; debt roll-forward still shows balance paydown through exit.');
   }
 
   if (!entryPricePerAcre || entryPricePerAcre <= 0 || !noiPerAcre || noiPerAcre <= 0 || !exitCapRate || exitCapRate <= 0) {
@@ -276,6 +361,25 @@ export function computeAcquisitionUnderwriting(
       remaining_loan_balance_total: null,
       net_exit_equity_total: null,
       levered_total_profit: null,
+      balance_roll_forward: [],
+      refinance_mode: refinanceMode,
+      refinance_year: refinanceYear,
+      refinance_cap_rate: refinanceCapRate != null ? round4(refinanceCapRate) : null,
+      refinance_cap_basis: refinanceCapBasis,
+      refinance_ltv_pct: round4(refinanceLtvPct),
+      refinance_loan_rate_pct: round4(refinanceLoanRatePct),
+      refinance_loan_term_years: refinanceLoanTermYears,
+      refinance_noi_per_acre: null,
+      refinance_value_per_acre: null,
+      refinance_proceeds_per_acre: null,
+      refinance_cash_out_per_acre: null,
+      refinance_annual_debt_service_per_acre: null,
+      refinance_dscr: null,
+      exit_remaining_balance_after_refi_per_acre: null,
+      net_exit_equity_after_refi_per_acre: null,
+      refinance_cash_out_total: null,
+      exit_remaining_balance_after_refi_total: null,
+      net_exit_equity_after_refi_total: null,
       notes,
     };
   }
@@ -296,12 +400,15 @@ export function computeAcquisitionUnderwriting(
   const moic = entryPricePerAcre > 0 ? totalDistributionsPerAcre / entryPricePerAcre : null;
   const debtAmountPerAcre = leverageMode === 'invalid' ? null : entryPricePerAcre * Math.max(0, ltvPct / 100);
   const equityCheckPerAcre = debtAmountPerAcre != null ? entryPricePerAcre - debtAmountPerAcre : null;
+  const initialLoanRateDec = Math.max(0, loanRatePct) / 100;
   const annualDebtServicePerAcre = debtAmountPerAcre != null
-    ? amortizedAnnualDebtService(debtAmountPerAcre, Math.max(0, loanRatePct) / 100, loanTermYears)
+    ? amortizedAnnualDebtService(debtAmountPerAcre, initialLoanRateDec, loanTermYears)
     : null;
   const remainingLoanBalancePerAcre = debtAmountPerAcre != null
-    ? remainingLoanBalance(debtAmountPerAcre, Math.max(0, loanRatePct) / 100, loanTermYears, holdYears)
+    ? remainingLoanBalance(debtAmountPerAcre, initialLoanRateDec, loanTermYears, holdYears)
     : null;
+  const balanceRollForward = buildBalanceRollForward(debtAmountPerAcre, initialLoanRateDec, loanTermYears, holdYears)
+    .map((point) => ({ ...point, balance_per_acre: point.balance_per_acre != null ? round2(point.balance_per_acre) : null }));
   const year1CashAfterDebtPerAcre = annualDebtServicePerAcre != null ? year1Noi - annualDebtServicePerAcre : null;
   const yearlyCashAfterDebt = yearlyNoi.map((value) => annualDebtServicePerAcre != null ? value - annualDebtServicePerAcre : null);
   const cumulativeCashAfterDebtPerAcre = yearlyCashAfterDebt.every((value) => value != null)
@@ -311,24 +418,72 @@ export function computeAcquisitionUnderwriting(
     netExitValuePerAcre != null && remainingLoanBalancePerAcre != null
       ? netExitValuePerAcre - remainingLoanBalancePerAcre
       : null;
+  const refinanceNoiPerAcre =
+    refinanceMode === 'modeled' && refinanceYear != null
+      ? yearlyNoi[refinanceYear - 1] ?? null
+      : null;
+  const refinanceValuePerAcre =
+    refinanceNoiPerAcre != null && refinanceCapRate != null && refinanceCapRate > 0
+      ? refinanceNoiPerAcre / (refinanceCapRate / 100)
+      : null;
+  const refinanceProceedsPerAcre =
+    refinanceMode === 'modeled' && refinanceValuePerAcre != null
+      ? refinanceValuePerAcre * (refinanceLtvPct / 100)
+      : null;
+  const refinanceLoanRateDec = Math.max(0, refinanceLoanRatePct) / 100;
+  const refinanceCashOutPerAcre =
+    refinanceProceedsPerAcre != null && refinanceYear != null && debtAmountPerAcre != null
+      ? refinanceProceedsPerAcre - (remainingLoanBalance(debtAmountPerAcre, initialLoanRateDec, loanTermYears, refinanceYear) ?? 0)
+      : null;
+  const remainingLoanBalanceAtRefiPerAcre =
+    refinanceMode === 'modeled' && refinanceYear != null && debtAmountPerAcre != null
+      ? remainingLoanBalance(debtAmountPerAcre, initialLoanRateDec, loanTermYears, refinanceYear)
+      : null;
+  const refinanceAnnualDebtServicePerAcre =
+    refinanceProceedsPerAcre != null
+      ? amortizedAnnualDebtService(refinanceProceedsPerAcre, refinanceLoanRateDec, refinanceLoanTermYears)
+      : null;
+  const refinanceDscr =
+    refinanceNoiPerAcre != null && refinanceAnnualDebtServicePerAcre != null && refinanceAnnualDebtServicePerAcre > 0
+      ? refinanceNoiPerAcre / refinanceAnnualDebtServicePerAcre
+      : null;
+  const exitRemainingBalanceAfterRefiPerAcre =
+    refinanceMode === 'modeled' && refinanceProceedsPerAcre != null && refinanceYear != null
+      ? remainingLoanBalance(refinanceProceedsPerAcre, refinanceLoanRateDec, refinanceLoanTermYears, holdYears - refinanceYear)
+      : null;
+  const netExitEquityAfterRefiPerAcre =
+    netExitValuePerAcre != null && exitRemainingBalanceAfterRefiPerAcre != null
+      ? netExitValuePerAcre - exitRemainingBalanceAfterRefiPerAcre
+      : null;
   const leveredCashFlows =
     equityCheckPerAcre != null
     && equityCheckPerAcre > 0
     && annualDebtServicePerAcre != null
-    && remainingLoanBalancePerAcre != null
+    && (
+      (refinanceMode === 'modeled' && refinanceYear != null && refinanceCashOutPerAcre != null && refinanceAnnualDebtServicePerAcre != null && exitRemainingBalanceAfterRefiPerAcre != null)
+      || (refinanceMode !== 'modeled' && remainingLoanBalancePerAcre != null)
+    )
       ? [
           -equityCheckPerAcre,
-          ...yearlyNoi.slice(0, -1).map((value) => value - annualDebtServicePerAcre),
-          exitNoi - annualDebtServicePerAcre + (netExitValuePerAcre - remainingLoanBalancePerAcre),
+          ...yearlyNoi.slice(0, -1).map((value, index) => {
+            const year = index + 1;
+            if (refinanceMode === 'modeled' && refinanceYear != null && year >= refinanceYear && refinanceAnnualDebtServicePerAcre != null) {
+              if (year === refinanceYear) return value - annualDebtServicePerAcre + (refinanceCashOutPerAcre ?? 0);
+              return value - refinanceAnnualDebtServicePerAcre;
+            }
+            return value - annualDebtServicePerAcre;
+          }),
+          refinanceMode === 'modeled' && refinanceYear != null && refinanceAnnualDebtServicePerAcre != null && netExitEquityAfterRefiPerAcre != null
+            ? exitNoi - refinanceAnnualDebtServicePerAcre + netExitEquityAfterRefiPerAcre
+            : exitNoi - annualDebtServicePerAcre + (netExitValuePerAcre - remainingLoanBalancePerAcre!),
         ]
       : null;
   const leveredIrrPct = leveredCashFlows ? computeIrr(leveredCashFlows) : null;
   const leveredMoic =
     equityCheckPerAcre != null
     && equityCheckPerAcre > 0
-    && cumulativeCashAfterDebtPerAcre != null
-    && netExitEquityPerAcre != null
-      ? (cumulativeCashAfterDebtPerAcre + netExitEquityPerAcre) / equityCheckPerAcre
+    && leveredCashFlows
+      ? leveredCashFlows.slice(1).reduce((sum, value) => sum + value, 0) / equityCheckPerAcre
       : null;
 
   return {
@@ -383,10 +538,28 @@ export function computeAcquisitionUnderwriting(
     levered_total_profit:
       equityCheckPerAcre != null
       && equityCheckPerAcre > 0
-      && cumulativeCashAfterDebtPerAcre != null
-      && netExitEquityPerAcre != null
-        ? round2(((cumulativeCashAfterDebtPerAcre + netExitEquityPerAcre) - equityCheckPerAcre) * acres)
+      && leveredCashFlows
+        ? round2(leveredCashFlows.slice(1).reduce((sum, value) => sum + value, 0) * acres - equityCheckPerAcre * acres)
         : null,
+    balance_roll_forward: balanceRollForward,
+    refinance_mode: refinanceMode,
+    refinance_year: refinanceYear,
+    refinance_cap_rate: refinanceCapRate != null ? round4(refinanceCapRate) : null,
+    refinance_cap_basis: refinanceCapBasis,
+    refinance_ltv_pct: round4(refinanceLtvPct),
+    refinance_loan_rate_pct: round4(refinanceLoanRatePct),
+    refinance_loan_term_years: refinanceLoanTermYears,
+    refinance_noi_per_acre: refinanceNoiPerAcre != null ? round2(refinanceNoiPerAcre) : null,
+    refinance_value_per_acre: refinanceValuePerAcre != null ? round2(refinanceValuePerAcre) : null,
+    refinance_proceeds_per_acre: refinanceProceedsPerAcre != null ? round2(refinanceProceedsPerAcre) : null,
+    refinance_cash_out_per_acre: refinanceCashOutPerAcre != null ? round2(refinanceCashOutPerAcre) : null,
+    refinance_annual_debt_service_per_acre: refinanceAnnualDebtServicePerAcre != null ? round2(refinanceAnnualDebtServicePerAcre) : null,
+    refinance_dscr: refinanceDscr != null ? round4(refinanceDscr) : null,
+    exit_remaining_balance_after_refi_per_acre: exitRemainingBalanceAfterRefiPerAcre != null ? round2(exitRemainingBalanceAfterRefiPerAcre) : null,
+    net_exit_equity_after_refi_per_acre: netExitEquityAfterRefiPerAcre != null ? round2(netExitEquityAfterRefiPerAcre) : null,
+    refinance_cash_out_total: refinanceCashOutPerAcre != null ? round2(refinanceCashOutPerAcre * acres) : null,
+    exit_remaining_balance_after_refi_total: exitRemainingBalanceAfterRefiPerAcre != null ? round2(exitRemainingBalanceAfterRefiPerAcre * acres) : null,
+    net_exit_equity_after_refi_total: netExitEquityAfterRefiPerAcre != null ? round2(netExitEquityAfterRefiPerAcre * acres) : null,
     notes,
   };
 }

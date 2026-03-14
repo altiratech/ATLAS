@@ -2190,6 +2190,11 @@ app.post('/api/v1/run/scenario', async (c) => {
       leverage_ltv_pct?: number;
       leverage_loan_rate_pct?: number;
       leverage_loan_term_years?: number;
+      refinance_year?: number;
+      refinance_cap_rate?: number;
+      refinance_ltv_pct?: number;
+      refinance_loan_rate_pct?: number;
+      refinance_loan_term_years?: number;
     };
     credit?: {
       rent_stress_pct?: number;
