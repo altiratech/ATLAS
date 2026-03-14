@@ -1,5 +1,5 @@
 import { PG } from '../config.js';
-import { parseTags, toast } from '../formatting.js';
+import { $, $$, $pct, parseTags, toast } from '../formatting.js';
 import {
   api,
   defaultResearchRecord,
@@ -144,6 +144,8 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     ? [...latestComparisonTable].sort((a, b) => (a.delta_fair_value_vs_base ?? Number.POSITIVE_INFINITY) - (b.delta_fair_value_vs_base ?? Number.POSITIVE_INFINITY))[0]
     : null;
   const latestDriverDecomposition = Array.isArray(latestScenarioRun?.comparison?.driver_decomposition) ? latestScenarioRun.comparison.driver_decomposition : [];
+  const latestScenarioAcquisitionInputs = readAcquisitionInputs(latestScenarioRun);
+  const latestScenarioAcquisition = readAcquisitionSnapshot(latestScenarioRun, latestBaseScenario);
   const latestTopDriver = latestDriverDecomposition
     .map((entry) => ({ scenario: entry.scenario, driver: Array.isArray(entry.drivers) ? entry.drivers[0] : null }))
     .find((entry) => entry.driver?.driver && entry.driver?.delta != null) || null;
@@ -177,6 +179,18 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     : latestBestScenario?.delta_fair_value_vs_base != null || latestWorstScenario?.delta_fair_value_vs_base != null
       ? `Latest scenario snapshot: base fair value ${latestBaseScenario?.fair_value != null ? `$${Math.round(latestBaseScenario.fair_value).toLocaleString('en-US')}` : 'N/A'}, upside ${latestBestScenario?.delta_fair_value_vs_base != null ? `${latestBestScenario.scenario} ${latestBestScenario.delta_fair_value_vs_base > 0 ? '+' : ''}$${Math.round(Math.abs(latestBestScenario.delta_fair_value_vs_base)).toLocaleString('en-US')}` : 'N/A'}, downside ${latestWorstScenario?.delta_fair_value_vs_base != null ? `${latestWorstScenario.scenario} ${latestWorstScenario.delta_fair_value_vs_base > 0 ? '+' : ''}$${Math.round(Math.abs(latestWorstScenario.delta_fair_value_vs_base)).toLocaleString('en-US')}` : 'N/A'}.`
       : 'Latest scenario snapshot is saved, but compare deltas are not available.';
+  const memoAcquisitionText = !latestScenarioAcquisition
+    ? 'No saved acquisition underwrite is attached to the latest scenario snapshot yet.'
+    : `Latest underwrite: ${latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'}-year unlevered hold on ${Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres at ${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac -> ${$pct(latestScenarioAcquisition.irr_pct)} IRR, ${latestScenarioAcquisition.moic != null ? `${$(latestScenarioAcquisition.moic, 2)}x MOIC` : 'MOIC N/A'}, ${$pct(latestScenarioAcquisition.year1_cash_yield_pct)} year 1 cash yield.`;
+  const currentCountyName = countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName;
+  const currentState = countyMap[county] ? countyMap[county].split(', ')[1] : params?.state;
+  const buildScenarioNavParams = (scenarioRun = null) => ({
+    fips: county,
+    countyName: currentCountyName,
+    state: currentState,
+    sourcePage: 'research',
+    acquisitionInputs: readAcquisitionInputs(scenarioRun) || latestScenarioAcquisitionInputs || undefined,
+  });
 
   const saveWorkspace = async () => {
     if (!county) { addToast(toast('Select a county first', 'err')); return; }
@@ -276,7 +290,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         </div>
         <div className="rw-actions" style={{margin:0}}>
           <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
-          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: params?.countyName, state: params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>
         </div>
       </div>
     </div>}
@@ -302,6 +316,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
           <div className="workflow-p">
             <div style={{marginBottom:'.32rem'}}><strong>Thesis:</strong> {thesisPreview}</div>
             <div><strong>Scenario read:</strong> {memoScenarioText}</div>
+            <div style={{marginTop:'.35rem'}}><strong>Underwrite:</strong> {memoAcquisitionText}</div>
           </div>
         </div>
         <div className="workflow-card">
@@ -411,7 +426,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div className="fg"><label>Missing Data Notes (comma separated)</label><input type="text" value={missingDataNotesInput} onChange={e => setMissingDataNotesInput(e.target.value)} placeholder="parcel zoning unknown, substation capacity unknown"/></div>
         <div className="rw-actions">
           <button className="btn btn-p" onClick={saveWorkspace}>Save Workspace</button>
-          {county && <button className="btn" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>}
+          {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>}
         </div>
       </div>
 
@@ -479,8 +494,27 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
           <div className="sc-v" style={{fontSize:'.88rem'}}>{latestTopDriver ? `${latestTopDriver.scenario}: ${latestTopDriver.driver.driver}` : 'N/A'}</div>
           <div className="sc-c">{latestTopDriver ? `Top one-at-a-time driver delta: ${$(latestTopDriver.driver.delta, 2)}` : 'Driver decomposition is not available for the latest snapshot.'}</div>
         </div>
+        {latestScenarioAcquisition && <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.55rem',marginTop:'.6rem'}}>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Acquisition Read</div>
+            <div className="sc-v">{latestScenarioAcquisition.irr_pct != null ? `${$pct(latestScenarioAcquisition.irr_pct)} IRR` : 'N/A'}</div>
+            <div className="sc-c">{latestScenarioAcquisition.moic != null ? `${$(latestScenarioAcquisition.moic, 2)}x MOIC` : 'MOIC unavailable'} • {$pct(latestScenarioAcquisition.year1_cash_yield_pct)} year 1 cash yield</div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Deal Basis</div>
+            <div className="sc-v">{latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'} years</div>
+            <div className="sc-c">
+              {Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres • {latestScenarioAcquisition.entry_price_per_acre != null || latestScenarioAcquisitionInputs?.entry_price_per_acre != null ? `${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac` : 'Entry price unavailable'}
+            </div>
+          </div>
+          <div className="sc" style={{margin:0}}>
+            <div className="sc-l">Exit / Profit</div>
+            <div className="sc-v">{$$(latestScenarioAcquisition.net_exit_value_total)}</div>
+            <div className="sc-c">{latestScenarioAcquisition.total_profit != null ? `${$$(latestScenarioAcquisition.total_profit)} total profit` : 'Profit unavailable'} • {formatAcquisitionBasis(latestScenarioAcquisition.exit_cap_basis, 'exit')}</div>
+          </div>
+        </div>}
         <div className="rw-actions">
-          {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, {fips: county, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open Scenario Lab</button>}
+          {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(latestScenarioRun))}>Open Scenario Lab</button>}
         </div>
       </div>}
     </div>
@@ -518,6 +552,10 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
       {scenarioRuns.length === 0 ? <div className="empty"><p>No scenario compare snapshots yet.</p></div>
       : scenarioRuns.map(run => {
         const assumptionSummary = summarizeScenarioAssumptions(run.assumptions);
+        const runAcquisitionInputs = readAcquisitionInputs(run);
+        const runComparisonTable = Array.isArray(run.comparison?.comparison_table) ? run.comparison.comparison_table : [];
+        const runBaseScenario = runComparisonTable.find((row) => /base/i.test(row.scenario || '')) || runComparisonTable[0] || null;
+        const runAcquisition = readAcquisitionSnapshot(run, runBaseScenario);
         return <div key={run.id} className="pack-row">
           <div>
             <div style={{fontSize:'.8rem',fontWeight:600,marginBottom:'.18rem'}}>{run.scenario_name || 'Scenario Snapshot'}</div>
@@ -526,8 +564,11 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
               Base set: {assumptionSummary.baseLabel}
               {assumptionSummary.overrideCount > 0 ? ` • overrides: ${assumptionSummary.overrideKeys.join(', ')}` : ' • no stored overrides'}
             </div>
+            {runAcquisition && <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.18rem'}}>
+              Underwrite: {$pct(runAcquisition.irr_pct)} IRR • {runAcquisition.moic != null ? `${$(runAcquisition.moic, 2)}x MOIC` : 'MOIC unavailable'} • {runAcquisitionInputs?.hold_years ?? runAcquisition.hold_years ?? '--'}y hold • {runAcquisition.entry_price_per_acre != null || runAcquisitionInputs?.entry_price_per_acre != null ? `${$$(runAcquisition.entry_price_per_acre ?? runAcquisitionInputs?.entry_price_per_acre)} / ac` : 'entry unavailable'}
+            </div>}
           </div>
-          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(run))}>Open</button>
         </div>;
       })}
     </div>
@@ -551,4 +592,39 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         />}
     </div>
   </div>;
+}
+
+function readAcquisitionInputs(run) {
+  const acquisition = run?.assumptions?.acquisition;
+  return acquisition && typeof acquisition === 'object' ? acquisition : null;
+}
+
+function readAcquisitionSnapshot(run, fallbackBaseScenario) {
+  const saved = run?.comparison?.acquisition_snapshot;
+  if (saved && typeof saved === 'object') return saved;
+  if (!fallbackBaseScenario) return null;
+  if (
+    fallbackBaseScenario.irr_pct == null
+    && fallbackBaseScenario.moic == null
+    && fallbackBaseScenario.year1_cash_yield_pct == null
+  ) {
+    return null;
+  }
+  return {
+    irr_pct: fallbackBaseScenario.irr_pct ?? null,
+    moic: fallbackBaseScenario.moic ?? null,
+    year1_cash_yield_pct: fallbackBaseScenario.year1_cash_yield_pct ?? null,
+  };
+}
+
+function formatAcquisitionBasis(basis, kind) {
+  if (kind === 'entry') {
+    if (basis === 'custom') return 'Custom entry price';
+    if (basis === 'benchmark_value') return 'Using current benchmark';
+    return 'Entry price unavailable';
+  }
+  if (basis === 'custom') return 'Custom exit cap';
+  if (basis === 'implied_cap_rate') return 'Using current cap rate';
+  if (basis === 'required_return') return 'Using required return';
+  return 'Exit cap unavailable';
 }

@@ -60,6 +60,15 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
   React.useEffect(() => { navPackRef.current = ''; }, [county]);
   React.useEffect(() => { if (params?.fips) setCounty(params.fips); }, [params?.fips]);
   React.useEffect(() => {
+    const acquisitionInputs = params?.acquisitionInputs;
+    if (!acquisitionInputs || typeof acquisitionInputs !== 'object') return;
+    setEntryPrice(acquisitionInputs.entry_price_per_acre != null ? String(acquisitionInputs.entry_price_per_acre) : '');
+    setHoldYears(acquisitionInputs.hold_years != null ? String(acquisitionInputs.hold_years) : '5');
+    setExitCapRate(acquisitionInputs.exit_cap_rate != null ? String(acquisitionInputs.exit_cap_rate) : '');
+    setSaleCostPct(acquisitionInputs.sale_cost_pct != null ? String(acquisitionInputs.sale_cost_pct) : '2');
+    setAcres(acquisitionInputs.acres != null ? String(acquisitionInputs.acres) : '500');
+  }, [params?.acquisitionInputs]);
+  React.useEffect(() => {
     const matchedPreset = SCENARIO_PRESETS.find((preset) => preset.rp === Number(rp) && preset.gr === Number(gr) && preset.rs === Number(rs));
     setPresetKey(matchedPreset?.key || 'custom');
   }, [rp, gr, rs]);
@@ -138,6 +147,7 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
             comparison: {
               comparison_table: d.comparison_table || [],
               driver_decomposition: d.driver_decomposition || [],
+              acquisition_snapshot: d.base?.acquisition || null,
             },
           }),
         });
