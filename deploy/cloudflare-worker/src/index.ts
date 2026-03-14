@@ -33,6 +33,9 @@ import {
   ensureIndustrialSeriesCatalog,
   INDUSTRIAL_REQUIRED_SERIES,
 } from './services/industrial';
+import {
+  computeAcquisitionUnderwriting,
+} from './services/acquisition';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -1670,6 +1673,7 @@ app.get('/api/v1/geo/:geoKey/summary', async (c) => {
   const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
   const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const result = await computeCounty(db, geoKey, resolved.asOf, assumptions);
+  const acquisition = computeAcquisitionUnderwriting(result.metrics, assumptions);
   const zscores = await computeMetricZscoresForCounty(
     db,
     geoKey,
@@ -1679,6 +1683,7 @@ app.get('/api/v1/geo/:geoKey/summary', async (c) => {
   );
   return c.json({
     ...result,
+    acquisition,
     zscores,
     as_of_meta: resolved.meta,
   });
@@ -2166,6 +2171,13 @@ app.post('/api/v1/run/scenario', async (c) => {
     overrides?: Record<string, any>;
     vary_params?: { param: string; values: number[]; target_metric?: string }[];
     scenario_sets?: { name?: string; overrides?: Record<string, any> }[];
+    acquisition?: {
+      entry_price_per_acre?: number;
+      hold_years?: number;
+      exit_cap_rate?: number;
+      sale_cost_pct?: number;
+      acres?: number;
+    };
   }>();
 
   const normalizedVaryParams: Array<{ param: string; values: number[]; target_metric?: string }> = [];
@@ -2220,6 +2232,7 @@ app.post('/api/v1/run/scenario', async (c) => {
   if (body.overrides) assumptions = { ...assumptions, ...body.overrides };
 
   const base = await computeCounty(db, body.geo_key, resolved.asOf, assumptions);
+  const baseAcquisition = computeAcquisitionUnderwriting(base.metrics, assumptions, body.acquisition);
   const sensitivities: Record<string, any> = {};
 
   if (normalizedVaryParams.length) {
@@ -2242,10 +2255,12 @@ app.post('/api/v1/run/scenario', async (c) => {
       const setOverrides = scenarioSet.overrides ?? {};
       const scenarioAssumptions = { ...assumptions, ...setOverrides };
       const scenario = await computeCounty(db, body.geo_key, resolved.asOf, scenarioAssumptions);
+      const acquisition = computeAcquisitionUnderwriting(scenario.metrics, scenarioAssumptions, body.acquisition);
       scenarioResults.push({
         name,
         assumptions: scenarioAssumptions,
         result: scenario,
+        acquisition,
       });
 
       const fairValue = scenario.metrics.fair_value ?? null;
@@ -2258,6 +2273,9 @@ app.post('/api/v1/run/scenario', async (c) => {
         implied_cap_rate: scenario.metrics.implied_cap_rate ?? null,
         noi_per_acre: scenario.metrics.noi_per_acre ?? null,
         delta_fair_value_vs_base: deltaVsBase,
+        irr_pct: acquisition.irr_pct,
+        moic: acquisition.moic,
+        year1_cash_yield_pct: acquisition.year1_cash_yield_pct,
       });
 
       const deltas: Record<string, number> = {};
@@ -2298,7 +2316,10 @@ app.post('/api/v1/run/scenario', async (c) => {
   return c.json({
     as_of: resolved.asOf,
     as_of_meta: resolved.meta,
-    base,
+    base: {
+      ...base,
+      acquisition: baseAcquisition,
+    },
     sensitivities,
     scenarios: scenarioResults,
     comparison_table: comparisonTable,

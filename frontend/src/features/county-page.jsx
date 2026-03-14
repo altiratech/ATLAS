@@ -140,6 +140,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
   if (err || !data) return <ErrBox title="County Error" msg={err || 'Not found'} onRetry={load}/>;
 
   const m = data.metrics || {};
+  const acquisition = data.acquisition || null;
   const baselineMetrics = baselineSummary?.metrics || {};
   const rentHist = ts.map(t => t.cash_rent).filter(v => v != null);
   const valHist = ts.map(t => t.benchmark_value).filter(v => v != null);
@@ -406,6 +407,45 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       </div>
     </div>
 
+    {acquisition && <div className="card" style={{marginBottom:'1rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Acquisition Underwrite</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>Default deal view for this county</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
+            Atlas is running an unlevered underwriting snapshot using the current county benchmark as entry price, a {acquisition.hold_years}-year hold, and the current cap-rate regime unless you override it in Scenario Lab.
+          </div>
+        </div>
+        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, workflowParams)}>Open in Scenario Lab</button>
+      </div>
+      <div className="sg">
+        <div className="sc"><div className="sc-l">Entry $/ac</div><div className="sc-v">{$$(acquisition.entry_price_per_acre)}</div><div className="sc-c">{acquisition.entry_discount_to_fair_value_pct != null ? `${acquisition.entry_discount_to_fair_value_pct >= 0 ? '+' : ''}${$(acquisition.entry_discount_to_fair_value_pct,2)}% vs fair value` : 'Fair value comparison unavailable'}</div></div>
+        <div className="sc"><div className="sc-l">Year 1 Cash Yield</div><div className="sc-v">{$pct(acquisition.year1_cash_yield_pct)}</div><div className="sc-c">NOI / entry price</div></div>
+        <div className="sc"><div className="sc-l">IRR</div><div className="sc-v">{$pct(acquisition.irr_pct)}</div><div className="sc-c">{acquisition.hold_years}-year unlevered</div></div>
+        <div className="sc"><div className="sc-l">MOIC</div><div className="sc-v">{acquisition.moic != null ? `${$(acquisition.moic,2)}x` : 'N/A'}</div><div className="sc-c">NOI + exit / entry</div></div>
+        <div className="sc"><div className="sc-l">Net Exit Value</div><div className="sc-v">{$$(acquisition.net_exit_value_per_acre)}</div><div className="sc-c">{acquisition.exit_cap_rate != null ? `${$(acquisition.exit_cap_rate,2)}% exit cap` : 'Exit cap unavailable'}</div></div>
+        <div className="sc"><div className="sc-l">Deal Size</div><div className="sc-v">{$$(acquisition.deal_size)}</div><div className="sc-c">{Number(acquisition.acres || 0).toLocaleString()} acre default deal</div></div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginTop:'.75rem'}}>
+        <div className="workflow-card">
+          <div className="workflow-step">Underwrite Inputs</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.28rem'}}><strong>Entry basis:</strong> {formatAcquisitionEntryBasis(acquisition.entry_price_basis)}</div>
+            <div style={{marginBottom:'.28rem'}}><strong>Exit basis:</strong> {formatAcquisitionExitBasis(acquisition.exit_cap_basis)}</div>
+            <div style={{marginBottom:'.28rem'}}><strong>Growth:</strong> {$pct(acquisition.annual_noi_growth_pct)}</div>
+            <div style={{marginBottom:'.28rem'}}><strong>Near-term shock:</strong> {$pct(acquisition.near_term_rent_shock_pct)}</div>
+            <div><strong>Sale costs:</strong> {$pct(acquisition.sale_cost_pct)}</div>
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">Model Notes</div>
+          <div className="workflow-p">
+            {(acquisition.notes || []).map((note, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {note}</div>)}
+          </div>
+        </div>
+      </div>
+    </div>}
+
     <div className="sg">
       <div className="sc">
         <div className="sc-l">Cash Rent</div>
@@ -613,4 +653,17 @@ function formatBpsDelta(value) {
 function formatSignedNumber(value, digits = 2) {
   if (value == null) return '--';
   return `${value >= 0 ? '+' : ''}${Number(value).toFixed(digits)}`;
+}
+
+function formatAcquisitionEntryBasis(basis) {
+  if (basis === 'custom') return 'Custom entry price';
+  if (basis === 'benchmark_value') return 'Current Atlas benchmark';
+  return 'Entry unavailable';
+}
+
+function formatAcquisitionExitBasis(basis) {
+  if (basis === 'custom') return 'Custom exit cap';
+  if (basis === 'implied_cap_rate') return 'Current implied cap rate';
+  if (basis === 'required_return') return 'Required return fallback';
+  return 'Exit cap unavailable';
 }
