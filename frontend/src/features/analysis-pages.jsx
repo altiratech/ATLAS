@@ -95,7 +95,7 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
 
   const metricRows = [
     {key:'cash_rent',label:'Cash Rent ($/ac)',fmt:v => $$(v)},
-    {key:'benchmark_value',label:'Land Value ($/ac)',fmt:v => $$(v)},
+    {key:'benchmark_value',label:'Benchmark Value ($/ac)',fmt:v => $$(v)},
     {key:'noi_per_acre',label:'NOI ($/ac)',fmt:v => $$(v)},
     {key:'implied_cap_rate',label:'Implied Cap Rate',fmt:v => $pct(v)},
     {key:'fair_value',label:'Fair Value ($/ac)',fmt:v => $$(v)},

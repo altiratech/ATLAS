@@ -5,6 +5,7 @@ import {
   $chg,
   $pct,
   $x,
+  benchmarkMethodBand,
   industrialConfidenceBand,
   productivityBand,
   sourceBand,
@@ -408,6 +409,13 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
             {surfacedReasons.map((reason, idx) => <div key={idx}>• {reason}</div>)}
           </div>
         </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Benchmark Basis</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{benchmarkMethodBand(data.benchmark_method).label}</div>
+          <div className="sc-c">
+            {data.benchmark_method_detail || 'Atlas benchmark detail unavailable.'} This is an underwriting anchor for the current land lens, not a parcel appraisal or whole-county land-market estimate.
+          </div>
+        </div>
       </div>
     </div>
 
@@ -417,7 +425,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Acquisition Underwrite</div>
           <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>Default deal view for this county</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
-            Atlas is running an unlevered underwriting snapshot using the current county benchmark as entry price, a {acquisition.hold_years}-year hold, and the current cap-rate regime unless you override it in Scenario Lab.
+            Atlas is running an unlevered underwriting snapshot using the current Atlas benchmark value as the default entry price, a {acquisition.hold_years}-year hold, and the current cap-rate regime unless you override it in Scenario Lab.
           </div>
         </div>
         <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, workflowParams)}>Open in Scenario Lab</button>
@@ -454,9 +462,9 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
         <div>
           <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Lender / Credit Stress</div>
-          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>Default debt downside view for this county</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>Benchmark-based debt downside view for this county</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
-            Atlas is stress-testing the current county debt basis using the active assumption-set leverage terms, a {$(credit.rent_stress_pct,1)}% NOI shock, and a +{$(credit.rate_shock_bps,0)} bps loan-rate shock.
+            Atlas is stress-testing a benchmark-based debt basis using the active assumption-set leverage terms, a {$(credit.rent_stress_pct,1)}% NOI shock, and a +{$(credit.rate_shock_bps,0)} bps loan-rate shock. Treat this as county screening context, not deal-specific credit underwriting.
           </div>
         </div>
         <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, workflowParams)}>Open in Scenario Lab</button>
@@ -468,10 +476,10 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
         <div className="sc"><div className="sc-l">Combined Stress DSCR</div><div className="sc-v">{credit.combined_stress_dscr != null ? `${$(credit.combined_stress_dscr,2)}x` : 'N/A'}</div><div className="sc-c">Rent + rate stress together</div></div>
         <div className="sc"><div className="sc-l">Debt Yield</div><div className="sc-v">{$pct(credit.debt_yield_pct)}</div><div className="sc-c">NOI / debt basis</div></div>
         <div className="sc"><div className="sc-l">Break-even Rent</div><div className="sc-v">{$$(credit.break_even_rent)}</div><div className="sc-c">Rent needed to clear required return</div></div>
-        <div className="sc"><div className="sc-l">Debt / Acre</div><div className="sc-v">{$$(credit.debt_per_acre)}</div><div className="sc-c">{credit.ltv != null ? `${$(credit.ltv,1)}% LTV` : 'LTV unavailable'}</div></div>
+        <div className="sc"><div className="sc-l">Benchmark Debt / Acre</div><div className="sc-v">{$$(credit.debt_per_acre)}</div><div className="sc-c">{credit.ltv != null ? `${$(credit.ltv,1)}% LTV on benchmark value` : 'LTV unavailable'}</div></div>
         <div className="sc"><div className="sc-l">Annual Debt Service</div><div className="sc-v">{$$(credit.annual_debt_service_per_acre)}</div><div className="sc-c">{credit.loan_rate_pct != null ? `${$(credit.loan_rate_pct,2)}% / ${credit.loan_term_years}y` : 'Debt terms unavailable'}</div></div>
-        <div className="sc"><div className="sc-l">Value Cushion</div><div className="sc-v">{$pct(credit.value_decline_to_100_ltv_pct)}</div><div className="sc-c">Benchmark decline before 100% LTV</div></div>
-        <div className="sc"><div className="sc-l">Fair Value LTV</div><div className="sc-v">{$pct(credit.fair_value_ltv_pct)}</div><div className="sc-c">{credit.fair_value_equity_cushion_pct != null ? `${$pct(credit.fair_value_equity_cushion_pct)} equity cushion at fair value` : 'Fair value cushion unavailable'}</div></div>
+        <div className="sc"><div className="sc-l">Benchmark Value Cushion</div><div className="sc-v">{$pct(credit.value_decline_to_100_ltv_pct)}</div><div className="sc-c">Benchmark decline before 100% LTV</div></div>
+        <div className="sc"><div className="sc-l">Fair Value LTV</div><div className="sc-v">{$pct(credit.fair_value_ltv_pct)}</div><div className="sc-c">{credit.fair_value_equity_cushion_pct != null ? `${$pct(credit.fair_value_equity_cushion_pct)} equity cushion if debt stays fixed and fair value is the reference` : 'Fair value cushion unavailable'}</div></div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginTop:'.75rem'}}>
         <div className="workflow-card">
@@ -500,7 +508,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
         <Spark data={rentHist}/>
       </div>
       <div className="sc">
-        <div className="sc-l">Land Value</div>
+        <div className="sc-l">Benchmark Value</div>
         <div className="sc-v">{$$(m.benchmark_value)}</div>
         <span className={`badge ${zBand(zscores.benchmark_value).className}`}>{zBand(zscores.benchmark_value).label}</span>
         <Spark data={valHist} color="#63d2ff"/>
@@ -558,10 +566,10 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
             <tr><td>Productivity Adjustment</td><td className="n">{countyProductivity.label}</td><td style={{fontSize:'.8rem'}}>{data.productivity_active ? (data.yield_productivity_detail || 'County yield differentiation is active in fair value.') : 'Inactive for selected year; fair value is using the base model without county yield adjustment.'}</td></tr>
             <tr><td>Yield Basis vs State</td><td className="n">{$x(m.yield_basis_ratio)}</td><td style={{fontSize:'.8rem'}}>{data.yield_productivity_detail || 'No county yield basis available'}</td></tr>
             <tr><td>Yield Productivity Factor</td><td className="n">{$x(m.yield_productivity_factor)}</td><td style={{fontSize:'.8rem'}}>{data.productivity_active ? 'Applied inside fair value model using county yield basis.' : 'Inactive: no county yield basis was available for the selected year.'}</td></tr>
-            <tr><td>Implied Cap Rate</td><td className="n">{$pct(m.implied_cap_rate)}</td><td style={{fontSize:'.8rem'}}>NOI / Land Value</td></tr>
+            <tr><td>Implied Cap Rate</td><td className="n">{$pct(m.implied_cap_rate)}</td><td style={{fontSize:'.8rem'}}>NOI / Benchmark Value</td></tr>
             <tr><td>Required Return</td><td className="n">{$pct(m.required_return)}</td><td style={{fontSize:'.8rem'}}>10Y + risk premium</td></tr>
             <tr><td>Fair Value (Gordon)</td><td className="n">{$$(m.fair_value)}</td><td style={{fontSize:'.8rem'}}>NOI(1+g)/(r-g)</td></tr>
-            <tr><td>Rent Multiple</td><td className="n">{$(m.rent_multiple,1)}x</td><td style={{fontSize:'.8rem'}}>Land Value / Rent</td></tr>
+            <tr><td>Rent Multiple</td><td className="n">{$(m.rent_multiple,1)}x</td><td style={{fontSize:'.8rem'}}>Benchmark Value / Rent</td></tr>
             <tr><td>Cap Spread to 10Y (bps)</td><td className="n">{$(m.cap_spread_to_10y,0)}</td><td style={{fontSize:'.8rem'}}>Cap rate - Treasury</td></tr>
             <tr><td>DSCR</td><td className="n">{$(m.dscr,2)}</td><td style={{fontSize:'.8rem'}}>NOI / Debt Service</td></tr>
             <tr><td>Payback Period (yrs)</td><td className="n">{$(m.payback_period,1)}</td><td style={{fontSize:'.8rem'}}>Value / NOI</td></tr>
@@ -572,7 +580,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       {tab === 'history' && <div>
         <h3 style={{fontSize:'.95rem',marginBottom:'.75rem'}}>Time Series ({ts[0]?.year || '--'}-{ts[ts.length-1]?.year || '--'})</h3>
         <div className="tc"><table>
-          <thead><tr><th>Year</th><th>Cash Rent</th><th>Land Value</th><th>Cap Rate</th><th>Fair Value</th><th>NOI</th></tr></thead>
+          <thead><tr><th>Year</th><th>Cash Rent</th><th>Benchmark Value</th><th>Cap Rate</th><th>Fair Value</th><th>NOI</th></tr></thead>
           <tbody>{ts.map(t => <tr key={t.year}>
             <td>{t.year}</td><td className="n">{$$(t.cash_rent)}</td><td className="n">{$$(t.benchmark_value)}</td>
             <td className="n">{$pct(t.implied_cap_rate)}</td><td className="n">{$$(t.fair_value)}</td><td className="n">{$$(t.noi_per_acre)}</td>

@@ -185,6 +185,12 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
         </div>
       </div>
     </div>
+    <div className="card" style={{marginBottom:'1rem',padding:'.65rem .75rem'}}>
+      <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Benchmark Scope</div>
+      <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
+        Atlas uses a <strong style={{color:'var(--text)'}}>benchmark value</strong> as its farmland-style underwriting anchor. When county land value is unavailable, Atlas can derive that benchmark from county cash rent multiplied by the state rent multiple. Treat it as an underwriting benchmark for the current lens, not as a whole-county appraisal of every land use.
+      </div>
+    </div>
 
     <div className="sg">
       <div className="sc"><div className="sc-l">Counties</div><div className="sc-v">{data.county_count}</div><div className="sc-c" style={{color:'var(--text2)'}}>In database</div></div>
@@ -255,7 +261,7 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
             <div style={{fontSize:'.75rem',fontWeight:600}}>{r.primary_driver_label || '--'}</div>
             <div style={{fontSize:'.68rem',color:'var(--text2)'}}>{r.driver_summary || '--'}</div>
           </div>},
-          {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
+          {key:'benchmark_value',label:'Benchmark Value',num:true,fmt:v=>$$(v)},
           {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
           {key:'spread_pct',label:'Spread',num:true,fmt:v=>v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},
           {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:(_,r)=>$pct(r.implied_cap_rate ?? r.implied_cap)},
@@ -289,7 +295,7 @@ export function Dashboard({addToast, nav, assumptionSets, activeAssumptionSetId,
             <div style={{fontSize:'.75rem',fontWeight:600}}>{r.primary_driver_label || '--'}</div>
             <div style={{fontSize:'.68rem',color:'var(--text2)'}}>{r.driver_summary || '--'}</div>
           </div>},
-          {key:'benchmark_value',label:'Land Value',num:true,fmt:v=>$$(v)},
+          {key:'benchmark_value',label:'Benchmark Value',num:true,fmt:v=>$$(v)},
           {key:'fair_value',label:'Fair Value',num:true,fmt:v=>$$(v)},
           {key:'spread_pct',label:'Spread',num:true,fmt:v=>v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},
           {key:'implied_cap_rate',label:'Cap Rate',num:true,fmt:(_,r)=>$pct(r.implied_cap_rate ?? r.implied_cap)},
