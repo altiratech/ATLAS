@@ -182,7 +182,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
       : 'Latest scenario snapshot is saved, but compare deltas are not available.';
   const memoAcquisitionText = !latestScenarioAcquisition
     ? 'No saved acquisition underwrite is attached to the latest scenario snapshot yet.'
-    : `Latest underwrite: ${latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'}-year unlevered hold on ${Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres at ${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac -> ${$pct(latestScenarioAcquisition.irr_pct)} IRR, ${latestScenarioAcquisition.moic != null ? `${$(latestScenarioAcquisition.moic, 2)}x MOIC` : 'MOIC N/A'}, ${$pct(latestScenarioAcquisition.year1_cash_yield_pct)} year 1 cash yield.`;
+    : `Latest underwrite: ${latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'}-year hold on ${Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres at ${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac -> ${$pct(latestScenarioAcquisition.irr_pct)} unlevered IRR, ${$pct(latestScenarioAcquisition.levered_irr_pct)} levered IRR, ${$pct(latestScenarioAcquisition.year1_cash_on_cash_yield_pct)} year 1 cash-on-cash, ${latestScenarioAcquisition.ltv_pct != null ? `${$(latestScenarioAcquisition.ltv_pct, 1)}% leverage` : 'no leverage detail'}.`;
   const currentCountyName = countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName;
   const currentState = countyMap[county] ? countyMap[county].split(', ')[1] : params?.state;
   const buildScenarioNavParams = (scenarioRun = null) => ({
@@ -499,20 +499,20 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         {latestScenarioAcquisition && <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.55rem',marginTop:'.6rem'}}>
           <div className="sc" style={{margin:0}}>
             <div className="sc-l">Acquisition Read</div>
-            <div className="sc-v">{latestScenarioAcquisition.irr_pct != null ? `${$pct(latestScenarioAcquisition.irr_pct)} IRR` : 'N/A'}</div>
-            <div className="sc-c">{latestScenarioAcquisition.moic != null ? `${$(latestScenarioAcquisition.moic, 2)}x MOIC` : 'MOIC unavailable'} • {$pct(latestScenarioAcquisition.year1_cash_yield_pct)} year 1 cash yield</div>
+            <div className="sc-v">{latestScenarioAcquisition.levered_irr_pct != null ? `${$pct(latestScenarioAcquisition.levered_irr_pct)} Levered IRR` : 'N/A'}</div>
+            <div className="sc-c">{$pct(latestScenarioAcquisition.irr_pct)} unlevered IRR • {$pct(latestScenarioAcquisition.year1_cash_on_cash_yield_pct)} year 1 cash-on-cash</div>
           </div>
           <div className="sc" style={{margin:0}}>
             <div className="sc-l">Deal Basis</div>
             <div className="sc-v">{latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'} years</div>
             <div className="sc-c">
-              {Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres • {latestScenarioAcquisition.entry_price_per_acre != null || latestScenarioAcquisitionInputs?.entry_price_per_acre != null ? `${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac` : 'Entry price unavailable'}
+              {Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres • {latestScenarioAcquisition.entry_price_per_acre != null || latestScenarioAcquisitionInputs?.entry_price_per_acre != null ? `${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac` : 'Entry price unavailable'} • {latestScenarioAcquisition.ltv_pct != null ? `${$(latestScenarioAcquisition.ltv_pct, 1)}% leverage` : 'leverage unavailable'}
             </div>
           </div>
           <div className="sc" style={{margin:0}}>
             <div className="sc-l">Exit / Profit</div>
-            <div className="sc-v">{$$(latestScenarioAcquisition.net_exit_value_total)}</div>
-            <div className="sc-c">{latestScenarioAcquisition.total_profit != null ? `${$$(latestScenarioAcquisition.total_profit)} total profit` : 'Profit unavailable'} • {formatAcquisitionBasis(latestScenarioAcquisition.exit_cap_basis, 'exit')}</div>
+            <div className="sc-v">{$$(latestScenarioAcquisition.net_exit_equity_total ?? latestScenarioAcquisition.net_exit_value_total)}</div>
+            <div className="sc-c">{latestScenarioAcquisition.levered_total_profit != null ? `${$$(latestScenarioAcquisition.levered_total_profit)} levered profit` : 'Profit unavailable'} • {formatAcquisitionBasis(latestScenarioAcquisition.exit_cap_basis, 'exit')}</div>
           </div>
         </div>}
         <div className="rw-actions">
@@ -567,7 +567,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
               {assumptionSummary.overrideCount > 0 ? ` • overrides: ${assumptionSummary.overrideKeys.join(', ')}` : ' • no stored overrides'}
             </div>
             {runAcquisition && <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.18rem'}}>
-              Underwrite: {$pct(runAcquisition.irr_pct)} IRR • {runAcquisition.moic != null ? `${$(runAcquisition.moic, 2)}x MOIC` : 'MOIC unavailable'} • {runAcquisitionInputs?.hold_years ?? runAcquisition.hold_years ?? '--'}y hold • {runAcquisition.entry_price_per_acre != null || runAcquisitionInputs?.entry_price_per_acre != null ? `${$$(runAcquisition.entry_price_per_acre ?? runAcquisitionInputs?.entry_price_per_acre)} / ac` : 'entry unavailable'}
+              Underwrite: {$pct(runAcquisition.levered_irr_pct ?? runAcquisition.irr_pct)} {runAcquisition.levered_irr_pct != null ? 'levered IRR' : 'IRR'} • {$pct(runAcquisition.year1_cash_on_cash_yield_pct ?? runAcquisition.year1_cash_yield_pct)} {runAcquisition.year1_cash_on_cash_yield_pct != null ? 'cash-on-cash' : 'cash yield'} • {runAcquisitionInputs?.hold_years ?? runAcquisition.hold_years ?? '--'}y hold • {runAcquisition.ltv_pct != null ? `${$(runAcquisition.ltv_pct, 1)}% leverage` : 'leverage unavailable'}
             </div>}
           </div>
           <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(run))}>Open</button>

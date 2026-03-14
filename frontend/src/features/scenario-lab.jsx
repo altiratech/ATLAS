@@ -30,6 +30,9 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
   const [exitCapRate, setExitCapRate] = React.useState('');
   const [saleCostPct, setSaleCostPct] = React.useState('2');
   const [acres, setAcres] = React.useState('500');
+  const [leverageLtvPct, setLeverageLtvPct] = React.useState('');
+  const [leverageLoanRatePct, setLeverageLoanRatePct] = React.useState('');
+  const [leverageLoanTermYears, setLeverageLoanTermYears] = React.useState('');
   const [creditRentStressPct, setCreditRentStressPct] = React.useState('-10');
   const [creditRateShockBps, setCreditRateShockBps] = React.useState('100');
   const [result, setResult] = React.useState(null);
@@ -69,6 +72,9 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
     setExitCapRate(acquisitionInputs.exit_cap_rate != null ? String(acquisitionInputs.exit_cap_rate) : '');
     setSaleCostPct(acquisitionInputs.sale_cost_pct != null ? String(acquisitionInputs.sale_cost_pct) : '2');
     setAcres(acquisitionInputs.acres != null ? String(acquisitionInputs.acres) : '500');
+    setLeverageLtvPct(acquisitionInputs.leverage_ltv_pct != null ? String(acquisitionInputs.leverage_ltv_pct) : '');
+    setLeverageLoanRatePct(acquisitionInputs.leverage_loan_rate_pct != null ? String(acquisitionInputs.leverage_loan_rate_pct) : '');
+    setLeverageLoanTermYears(acquisitionInputs.leverage_loan_term_years != null ? String(acquisitionInputs.leverage_loan_term_years) : '');
   }, [params?.acquisitionInputs]);
   React.useEffect(() => {
     const creditInputs = params?.creditInputs;
@@ -124,6 +130,9 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
             exit_cap_rate: exitCapRate === '' ? null : Number(exitCapRate),
             sale_cost_pct: saleCostPct === '' ? null : Number(saleCostPct),
             acres: acres === '' ? null : Number(acres),
+            leverage_ltv_pct: leverageLtvPct === '' ? null : Number(leverageLtvPct),
+            leverage_loan_rate_pct: leverageLoanRatePct === '' ? null : Number(leverageLoanRatePct),
+            leverage_loan_term_years: leverageLoanTermYears === '' ? null : Number(leverageLoanTermYears),
           },
           credit: {
             rent_stress_pct: creditRentStressPct === '' ? null : Number(creditRentStressPct),
@@ -154,6 +163,9 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
                 exit_cap_rate: exitCapRate === '' ? null : Number(exitCapRate),
                 sale_cost_pct: saleCostPct === '' ? null : Number(saleCostPct),
                 acres: acres === '' ? null : Number(acres),
+                leverage_ltv_pct: leverageLtvPct === '' ? null : Number(leverageLtvPct),
+                leverage_loan_rate_pct: leverageLoanRatePct === '' ? null : Number(leverageLoanRatePct),
+                leverage_loan_term_years: leverageLoanTermYears === '' ? null : Number(leverageLoanTermYears),
               },
               credit: {
                 rent_stress_pct: creditRentStressPct === '' ? null : Number(creditRentStressPct),
@@ -284,7 +296,7 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
       <div style={{marginTop:'.7rem',borderTop:'1px solid var(--line)',paddingTop:'.6rem'}}>
         <h4 style={{fontSize:'.78rem',marginBottom:'.45rem',letterSpacing:'.12em',textTransform:'uppercase'}}>Acquisition Underwrite</h4>
         <div style={{fontSize:'.74rem',color:'var(--text2)',marginBottom:'.6rem'}}>
-          Atlas will run an unlevered deal model on top of the scenario outputs. Leave entry price or exit cap blank to use the live county benchmark and current implied cap rate.
+          Atlas will run both unlevered and levered deal views on top of the scenario outputs. Leave entry price, exit cap, or leverage fields blank to use the live county benchmark and the active assumption-set debt terms.
         </div>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'.75rem'}}>
           <div className="fg" style={{margin:0}}>
@@ -306,6 +318,18 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
           <div className="fg" style={{margin:0}}>
             <label>Acres</label>
             <input type="number" min="1" step="1" value={acres} onChange={e=>setAcres(e.target.value)}/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Deal LTV %</label>
+            <input type="number" min="0" max="95" step="0.5" value={leverageLtvPct} onChange={e=>setLeverageLtvPct(e.target.value)} placeholder="Assumption-set default"/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Deal Loan Rate %</label>
+            <input type="number" min="0" max="20" step="0.1" value={leverageLoanRatePct} onChange={e=>setLeverageLoanRatePct(e.target.value)} placeholder="Assumption-set default"/>
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Deal Loan Term</label>
+            <input type="number" min="1" max="40" step="1" value={leverageLoanTermYears} onChange={e=>setLeverageLoanTermYears(e.target.value)} placeholder="Assumption-set default"/>
           </div>
         </div>
       </div>
@@ -359,16 +383,20 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
       {acquisition && <div className="card">
         <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Acquisition Underwrite</h3>
         <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.65rem'}}>
-          Unlevered underwriting using the active scenario NOI path. Entry defaults to the Atlas benchmark and exit cap defaults to the current implied cap unless you override them above.
+          Atlas is showing unlevered and levered deal views using the active scenario NOI path. Entry defaults to the Atlas benchmark, exit cap defaults to the current implied cap, and leverage defaults to the active assumption set unless you override them above.
         </div>
         <div className="sg">
           <div className="sc"><div className="sc-l">Entry $/ac</div><div className="sc-v">{$$(acquisition.entry_price_per_acre)}</div><div className="sc-c">{formatAcquisitionBasis(acquisition.entry_price_basis, 'entry')}</div></div>
           <div className="sc"><div className="sc-l">Deal Size</div><div className="sc-v">{$$(acquisition.deal_size)}</div><div className="sc-c">{Number(acquisition.acres || 0).toLocaleString()} acres</div></div>
           <div className="sc"><div className="sc-l">Year 1 Cash Yield</div><div className="sc-v">{$pct(acquisition.year1_cash_yield_pct)}</div><div className="sc-c">NOI / entry price</div></div>
+          <div className="sc"><div className="sc-l">Year 1 Cash-on-Cash</div><div className="sc-v">{$pct(acquisition.year1_cash_on_cash_yield_pct)}</div><div className="sc-c">{formatLeverageMode(acquisition.leverage_mode)}</div></div>
           <div className="sc"><div className="sc-l">IRR</div><div className="sc-v">{$pct(acquisition.irr_pct)}</div><div className="sc-c">{acquisition.hold_years}-year unlevered</div></div>
+          <div className="sc"><div className="sc-l">Levered IRR</div><div className="sc-v">{$pct(acquisition.levered_irr_pct)}</div><div className="sc-c">{formatLeverageMode(acquisition.leverage_mode)}</div></div>
           <div className="sc"><div className="sc-l">MOIC</div><div className="sc-v">{acquisition.moic != null ? `${$(acquisition.moic,2)}x` : 'N/A'}</div><div className="sc-c">NOI + exit / entry</div></div>
-          <div className="sc"><div className="sc-l">Net Exit Value</div><div className="sc-v">{$$(acquisition.net_exit_value_total)}</div><div className="sc-c">{acquisition.exit_cap_rate != null ? `${$(acquisition.exit_cap_rate,2)}% exit cap` : 'Exit cap unavailable'}</div></div>
-          <div className="sc"><div className="sc-l">Total Profit</div><div className="sc-v">{$$(acquisition.total_profit)}</div><div className="sc-c">{acquisition.entry_discount_to_fair_value_pct != null ? `${acquisition.entry_discount_to_fair_value_pct >= 0 ? '+' : ''}${$(acquisition.entry_discount_to_fair_value_pct,2)}% vs fair value` : 'Fair value discount unavailable'}</div></div>
+          <div className="sc"><div className="sc-l">Levered MOIC</div><div className="sc-v">{acquisition.levered_moic != null ? `${$(acquisition.levered_moic,2)}x` : 'N/A'}</div><div className="sc-c">Cash after debt + exit equity / equity check</div></div>
+          <div className="sc"><div className="sc-l">Equity Check</div><div className="sc-v">{$$(acquisition.equity_check_total)}</div><div className="sc-c">{acquisition.ltv_pct != null ? `${$(acquisition.ltv_pct,1)}% deal leverage` : 'Leverage unavailable'}</div></div>
+          <div className="sc"><div className="sc-l">Net Exit Equity</div><div className="sc-v">{$$(acquisition.net_exit_equity_total)}</div><div className="sc-c">{acquisition.exit_cap_rate != null ? `${$(acquisition.exit_cap_rate,2)}% exit cap` : 'Exit cap unavailable'}</div></div>
+          <div className="sc"><div className="sc-l">Levered Profit</div><div className="sc-v">{$$(acquisition.levered_total_profit)}</div><div className="sc-c">{acquisition.entry_discount_to_fair_value_pct != null ? `${acquisition.entry_discount_to_fair_value_pct >= 0 ? '+' : ''}${$(acquisition.entry_discount_to_fair_value_pct,2)}% vs fair value` : 'Fair value discount unavailable'}</div></div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem',marginTop:'.75rem'}}>
           <div className="workflow-card">
@@ -377,6 +405,7 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
               <div style={{marginBottom:'.28rem'}}><strong>Hold:</strong> {acquisition.hold_years} years</div>
               <div style={{marginBottom:'.28rem'}}><strong>Growth:</strong> {$pct(acquisition.annual_noi_growth_pct)}</div>
               <div style={{marginBottom:'.28rem'}}><strong>Near-term shock:</strong> {$pct(acquisition.near_term_rent_shock_pct)}</div>
+              <div style={{marginBottom:'.28rem'}}><strong>Leverage:</strong> {acquisition.ltv_pct != null ? `${$(acquisition.ltv_pct,1)}% @ ${$pct(acquisition.loan_rate_pct)} / ${acquisition.loan_term_years}y` : 'Unavailable'}</div>
               <div><strong>Sale costs:</strong> {$pct(acquisition.sale_cost_pct)}</div>
             </div>
           </div>
@@ -433,14 +462,16 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
       {result.comparison_table && result.comparison_table.length > 0 && <div className="card">
         <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Scenario Compare</h3>
         <div className="tc"><table>
-          <thead><tr><th>Scenario</th><th>Fair Value</th><th>Cap Rate</th><th>NOI</th><th>IRR</th><th>MOIC</th><th>DSCR</th><th>Stress DSCR</th><th>Δ vs Base</th></tr></thead>
+          <thead><tr><th>Scenario</th><th>Fair Value</th><th>Cap Rate</th><th>NOI</th><th>IRR</th><th>Levered IRR</th><th>MOIC</th><th>COC</th><th>DSCR</th><th>Stress DSCR</th><th>Δ vs Base</th></tr></thead>
           <tbody>{result.comparison_table.map(row => <tr key={row.scenario}>
             <td>{row.scenario}</td>
             <td className="n">{$$(row.fair_value)}</td>
             <td className="n">{$pct(row.implied_cap_rate)}</td>
             <td className="n">{$$(row.noi_per_acre)}</td>
             <td className="n">{$pct(row.irr_pct)}</td>
+            <td className="n">{$pct(row.levered_irr_pct)}</td>
             <td className="n">{row.moic != null ? `${$(row.moic,2)}x` : 'N/A'}</td>
+            <td className="n">{$pct(row.year1_cash_on_cash_yield_pct)}</td>
             <td className="n">{row.dscr != null ? `${$(row.dscr,2)}x` : 'N/A'}</td>
             <td className="n">{row.combined_stress_dscr != null ? `${$(row.combined_stress_dscr,2)}x` : 'N/A'}</td>
             <td className="n">{row.delta_fair_value_vs_base != null ? $$(row.delta_fair_value_vs_base) : 'N/A'}</td>
@@ -471,4 +502,10 @@ function formatAcquisitionBasis(basis, kind) {
   if (basis === 'implied_cap_rate') return 'Using current cap rate';
   if (basis === 'required_return') return 'Using required return';
   return 'Exit cap unavailable';
+}
+
+function formatLeverageMode(mode) {
+  if (mode === 'cash') return 'Cash deal view';
+  if (mode === 'invalid') return 'Invalid leverage inputs';
+  return 'Levered deal view';
 }

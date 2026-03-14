@@ -1917,7 +1917,12 @@ app.get('/api/v1/compare', async (c) => {
 
   const results = [];
   for (const f of fipsList) {
-    results.push(await computeCounty(db, f, resolved.asOf, assumptions));
+    const county = await computeCounty(db, f, resolved.asOf, assumptions);
+    results.push({
+      ...county,
+      acquisition: computeAcquisitionUnderwriting(county.metrics, assumptions),
+      credit: computeCreditStress(county.metrics, assumptions),
+    });
   }
   return c.json({ as_of: resolved.asOf, as_of_meta: resolved.meta, counties: results });
 });
@@ -2182,6 +2187,9 @@ app.post('/api/v1/run/scenario', async (c) => {
       exit_cap_rate?: number;
       sale_cost_pct?: number;
       acres?: number;
+      leverage_ltv_pct?: number;
+      leverage_loan_rate_pct?: number;
+      leverage_loan_term_years?: number;
     };
     credit?: {
       rent_stress_pct?: number;
@@ -2286,8 +2294,11 @@ app.post('/api/v1/run/scenario', async (c) => {
         noi_per_acre: scenario.metrics.noi_per_acre ?? null,
         delta_fair_value_vs_base: deltaVsBase,
         irr_pct: acquisition.irr_pct,
+        levered_irr_pct: acquisition.levered_irr_pct,
         moic: acquisition.moic,
+        levered_moic: acquisition.levered_moic,
         year1_cash_yield_pct: acquisition.year1_cash_yield_pct,
+        year1_cash_on_cash_yield_pct: acquisition.year1_cash_on_cash_yield_pct,
         dscr: scenario.metrics.dscr ?? null,
         combined_stress_dscr: credit.combined_stress_dscr,
       });

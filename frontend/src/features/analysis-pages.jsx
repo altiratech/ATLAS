@@ -106,6 +106,14 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
     {key:'dscr',label:'DSCR',fmt:v => $(v,2)},
     {key:'payback_period',label:'Payback (yrs)',fmt:v => $(v,1)},
   ];
+  const underwriteRows = [
+    {label:'Unlevered IRR',fmt:c => $pct(c.acquisition?.irr_pct)},
+    {label:'Levered IRR',fmt:c => $pct(c.acquisition?.levered_irr_pct)},
+    {label:'Year 1 Cash-on-Cash',fmt:c => $pct(c.acquisition?.year1_cash_on_cash_yield_pct)},
+    {label:'Equity Check',fmt:c => $$(c.acquisition?.equity_check_total)},
+    {label:'Deal Leverage',fmt:c => c.acquisition?.ltv_pct != null ? `${$(c.acquisition.ltv_pct,1)}%` : '--'},
+    {label:'Combined Stress DSCR',fmt:c => c.credit?.combined_stress_dscr != null ? `${$(c.credit.combined_stress_dscr,2)}x` : '--'},
+  ];
 
   return <div>
     <AssumptionContextBar
@@ -155,6 +163,19 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
           {data.counties.map(c => <td key={c.geo_key} className="n">{mr.fmt(c.metrics?.[mr.key])}</td>)}
         </tr>)}</tbody>
       </table></div>
+      <div style={{marginTop:'.9rem'}}>
+        <h4 style={{fontSize:'.82rem',marginBottom:'.45rem',color:'var(--text2)',letterSpacing:'.12em',textTransform:'uppercase'}}>Default Underwrite</h4>
+        <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'920px'}}>
+          Atlas is showing the default deal view for each county using the active assumption set and county benchmark entry basis unless a county has missing core underwriting inputs.
+        </div>
+        <div className="tc tc-sticky"><table>
+          <thead><tr><th>Metric</th>{data.counties.map(c => <th key={`${c.geo_key}-uw`}>{c.county_name}, {c.state}</th>)}</tr></thead>
+          <tbody>{underwriteRows.map(row => <tr key={row.label}>
+            <td style={{fontWeight:500}}>{row.label}</td>
+            {data.counties.map(c => <td key={`${c.geo_key}-${row.label}`} className="n">{row.fmt(c)}</td>)}
+          </tr>)}</tbody>
+        </table></div>
+      </div>
     </div>}
   </div>;
 }
