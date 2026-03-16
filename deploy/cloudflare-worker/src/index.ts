@@ -1568,6 +1568,10 @@ function recordVisibleToUser(ownerKey: string | null | undefined, userKey: strin
   return normalizedOwner === userKey || normalizedOwner === RESEARCH_LEGACY_USER;
 }
 
+function recordOwnedByUser(ownerKey: string | null | undefined, userKey: string): boolean {
+  return (ownerKey || RESEARCH_LEGACY_USER) === userKey;
+}
+
 async function ensurePersonalDataSchema(db: D1Database) {
   if (personalDataSchemaReady) return;
   if (!personalDataSchemaPromise) {
@@ -3254,11 +3258,10 @@ app.post('/api/v1/watchlist', async (c) => {
     .prepare(
       `SELECT id
        FROM watchlist_items
-       WHERE geo_key = ? AND (owner_key = ? OR owner_key = ?)
-       ORDER BY CASE WHEN owner_key = ? THEN 0 ELSE 1 END
+       WHERE geo_key = ? AND owner_key = ?
        LIMIT 1`,
     )
-    .bind(body.geo_key, auth.userKey, RESEARCH_LEGACY_USER, auth.userKey)
+    .bind(body.geo_key, auth.userKey)
     .first<{ id: number }>();
   if (existing) return c.json({ id: existing.id, status: 'already_watching' });
 
@@ -3278,10 +3281,9 @@ app.delete('/api/v1/watchlist/:geoKey', async (c) => {
   const item = await db.prepare(
     `SELECT id
      FROM watchlist_items
-     WHERE geo_key = ? AND (owner_key = ? OR owner_key = ?)
-     ORDER BY CASE WHEN owner_key = ? THEN 0 ELSE 1 END
+     WHERE geo_key = ? AND owner_key = ?
      LIMIT 1`,
-  ).bind(geoKey, auth.userKey, RESEARCH_LEGACY_USER, auth.userKey).first<{ id: number }>();
+  ).bind(geoKey, auth.userKey).first<{ id: number }>();
   if (!item) return c.json({ error: 'Not in watchlist' }, 404);
   await db.prepare('DELETE FROM watchlist_items WHERE id = ?').bind(item.id).run();
   return c.json({ status: 'removed' });
@@ -3334,7 +3336,7 @@ app.delete('/api/v1/notes/:noteId', async (c) => {
     .bind(Number(noteId))
     .first<{ id: number; owner_key: string | null }>();
   if (!note) return c.json({ error: 'Note not found' }, 404);
-  if (!recordVisibleToUser(note.owner_key, auth.userKey)) return c.json({ error: 'Note not found' }, 404);
+  if (!recordOwnedByUser(note.owner_key, auth.userKey)) return c.json({ error: 'Note not found' }, 404);
   await db.prepare('DELETE FROM county_notes WHERE id = ?').bind(Number(noteId)).run();
   return c.json({ status: 'deleted' });
 });
@@ -3831,7 +3833,7 @@ app.post('/api/v1/portfolios/:portfolioId/holdings', async (c) => {
     .bind(portfolioId)
     .first<{ id: number; owner_key: string | null }>();
   if (!p) return c.json({ error: 'Portfolio not found' }, 404);
-  if (!recordVisibleToUser(p.owner_key, auth.userKey)) return c.json({ error: 'Portfolio not found' }, 404);
+  if (!recordOwnedByUser(p.owner_key, auth.userKey)) return c.json({ error: 'Portfolio not found' }, 404);
 
   const result = await db
     .prepare(
@@ -3854,7 +3856,7 @@ app.delete('/api/v1/portfolios/:portfolioId/holdings/:geoKey', async (c) => {
     .bind(portfolioId)
     .first<{ id: number; owner_key: string | null }>();
   if (!p) return c.json({ error: 'Portfolio not found' }, 404);
-  if (!recordVisibleToUser(p.owner_key, auth.userKey)) return c.json({ error: 'Portfolio not found' }, 404);
+  if (!recordOwnedByUser(p.owner_key, auth.userKey)) return c.json({ error: 'Portfolio not found' }, 404);
   const h = await db
     .prepare('SELECT id FROM portfolio_holdings WHERE portfolio_id = ? AND geo_key = ?')
     .bind(portfolioId, geoKey)
