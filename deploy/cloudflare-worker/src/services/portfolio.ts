@@ -28,6 +28,7 @@ export interface PortfolioResult {
   weighted_metrics: Record<string, number>;
   holdings: HoldingDetail[];
   state_exposure: Record<string, number>;
+  risk_summary: PortfolioRiskSummary;
   hhi: number;
   diversification_rating: string;
   num_counties: number;
@@ -50,6 +51,46 @@ interface HoldingDetail {
   implied_cap_rate: number;
   access_score: number;
   state: string;
+  source_quality: string | null;
+  benchmark_method: string | null;
+  benchmark_method_detail: string | null;
+  productivity_active: boolean | null;
+  yield_productivity_factor: number | null;
+  metrics: Record<string, number | null>;
+  drought: {
+    risk_score: number | null;
+    risk_rating_label: string | null;
+  } | null;
+  flood: {
+    hazard_score: number | null;
+    hazard_rating_label: string | null;
+  } | null;
+  irrigation: {
+    irrigated_acres: number | null;
+  } | null;
+  soil: {
+    significant_share_pct: number | null;
+    prime_share_pct: number | null;
+    rootzone_aws_100cm: number | null;
+    rootzone_aws_150cm: number | null;
+  } | null;
+  credit: {
+    base_dscr: number | null;
+    combined_stress_dscr: number | null;
+  } | null;
+}
+
+interface PortfolioRiskSummary {
+  weighted_drought_risk: number | null;
+  weighted_flood_risk: number | null;
+  weighted_soil_significant_share_pct: number | null;
+  weighted_rootzone_aws_100cm: number | null;
+  weighted_combined_stress_dscr: number | null;
+  county_observed_acres_pct: number;
+  proxy_county_acres_pct: number;
+  high_drought_acres_pct: number;
+  high_flood_acres_pct: number;
+  strong_soil_acres_pct: number;
 }
 
 const WEIGHT_KEYS = [
@@ -83,6 +124,21 @@ export function computePortfolioMetrics(
   let totalFairValue = 0;
   let totalPurchaseValue: number | null = 0;
   let totalAnnualNoi = 0;
+  let droughtWeighted = 0;
+  let droughtAcres = 0;
+  let floodWeighted = 0;
+  let floodAcres = 0;
+  let soilWeighted = 0;
+  let soilAcres = 0;
+  let awsWeighted = 0;
+  let awsAcres = 0;
+  let stressWeighted = 0;
+  let stressAcres = 0;
+  let countyObservedAcres = 0;
+  let proxyCountyAcres = 0;
+  let highDroughtAcres = 0;
+  let highFloodAcres = 0;
+  let strongSoilAcres = 0;
 
   for (const h of holdings) {
     const data = countyData[h.geo_key];
@@ -96,6 +152,11 @@ export function computePortfolioMetrics(
     const unrealizedPct = purchaseVal != null && purchaseVal > 0
       ? round2(((currentVal - purchaseVal) / purchaseVal) * 100)
       : null;
+    const droughtRisk = Number.isFinite(data?.drought?.risk_score) ? Number(data.drought.risk_score) : null;
+    const floodRisk = Number.isFinite(data?.flood?.hazard_score) ? Number(data.flood.hazard_score) : null;
+    const soilShare = Number.isFinite(data?.soil?.significant_share_pct) ? Number(data.soil.significant_share_pct) : null;
+    const aws100 = Number.isFinite(data?.soil?.rootzone_aws_100cm) ? Number(data.soil.rootzone_aws_100cm) : null;
+    const combinedStressDscr = Number.isFinite(data?.credit?.combined_stress_dscr) ? Number(data.credit.combined_stress_dscr) : null;
 
     totalCurrentValue += currentVal;
     totalFairValue += fairVal;
@@ -105,6 +166,31 @@ export function computePortfolioMetrics(
       totalPurchaseValue = null;
     }
     totalAnnualNoi += annualNoi;
+    if (droughtRisk != null) {
+      droughtWeighted += droughtRisk * h.acres;
+      droughtAcres += h.acres;
+      if (droughtRisk >= 80) highDroughtAcres += h.acres;
+    }
+    if (floodRisk != null) {
+      floodWeighted += floodRisk * h.acres;
+      floodAcres += h.acres;
+      if (floodRisk >= 80) highFloodAcres += h.acres;
+    }
+    if (soilShare != null) {
+      soilWeighted += soilShare * h.acres;
+      soilAcres += h.acres;
+      if (soilShare >= 70) strongSoilAcres += h.acres;
+    }
+    if (aws100 != null) {
+      awsWeighted += aws100 * h.acres;
+      awsAcres += h.acres;
+    }
+    if (combinedStressDscr != null) {
+      stressWeighted += combinedStressDscr * h.acres;
+      stressAcres += h.acres;
+    }
+    if (data.source_quality === 'county') countyObservedAcres += h.acres;
+    if (['proxy', 'mixed', 'state', 'national'].includes(String(data.source_quality || ''))) proxyCountyAcres += h.acres;
 
     holdingDetails.push({
       geo_key: h.geo_key,
@@ -122,6 +208,52 @@ export function computePortfolioMetrics(
       implied_cap_rate: (m.implied_cap_rate as number) ?? 0,
       access_score: (m.access_score as number) ?? 0,
       state: data.state,
+      source_quality: data.source_quality ?? null,
+      benchmark_method: data.benchmark_method ?? null,
+      benchmark_method_detail: data.benchmark_method_detail ?? null,
+      productivity_active: data.productivity_active ?? null,
+      yield_productivity_factor: (m.yield_productivity_factor as number) ?? null,
+      metrics: {
+        benchmark_value: (m.benchmark_value as number) ?? null,
+        fair_value: (m.fair_value as number) ?? null,
+        noi_per_acre: (m.noi_per_acre as number) ?? null,
+        implied_cap_rate: (m.implied_cap_rate as number) ?? null,
+        access_score: (m.access_score as number) ?? null,
+        dscr: (m.dscr as number) ?? null,
+        cap_spread_to_10y: (m.cap_spread_to_10y as number) ?? null,
+        yield_productivity_factor: (m.yield_productivity_factor as number) ?? null,
+      },
+      drought: data.drought
+        ? {
+            risk_score: droughtRisk,
+            risk_rating_label: data.drought.risk_rating_label ?? null,
+          }
+        : null,
+      flood: data.flood
+        ? {
+            hazard_score: floodRisk,
+            hazard_rating_label: data.flood.hazard_rating_label ?? null,
+          }
+        : null,
+      irrigation: data.irrigation
+        ? {
+            irrigated_acres: Number.isFinite(data.irrigation.irrigated_acres) ? Number(data.irrigation.irrigated_acres) : null,
+          }
+        : null,
+      soil: data.soil
+        ? {
+            significant_share_pct: soilShare,
+            prime_share_pct: Number.isFinite(data.soil.prime_share_pct) ? Number(data.soil.prime_share_pct) : null,
+            rootzone_aws_100cm: aws100,
+            rootzone_aws_150cm: Number.isFinite(data.soil.rootzone_aws_150cm) ? Number(data.soil.rootzone_aws_150cm) : null,
+          }
+        : null,
+      credit: data.credit
+        ? {
+            base_dscr: Number.isFinite(data.credit.base_dscr) ? Number(data.credit.base_dscr) : null,
+            combined_stress_dscr: combinedStressDscr,
+          }
+        : null,
     });
   }
 
@@ -160,6 +292,18 @@ export function computePortfolioMetrics(
     weighted_metrics: weighted,
     holdings: holdingDetails,
     state_exposure: stateExposure,
+    risk_summary: {
+      weighted_drought_risk: droughtAcres > 0 ? round2(droughtWeighted / droughtAcres) : null,
+      weighted_flood_risk: floodAcres > 0 ? round2(floodWeighted / floodAcres) : null,
+      weighted_soil_significant_share_pct: soilAcres > 0 ? round2(soilWeighted / soilAcres) : null,
+      weighted_rootzone_aws_100cm: awsAcres > 0 ? round2(awsWeighted / awsAcres) : null,
+      weighted_combined_stress_dscr: stressAcres > 0 ? round2(stressWeighted / stressAcres) : null,
+      county_observed_acres_pct: round2((countyObservedAcres / totalAcres) * 100),
+      proxy_county_acres_pct: round2((proxyCountyAcres / totalAcres) * 100),
+      high_drought_acres_pct: round2((highDroughtAcres / totalAcres) * 100),
+      high_flood_acres_pct: round2((highFloodAcres / totalAcres) * 100),
+      strong_soil_acres_pct: round2((strongSoilAcres / totalAcres) * 100),
+    },
     hhi,
     diversification_rating: rating,
     num_counties: holdingDetails.length,
@@ -172,7 +316,20 @@ function emptyResult(): PortfolioResult {
     total_acres: 0, total_current_value: 0, total_fair_value: 0,
     total_purchase_value: null, annual_noi: 0, portfolio_yield_pct: 0,
     unrealized_gain_pct: null, weighted_metrics: {}, holdings: [],
-    state_exposure: {}, hhi: 10000, diversification_rating: 'Concentrated',
+    state_exposure: {},
+    risk_summary: {
+      weighted_drought_risk: null,
+      weighted_flood_risk: null,
+      weighted_soil_significant_share_pct: null,
+      weighted_rootzone_aws_100cm: null,
+      weighted_combined_stress_dscr: null,
+      county_observed_acres_pct: 0,
+      proxy_county_acres_pct: 0,
+      high_drought_acres_pct: 0,
+      high_flood_acres_pct: 0,
+      strong_soil_acres_pct: 0,
+    },
+    hhi: 10000, diversification_rating: 'Concentrated',
     num_counties: 0, num_states: 0,
   };
 }

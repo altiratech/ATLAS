@@ -3796,8 +3796,9 @@ app.get('/api/v1/portfolios/:portfolioId', async (c) => {
   if (auth instanceof Response) return auth;
   const portfolioId = Number(c.req.param('portfolioId'));
   const requestedAsOf = c.req.query('as_of') ?? 'latest';
+  const assumptionSetId = c.req.query('assumption_set_id');
   const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
-  const assumptions = (await getAssumptions(db)) ?? {};
+  const assumptions = (await getAssumptions(db, assumptionSetId ? Number(assumptionSetId) : undefined)) ?? {};
 
   const p = await db
     .prepare('SELECT id, owner_key, name, description FROM portfolios WHERE id = ?')
