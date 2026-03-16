@@ -1,12 +1,13 @@
 import { PG } from '../config.js';
-import { $, $$, $pct, parseTags, toast } from '../formatting.js';
+import { $, $$, $int, $pct, benchmarkMethodBand, droughtRiskBand, floodRiskBand, sourceBand, parseTags, toast } from '../formatting.js';
 import {
   api,
   defaultResearchRecord,
   fetchResearchWorkspaces,
   normalizeResearchRecord,
 } from '../auth.js';
-import { assumptionSetLabel, summarizeScenarioAssumptions } from '../shared/assumptions-ui.jsx';
+import { appendAssumptionParam, assumptionSetLabel, summarizeScenarioAssumptions } from '../shared/assumptions-ui.jsx';
+import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, STable } from '../shared/data-ui.jsx';
 
@@ -32,6 +33,8 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
   const [missingDataNotesInput, setMissingDataNotesInput] = React.useState('');
   const [approvalState, setApprovalState] = React.useState('');
   const [scenarioRuns, setScenarioRuns] = React.useState([]);
+  const [countySummary, setCountySummary] = React.useState(null);
+  const [countySummaryLoading, setCountySummaryLoading] = React.useState(false);
 
   const statuses = [
     { value:'exploring', label:'Exploring' },
@@ -127,6 +130,28 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
       .then(setScenarioRuns)
       .catch(() => setScenarioRuns([]));
   }, [county, store[county]?.updated_at]);
+  React.useEffect(() => {
+    if (!county) {
+      setCountySummary(null);
+      setCountySummaryLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setCountySummaryLoading(true);
+    api(appendAssumptionParam(`/geo/${county}/summary`, activeAssumptionSetId))
+      .then((summary) => {
+        if (!cancelled) setCountySummary(summary);
+      })
+      .catch(() => {
+        if (!cancelled) setCountySummary(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCountySummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [county, activeAssumptionSetId]);
 
   const countyMap = React.useMemo(
     () => Object.fromEntries(counties.map(c => [c.fips, `${c.name}, ${c.state}`])),
@@ -185,6 +210,28 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     : `Latest underwrite: ${latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'}-year hold on ${Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres at ${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac -> ${$pct(latestScenarioAcquisition.irr_pct)} unlevered IRR, ${$pct(latestScenarioAcquisition.levered_irr_pct)} levered IRR, ${$pct(latestScenarioAcquisition.year1_cash_on_cash_yield_pct)} year 1 cash-on-cash, ${latestScenarioAcquisition.ltv_pct != null ? `${$(latestScenarioAcquisition.ltv_pct, 1)}% leverage` : 'no leverage detail'}, ${latestScenarioAcquisition.refinance_mode === 'modeled' ? `refi year ${latestScenarioAcquisition.refinance_year} with ${$$(latestScenarioAcquisition.refinance_cash_out_total)} cash out` : 'no refinance modeled'}.`;
   const currentCountyName = countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName;
   const currentState = countyMap[county] ? countyMap[county].split(', ')[1] : params?.state;
+  const countyMetrics = countySummary?.metrics || {};
+  const countyCredit = countySummary?.credit || null;
+  const countySoil = countySummary?.soil || null;
+  const countyIrrigation = countySummary?.irrigation || null;
+  const countyDrought = countySummary?.drought || null;
+  const countyFlood = countySummary?.flood || null;
+  const countyDecisionRead = countySummary
+    ? evaluateAtlasCountyRead({
+        metrics: countyMetrics,
+        sourceQuality: countySummary.source_quality,
+        productivityActive: countySummary.productivity_active,
+        yieldProductivityFactor: countyMetrics.yield_productivity_factor,
+        soil: countySoil,
+        irrigation: countyIrrigation,
+        drought: countyDrought,
+        flood: countyFlood,
+        credit: countyCredit,
+        benchmarkMethodDetail: countySummary.benchmark_method_detail,
+      })
+    : null;
+  const countyDroughtBadge = droughtRiskBand(countyDrought);
+  const countyFloodBadge = floodRiskBand(countyFlood);
   const buildScenarioNavParams = (scenarioRun = null) => ({
     fips: county,
     countyName: currentCountyName,
@@ -308,6 +355,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
           <span className="badge badge-a">{String(memoStatus || 'exploring').replace(/_/g, ' ').toUpperCase()}</span>
           <span className={`badge ${conviction >= 75 ? 'badge-g' : conviction >= 45 ? 'badge-a' : 'badge-r'}`}>CONVICTION {Math.round(conviction)}/100</span>
+          {countyDecisionRead && <span className={`badge ${countyDecisionRead.overall.className}`}>{countyDecisionRead.overall.label}</span>}
           {assetType && <span className="badge badge-b">{assetType.replace(/_/g, ' ').toUpperCase()}</span>}
           {targetUseCase && <span className="badge badge-b">{targetUseCase.replace(/_/g, ' ').toUpperCase()}</span>}
         </div>
@@ -353,6 +401,76 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         </div>
       </div>
     </div>
+    {county && <div className="card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.7rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Decision Record Context</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{selectedCountyLabel}</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'860px'}}>
+            {countySummaryLoading
+              ? 'Refreshing the live county read for the active assumption set.'
+              : countyDecisionRead
+                ? `${countyDecisionRead.overall.summary} This gives the memo a shared county read instead of forcing Atlas users to reconstruct it from separate pages.`
+                : 'Live county decision context is unavailable right now; the research record still remains editable.'}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
+          {countyDecisionRead && <span className={`badge ${countyDecisionRead.overall.className}`}>{countyDecisionRead.overall.label}</span>}
+          {countySummary?.source_quality && <span className={`badge ${sourceBand(countySummary.source_quality).className}`}>{sourceBand(countySummary.source_quality).label}</span>}
+          {countySummary?.benchmark_method && <span className={`badge ${benchmarkMethodBand(countySummary.benchmark_method).className}`}>{benchmarkMethodBand(countySummary.benchmark_method).label}</span>}
+          {countyDrought?.risk_score != null && <span className={`badge ${countyDroughtBadge.className}`}>{countyDroughtBadge.label}</span>}
+          {countyFlood?.hazard_score != null && <span className={`badge ${countyFloodBadge.className}`}>{countyFloodBadge.label}</span>}
+        </div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'.75rem'}}>
+        <div className="workflow-card">
+          <div className="workflow-step">Decision Signals</div>
+          <div className="workflow-p">
+            {!countyDecisionRead
+              ? 'Select a county to load the shared county read.'
+              : <>
+                  <div style={{marginBottom:'.28rem'}}><strong>Valuation:</strong> <span className={`badge ${countyDecisionRead.pillars.valuation.className}`}>{countyDecisionRead.pillars.valuation.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.valuation.detail}</span></div>
+                  <div style={{marginBottom:'.28rem'}}><strong>Land Quality:</strong> <span className={`badge ${countyDecisionRead.pillars.site.className}`}>{countyDecisionRead.pillars.site.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.site.detail}</span></div>
+                  <div style={{marginBottom:'.28rem'}}><strong>Hazards:</strong> <span className={`badge ${countyDecisionRead.pillars.resilience.className}`}>{countyDecisionRead.pillars.resilience.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.resilience.detail}</span></div>
+                  <div><strong>Debt View:</strong> <span className={`badge ${countyDecisionRead.pillars.finance.className}`}>{countyDecisionRead.pillars.finance.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.finance.detail}</span></div>
+                </>}
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">Evidence Snapshot</div>
+          <div className="workflow-p">
+            {!countySummary
+              ? 'Live county evidence is unavailable.'
+              : <>
+                  <div style={{marginBottom:'.28rem'}}><strong>Benchmark / Fair:</strong> {$$(countyMetrics.benchmark_value)} / {$$(countyMetrics.fair_value)}</div>
+                  <div style={{marginBottom:'.28rem'}}><strong>Access / DSCR:</strong> {countyMetrics.access_score != null ? `${$(countyMetrics.access_score, 1)} / 100` : 'N/A'} • {countyCredit?.combined_stress_dscr != null ? `${$(countyCredit.combined_stress_dscr, 2)}x stress` : countyMetrics.dscr != null ? `${$(countyMetrics.dscr, 2)}x base` : 'DSCR N/A'}</div>
+                  <div style={{marginBottom:'.28rem'}}><strong>NRCS / Irrigation:</strong> {$pct(countySoil?.significant_share_pct)} • {$int(countyIrrigation?.irrigated_acres)} acres</div>
+                  <div><strong>Hazards:</strong> Drought {countyDrought?.risk_score != null ? $(countyDrought.risk_score, 0) : 'N/A'} • Flood {countyFlood?.hazard_score != null ? $(countyFlood.hazard_score, 0) : 'N/A'}</div>
+                </>}
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">Support For The Memo</div>
+          <div className="workflow-p">
+            {!countyDecisionRead
+              ? 'County support signals will appear here once live evidence is loaded.'
+              : countyDecisionRead.supportPoints.length
+                ? countyDecisionRead.supportPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)
+                : 'No strong support signals are currently surfaced beyond the visible model outputs.'}
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">What Could Change The Call</div>
+          <div className="workflow-p">
+            {!countyDecisionRead
+              ? 'Gating checks will appear here when live county context is available.'
+              : countyDecisionRead.gatingChecks.length
+                ? countyDecisionRead.gatingChecks.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)
+                : 'No immediate gating checks are surfaced beyond the editable thesis and scenario work.'}
+          </div>
+        </div>
+      </div>
+    </div>}
     <div className="rw-grid">
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Research Workspace</h3>
