@@ -941,7 +941,7 @@ function allowAnonSessions(c: Context<{ Bindings: Bindings }>): boolean {
 
 function extractHeaderIdentity(
   c: Context<{ Bindings: Bindings }>,
-): { userKey: string; source: 'cloudflare_access' | 'dev_header' } | null {
+): { userKey: string; source: 'edge_identity' | 'dev_header' } | null {
   const email = c.req.header('cf-access-authenticated-user-email');
   const userId = c.req.header('cf-access-authenticated-user-id');
   const devHeader = allowDevIdentityHeader(c) ? c.req.header('x-atlas-user') : null;
@@ -949,7 +949,7 @@ function extractHeaderIdentity(
   if (!candidate) return null;
   const cleaned = sanitizeResearchUser(candidate);
   if (!cleaned) return null;
-  return { userKey: cleaned, source: email || userId ? 'cloudflare_access' : 'dev_header' };
+  return { userKey: cleaned, source: email || userId ? 'edge_identity' : 'dev_header' };
 }
 
 function extractBearerToken(c: Context<{ Bindings: Bindings }>): string | null {

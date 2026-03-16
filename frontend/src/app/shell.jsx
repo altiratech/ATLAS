@@ -111,6 +111,13 @@ export function AppShell({
   toasts,
   dismissToast,
 }) {
+  const authSourceLabel = authSource === 'edge_identity'
+    ? 'edge identity'
+    : authSource === 'dev_header'
+      ? 'dev header'
+      : authSource === 'anonymous'
+        ? 'demo session'
+        : authSource || '--';
   return <div className="app">
     <div className="side">
       <div className="side-logo">{APP_NAME}</div>
@@ -125,7 +132,7 @@ export function AppShell({
       <div className="top">
         <div className="top-t">{titles[currentPage]||APP_NAME}</div>
         <div className="top-a">
-          <button className="btn btn-sm" disabled title={`Identity source: ${authSource}`}>
+          <button className="btn btn-sm" disabled title={`Session source: ${authSourceLabel}`}>
             User: {researchUser || '--'}
           </button>
           <button className="btn btn-sm" onClick={resetSession} disabled={!authReady} title="Reset auth session">

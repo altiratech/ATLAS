@@ -20,7 +20,7 @@ Cloudflare Workers deployment profile for Altira Atlas.
 1. Configure an ingest admin secret on the Worker (never commit this in `wrangler.toml`):
    - `npx wrangler secret put INGEST_ADMIN_TOKEN`
 2. Add the same value to GitHub repo secret `ATLAS_INGEST_ADMIN_TOKEN` (repo: `altiratech/ATLAS`).
-3. If Cloudflare Access is enabled at the edge for Atlas routes, create a service token in the Access app and add GitHub secrets:
+3. If optional edge protection such as Cloudflare Access is enabled for Atlas routes, create a service token in the Access app and add GitHub secrets:
    - `ATLAS_CF_ACCESS_CLIENT_ID`
    - `ATLAS_CF_ACCESS_CLIENT_SECRET`
 4. Trigger workflow: `Actions` -> `Backfill Top-20 Atlas Data` -> `Run workflow`.
@@ -37,7 +37,7 @@ Use the dedicated bulk workflow to populate historical baseline from official US
    - `qs.crops_<stamp>.txt.gz`
    - `qs.economics_<stamp>.txt.gz`
 3. Optional explicit URLs can be supplied via workflow inputs (`crops_url`, `economics_url`).
-4. Bulk loader writes through `/api/v1/ingest/bulk` using existing auth headers (`ATLAS_INGEST_ADMIN_TOKEN` and optional Cloudflare Access service token headers).
+4. Bulk loader writes through `/api/v1/ingest/bulk` using existing auth headers (`ATLAS_INGEST_ADMIN_TOKEN` and optional edge-protection service token headers).
 5. Keep `Backfill Top-20 Atlas Data` for targeted API-driven deltas and retries, not first-time historical baseline.
 
 ## Backfill Orchestrator (Retry/Resume + Progress Ledger)
@@ -63,7 +63,8 @@ Use the orchestrator workflow when you want resumable year/state execution with 
 - Session mode (existing): `Authorization: Bearer <atlas_session_token>`
 - Admin mode (new): `X-Atlas-Ingest-Token: <INGEST_ADMIN_TOKEN>`
 - If the admin secret is not configured, the endpoint stays session-only.
-- If Cloudflare Access protects the hostname, include service token headers (`CF-Access-Client-Id`, `CF-Access-Client-Secret`) for automation.
+- If optional edge protection such as Cloudflare Access protects the hostname, include service token headers (`CF-Access-Client-Id`, `CF-Access-Client-Secret`) for automation.
+- Treat that edge protection as an operator/deployment layer, not as Atlas's long-term canonical end-user identity model.
 - Ingest supports optional query scoping for backfill orchestration:
   - `states=IA,IL`
   - `nass_series=cash_rent,corn_yield`

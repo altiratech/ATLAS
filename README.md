@@ -100,6 +100,15 @@ Manual install: `pip install -r requirements.txt`
 - Canonical web app URL: `https://atlas.altiratech.com`
 - `https://atlas.altiratech.com/altiratech-home` serves a compatibility mirror of the canonical company homepage source at `Code/active/altiratech-site/public/index.html`
 
+## Identity And Billing Compatibility
+
+- Atlas currently uses module-local session auth via `/api/v1/auth/bootstrap`.
+- Optional edge identity headers can seed Atlas sessions in protected environments, but that is not the long-term default end-user identity model.
+- Atlas should stay compatible with a shared Altira account/workspace/membership model rather than invent product-local billing or entitlement systems.
+- Visible roles should remain simple when suite auth lands: `user`, `manager`, `admin`.
+- Workspace billing, subscriptions, and module entitlements should live above Atlas, not inside Atlas.
+- Enterprise SSO is a later layer, not the default auth assumption for this module.
+
 ## Architecture
 
 ```
