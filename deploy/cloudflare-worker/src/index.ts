@@ -45,6 +45,9 @@ import {
 import {
   computeFloodEvidence,
 } from './services/flood';
+import {
+  computeIrrigationEvidence,
+} from './services/irrigation';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -242,6 +245,7 @@ async function computeCounty(
   const county = await getCounty(db, geoKey);
   const drought = computeDroughtEvidence(series, snapshot.lineage);
   const flood = computeFloodEvidence(series, snapshot.lineage);
+  const irrigation = computeIrrigationEvidence(series, snapshot.lineage);
 
   return {
     geo_key: geoKey,
@@ -270,6 +274,7 @@ async function computeCounty(
     access_density: accessData?.density ?? {},
     drought,
     flood,
+    irrigation,
   };
 }
 
@@ -310,6 +315,7 @@ function computeCountyFromSeries(
   const sourceQuality = getSourceQuality(benchmarkMethod.method);
   const drought = computeDroughtEvidence(hydratedSeries, lineage);
   const flood = computeFloodEvidence(hydratedSeries, lineage);
+  const irrigation = computeIrrigationEvidence(hydratedSeries, lineage);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     ctx.explains.benchmark_value = {
       ...(ctx.explains.benchmark_value ?? {}),
@@ -357,6 +363,7 @@ function computeCountyFromSeries(
     source_quality_detail: benchmarkMethod.detail,
     drought,
     flood,
+    irrigation,
   };
 }
 
@@ -2425,6 +2432,7 @@ app.get('/api/v1/screener', async (c) => {
         source_quality_detail: data.source_quality_detail,
         drought: data.drought,
         flood: data.flood,
+        irrigation: data.irrigation,
         metrics: Object.fromEntries(
           Object.entries(m).map(([k, v]) => [k, v != null ? Math.round((v as number) * 100) / 100 : null]),
         ),
@@ -2442,6 +2450,8 @@ app.get('/api/v1/screener', async (c) => {
         ? (a.drought?.risk_score ?? null)
       : sortBy === 'flood_hazard_score'
         ? (a.flood?.hazard_score ?? null)
+      : sortBy === 'irrigated_ag_land_acres'
+        ? (a.irrigation?.irrigated_acres ?? null)
       : (a.metrics[sortBy] ?? 0);
     const bv = sortBy === 'power_cost_index'
       ? (b.industrial?.power_cost_index ?? null)
@@ -2451,9 +2461,11 @@ app.get('/api/v1/screener', async (c) => {
         ? (b.drought?.risk_score ?? null)
       : sortBy === 'flood_hazard_score'
         ? (b.flood?.hazard_score ?? null)
+      : sortBy === 'irrigated_ag_land_acres'
+        ? (b.irrigation?.irrigated_acres ?? null)
       : (b.metrics[sortBy] ?? 0);
 
-    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price' || sortBy === 'drought_risk_score' || sortBy === 'flood_hazard_score')) {
+    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price' || sortBy === 'drought_risk_score' || sortBy === 'flood_hazard_score' || sortBy === 'irrigated_ag_land_acres')) {
       if (av == null && bv != null) return 1;
       if (av != null && bv == null) return -1;
       if (av == null && bv == null) {

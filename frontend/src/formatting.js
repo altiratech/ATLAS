@@ -5,6 +5,7 @@ export const $pct = (n) => n != null ? Number(n).toFixed(2) + '%' : 'N/A';
 export const $chg = (n) => n != null ? (n > 0 ? '+' : '') + Number(n).toFixed(1) + '%' : '--';
 export const $z = (n) => n != null ? Number(n).toFixed(2) + 'σ' : 'N/A';
 export const $x = (n) => n != null ? Number(n).toFixed(2) + 'x' : 'N/A';
+export const $int = (n) => n != null ? Number(n).toLocaleString('en-US',{maximumFractionDigits:0}) : 'N/A';
 
 export function toast(msg, type='info') { return {id: Date.now()+Math.random(), msg, type, dur: 3000}; }
 export const parseTags = (raw) => raw.split(',').map(t => t.trim()).filter(Boolean);

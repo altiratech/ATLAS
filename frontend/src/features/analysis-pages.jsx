@@ -3,6 +3,7 @@ import {
   $,
   $$,
   $chg,
+  $int,
   $pct,
   benchmarkMethodBand,
   droughtRiskBand,
@@ -158,6 +159,9 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
             </div>
             <div style={{fontSize:'.76rem',color:'var(--text2)',lineHeight:1.35}}>
               {c.benchmark_method_detail || 'Benchmark method detail unavailable.'}
+            </div>
+            <div style={{fontSize:'.76rem',color:'var(--text2)',lineHeight:1.35,marginTop:'.35rem'}}>
+              Irrigated acres: {$int(c.irrigation?.irrigated_acres)}
             </div>
           </div>;
         })}

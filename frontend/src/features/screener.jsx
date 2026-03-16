@@ -3,6 +3,7 @@ import {
   $,
   $$,
   $chg,
+  $int,
   $pct,
   benchmarkMethodBand,
   droughtRiskBand,
@@ -238,6 +239,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             <option value="cash_rent">Cash Rent</option>
             <option value="benchmark_value">Benchmark Value</option>
             <option value="access_score">Access Score</option>
+            <option value="irrigated_ag_land_acres">Irrigated Acres</option>
             <option value="power_cost_index">Power Cost Index</option>
             <option value="industrial_power_price">Power Price</option>
             <option value="drought_risk_score">Drought Risk</option>
@@ -292,6 +294,9 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
       <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.45rem',maxWidth:'980px'}}>
         Atlas is showing an underwriting benchmark for the current land lens in each county, not a whole-county urban appraisal. Rows tagged <strong style={{color:'var(--text1)'}}>PROXY</strong> derive benchmark value from county cash rent multiplied by the state land-value rent multiple when direct county land value is unavailable.
       </div>
+      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
+        Irrigated acreage is a USDA Census water-footprint layer. Atlas carries the latest census baseline forward between census years so it remains visible in current screening views.
+      </div>
       {results.as_of_meta && <div style={{marginBottom:'.55rem',display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
         <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>
           COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
@@ -342,6 +347,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             return <span className={`badge ${badge.className}`} title={r.flood?.summary || 'FEMA flood evidence not loaded yet.'}>{badge.label}</span>;
           }},
           {key:'_flood_agloss',label:'Flood Ag Loss %',num:true,fmt:(_,r) => $pct(r.flood?.ag_loss_rate_pct)},
+          {key:'_irrigated',label:'Irrigated Acres',num:true,fmt:(_,r) => <span title={r.irrigation?.summary || 'USDA irrigation footprint not loaded yet.'}>{$int(r.irrigation?.irrigated_acres)}</span>},
           {key:'_pidx',label:'Pwr Idx',num:true,fmt:(_,r) => $(r.industrial?.power_cost_index,1)},
           {key:'_ppx',label:'Pwr $',num:true,fmt:(_,r) => $(r.industrial?.industrial_power_price,2)},
           {key:'_zcap',label:'Cap Z',num:true,fmt:(_,r) => {
@@ -380,6 +386,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             _access:r.metrics?.access_score,
             _flood:r.flood?.hazard_score,
             _flood_agloss:r.flood?.ag_loss_rate_pct,
+            _irrigated:r.irrigation?.irrigated_acres,
             _industrial_lineage:r.industrial?.lineage,
             _pidx:r.industrial?.power_cost_index,
             _ppx:r.industrial?.industrial_power_price,

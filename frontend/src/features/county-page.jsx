@@ -3,6 +3,7 @@ import {
   $,
   $$,
   $chg,
+  $int,
   $pct,
   $x,
   benchmarkMethodBand,
@@ -157,6 +158,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
   const droughtBadge = droughtRiskBand(drought);
   const flood = data.flood || null;
   const floodBadge = floodRiskBand(flood);
+  const irrigation = data.irrigation || null;
   const workflowParams = {
     fips: data.geo_key,
     countyName: data.county_name,
@@ -435,9 +437,9 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
         <div>
           <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Physical / Agronomic Risk</div>
-          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>FEMA drought and flood evidence for this county</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>FEMA hazard and USDA irrigation footprint for this county</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
-            These layers come from FEMA National Risk Index county services. Atlas surfaces the official FEMA drought and flood hazard scores directly rather than folding them into fair value silently.
+            Atlas surfaces the official FEMA drought and flood hazard scores directly and pairs them with USDA Census irrigated acreage as a water-footprint layer. The USDA irrigation baseline is carried forward between census years rather than estimated synthetically.
           </div>
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
@@ -467,15 +469,20 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           <div className="sc-c">Expected annual agriculture loss rate from FEMA inland flooding when available</div>
         </div>
         <div className="sc">
+          <div className="sc-l">Irrigated Acres</div>
+          <div className="sc-v">{$int(irrigation?.irrigated_acres)}</div>
+          <div className="sc-c">USDA Census irrigated agricultural acreage carried forward between census years</div>
+        </div>
+        <div className="sc">
           <div className="sc-l">Evidence Basis</div>
-          <div className="sc-v" style={{fontSize:'.95rem'}}>{[drought?.lineage, flood?.lineage].filter(Boolean).join(' / ').toUpperCase() || 'N/A'}</div>
-          <div className="sc-c">{flood?.summary || drought?.summary || 'Flood and drought evidence have not been loaded for this county yet.'}</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{[drought?.lineage, flood?.lineage, irrigation?.lineage].filter(Boolean).join(' / ').toUpperCase() || 'N/A'}</div>
+          <div className="sc-c">{irrigation?.summary || flood?.summary || drought?.summary || 'Flood, drought, and irrigation evidence have not been loaded for this county yet.'}</div>
         </div>
       </div>
       <div style={{marginTop:'.75rem',fontSize:'.78rem',color:'var(--text2)',display:'grid',gap:'.35rem'}}>
         {(() => {
-          const notes = Array.from(new Set([...(drought?.notes || []), ...(flood?.notes || [])]));
-          if (!notes.length) return [<div key="missing">• FEMA drought and flood evidence have not been loaded yet.</div>];
+          const notes = Array.from(new Set([...(drought?.notes || []), ...(flood?.notes || []), ...(irrigation?.notes || [])]));
+          if (!notes.length) return [<div key="missing">• FEMA drought, flood, and irrigation evidence have not been loaded yet.</div>];
           return notes.map((note, idx) => <div key={idx}>• {note}</div>);
         })()}
       </div>
@@ -627,14 +634,14 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       <div className="sc">
         <div className="sc-l">Physical Risk</div>
         <div className="sc-v" style={{fontSize:'.95rem'}}>
-          {drought?.risk_score != null || flood?.hazard_score != null
-            ? `D ${drought?.risk_score != null ? $(drought.risk_score,1) : 'N/A'} | F ${flood?.hazard_score != null ? $(flood.hazard_score,1) : 'N/A'}`
+          {drought?.risk_score != null || flood?.hazard_score != null || irrigation?.irrigated_acres != null
+            ? `D ${drought?.risk_score != null ? $(drought.risk_score,1) : 'N/A'} | F ${flood?.hazard_score != null ? $(flood.hazard_score,1) : 'N/A'} | Irr ${irrigation?.irrigated_acres != null ? $int(irrigation.irrigated_acres) : 'N/A'}`
             : 'N/A'}
         </div>
         <div className="sc-c">
-          {flood?.hazard_rating_label || drought?.risk_rating_label
-            ? `Flood ${flood?.hazard_rating_label || 'N/A'} · Drought ${drought?.risk_rating_label || 'N/A'}`
-            : 'FEMA drought and flood evidence unavailable'}
+          {flood?.hazard_rating_label || drought?.risk_rating_label || irrigation?.irrigated_acres != null
+            ? `Flood ${flood?.hazard_rating_label || 'N/A'} · Drought ${drought?.risk_rating_label || 'N/A'} · Irrigation ${irrigation?.irrigated_acres != null ? 'reported' : 'N/A'}`
+            : 'FEMA drought, flood, and irrigation evidence unavailable'}
         </div>
       </div>
       <div className="sc">
