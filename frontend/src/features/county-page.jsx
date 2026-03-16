@@ -18,6 +18,7 @@ import {
 } from '../formatting.js';
 import { api } from '../auth.js';
 import { appendAssumptionParam, AssumptionContextBar, assumptionSetLabel, findDefaultAssumptionSet } from '../shared/assumptions-ui.jsx';
+import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { MiniBar, Spark } from '../shared/data-ui.jsx';
 
@@ -226,53 +227,34 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       : 'No county productivity uplift is active in the current fair value.',
     data.benchmark_method_detail || 'Benchmark method detail unavailable.',
   ];
+  const decisionRead = evaluateAtlasCountyRead({
+    metrics: m,
+    sourceQuality: data.source_quality,
+    productivityActive: data.productivity_active,
+    yieldProductivityFactor: m.yield_productivity_factor,
+    soil,
+    irrigation,
+    drought,
+    flood,
+    credit,
+    benchmarkMethodDetail: data.benchmark_method_detail,
+  });
   const fairValueDelta = m.fair_value != null && baselineMetrics.fair_value != null ? m.fair_value - baselineMetrics.fair_value : null;
   const requiredReturnDelta = m.required_return != null && baselineMetrics.required_return != null ? m.required_return - baselineMetrics.required_return : null;
   const dscrDelta = m.dscr != null && baselineMetrics.dscr != null ? m.dscr - baselineMetrics.dscr : null;
   const breakEvenRentDelta = m.break_even_rent != null && baselineMetrics.break_even_rent != null ? m.break_even_rent - baselineMetrics.break_even_rent : null;
   const supportPoints = [
-    valueSpreadPct != null
-      ? `Modeled fair value is ${$chg(valueSpreadPct)} versus current benchmark value.`
+    ...decisionRead.supportPoints,
+    industrial?.overall_score != null
+      ? `Industrial suitability currently reads ${$(industrial.overall_score, 0)} / 100.`
       : null,
-    typeof m.cap_spread_to_10y === 'number'
-      ? `Cap spread to the 10Y is ${$(m.cap_spread_to_10y, 0)} bps.`
-      : null,
-    data.productivity_active && typeof m.yield_productivity_factor === 'number'
-      ? `County productivity factor is active at ${$x(m.yield_productivity_factor)}.`
-      : null,
-    soil?.significant_share_pct != null
-      ? `NRCS classifies ${$pct(soil.significant_share_pct)} of surveyed acres as farmland-significant.`
-      : null,
-    m.dscr != null
-      ? `Debt-service coverage is ${$(m.dscr, 2)}x under the active model set.`
-      : null,
-  ].filter(Boolean).slice(0, 3);
+  ].filter(Boolean).slice(0, 4);
   const cautionPoints = [
-    data.source_quality === 'proxy'
-      ? 'Benchmark value is proxy-derived rather than county-observed.'
-      : null,
-    data.productivity_active
-      ? null
-      : 'County yield basis is inactive, so fair value is running on the base model only.',
-    m.access_score != null
-      ? null
-      : 'Access score is still missing, so market-readiness is only partially underwritten.',
-    soil?.significant_share_pct != null && soil.significant_share_pct < 35
-      ? 'NRCS farmland-significant share is limited for this county.'
-      : null,
+    ...decisionRead.cautionPoints,
     industrial?.missing_critical_data?.length
       ? `Industrial lane still has missing evidence: ${industrial.missing_critical_data.slice(0, 2).join(', ')}${industrial.missing_critical_data.length > 2 ? '...' : ''}`
       : null,
-    credit?.combined_stress_dscr != null && credit.combined_stress_dscr < 1
-      ? 'Combined rent/rate stress pushes DSCR below 1.0x.'
-      : null,
-    drought?.risk_score != null && drought.risk_score >= 80
-      ? `FEMA drought risk is elevated at ${$(drought.risk_score, 1)} / 100.`
-      : null,
-    flood?.hazard_score != null && flood.hazard_score >= 80
-      ? `FEMA flood risk is elevated at ${$(flood.hazard_score, 1)} / 100.`
-      : null,
-  ].filter(Boolean).slice(0, 3);
+  ].filter(Boolean).slice(0, 4);
 
   return <div>
     <AssumptionContextBar
@@ -346,19 +328,29 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
         <div>
           <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>County Brief</div>
-          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{valueSignal.label} | {underwritingStatus.label}</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{decisionRead.overall.label} | {valueSignal.label} | {underwritingStatus.label}</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
-            {valueSignal.summary} Model basis: {data.benchmark_method === 'rent_multiple_proxy' ? 'rent multiple proxy' : 'direct benchmark'}.
+            {decisionRead.overall.summary} Model basis: {data.benchmark_method === 'rent_multiple_proxy' ? 'rent multiple proxy' : 'direct benchmark'}.
           </div>
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
+          <span className={`badge ${decisionRead.overall.className}`}>{decisionRead.overall.label}</span>
           <span className={`badge ${valueSignal.className}`}>{valueSignal.label}</span>
           <span className={`badge ${underwritingStatus.className}`}>{underwritingStatus.label}</span>
           <span className={`badge ${confidence.className}`}>{confidence.label}</span>
           <span className={`badge ${sourceBand(data.source_quality).className}`}>{sourceBand(data.source_quality).label}</span>
         </div>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1.1fr 1.1fr .9fr',gap:'.75rem'}}>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1.05fr 1.05fr .9fr',gap:'.75rem'}}>
+        <div className="workflow-card">
+          <div className="workflow-step">Decision Signals</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.28rem'}}><strong>Valuation:</strong> <span className={`badge ${decisionRead.pillars.valuation.className}`}>{decisionRead.pillars.valuation.label}</span> <span style={{marginLeft:'.35rem'}}>{decisionRead.pillars.valuation.detail}</span></div>
+            <div style={{marginBottom:'.28rem'}}><strong>Land Quality:</strong> <span className={`badge ${decisionRead.pillars.site.className}`}>{decisionRead.pillars.site.label}</span> <span style={{marginLeft:'.35rem'}}>{decisionRead.pillars.site.detail}</span></div>
+            <div style={{marginBottom:'.28rem'}}><strong>Hazards:</strong> <span className={`badge ${decisionRead.pillars.resilience.className}`}>{decisionRead.pillars.resilience.label}</span> <span style={{marginLeft:'.35rem'}}>{decisionRead.pillars.resilience.detail}</span></div>
+            <div><strong>Debt View:</strong> <span className={`badge ${decisionRead.pillars.finance.className}`}>{decisionRead.pillars.finance.label}</span> <span style={{marginLeft:'.35rem'}}>{decisionRead.pillars.finance.detail}</span></div>
+          </div>
+        </div>
         <div className="workflow-card">
           <div className="workflow-step">Investment Case</div>
           <div className="workflow-p">
@@ -366,9 +358,11 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           </div>
         </div>
         <div className="workflow-card">
-          <div className="workflow-step">Open Questions</div>
+          <div className="workflow-step">What Changes The View</div>
           <div className="workflow-p">
-            {cautionPoints.length === 0 ? 'No immediate model cautions are surfaced beyond the visible confidence/readiness flags.' : cautionPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)}
+            {decisionRead.gatingChecks.length === 0
+              ? (cautionPoints.length === 0 ? 'No immediate gating checks are surfaced beyond the visible confidence/readiness flags.' : cautionPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>))
+              : decisionRead.gatingChecks.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)}
           </div>
         </div>
         <div className="workflow-card">
@@ -376,6 +370,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           <div className="workflow-p">
             <div style={{marginBottom:'.28rem'}}><strong>Model set:</strong> {assumptionSetLabel(activeAssumptionSet)}</div>
             <div style={{marginBottom:'.28rem'}}><strong>Target use:</strong> farmland investment</div>
+            <div style={{marginBottom:'.28rem'}}><strong>Read:</strong> {decisionRead.overall.label}</div>
             <div><strong>Next step:</strong> {data.source_quality === 'proxy' ? 'Research + Scenario' : 'Research + downside case'}</div>
           </div>
         </div>

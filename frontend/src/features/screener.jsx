@@ -18,6 +18,7 @@ import {
 } from '../formatting.js';
 import { api } from '../auth.js';
 import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
+import { buildScreenReasons } from '../shared/atlas-read.js';
 import { ErrBox } from '../shared/system.jsx';
 import { STable } from '../shared/data-ui.jsx';
 
@@ -35,6 +36,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   const [minSoilFarmlandPct, setMinSoilFarmlandPct] = React.useState('');
   const [state, setState] = React.useState('');
   const [basisFilter, setBasisFilter] = React.useState('');
+  const [preset, setPreset] = React.useState('');
   const [sortBy, setSortBy] = React.useState('implied_cap_rate');
   const [sortDir, setSortDir] = React.useState('desc');
   const [zCapMin, setZCapMin] = React.useState('');
@@ -47,6 +49,95 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   const [selScreen, setSelScreen] = React.useState('');
   const [screenName, setScreenName] = React.useState('');
   const [savingScreen, setSavingScreen] = React.useState(false);
+
+  const applyPreset = React.useCallback((value) => {
+    setPreset(value);
+    setBasisFilter('');
+    setSelScreen('');
+    setZCapMin('');
+    setZCapMax('');
+    setZFairMin('');
+    setZFairMax('');
+    setZRentMin('');
+    setZRentMax('');
+    if (value === '') {
+      return;
+    }
+    if (value === 'quality_land') {
+      setMinCap('');
+      setMaxRentMult('');
+      setMinAccess('');
+      setMinPowerIndex('');
+      setMaxPowerPrice('');
+      setMaxDroughtRisk('60');
+      setMaxFloodRisk('60');
+      setMinSoilFarmlandPct('70');
+      setSortBy('soil_significant_farmland_share_pct');
+      setSortDir('desc');
+      return;
+    }
+    if (value === 'resilient_value') {
+      setMinCap('2.5');
+      setMaxRentMult('');
+      setMinAccess('');
+      setMinPowerIndex('');
+      setMaxPowerPrice('');
+      setMaxDroughtRisk('50');
+      setMaxFloodRisk('50');
+      setMinSoilFarmlandPct('55');
+      setSortBy('implied_cap_rate');
+      setSortDir('desc');
+      return;
+    }
+    if (value === 'irrigated_quality') {
+      setMinCap('');
+      setMaxRentMult('');
+      setMinAccess('');
+      setMinPowerIndex('');
+      setMaxPowerPrice('');
+      setMaxDroughtRisk('70');
+      setMaxFloodRisk('');
+      setMinSoilFarmlandPct('50');
+      setSortBy('irrigated_ag_land_acres');
+      setSortDir('desc');
+      return;
+    }
+    if (value === 'decision_ready') {
+      setMinCap('2.5');
+      setMaxRentMult('');
+      setMinAccess('40');
+      setMinPowerIndex('');
+      setMaxPowerPrice('');
+      setMaxDroughtRisk('60');
+      setMaxFloodRisk('60');
+      setMinSoilFarmlandPct('60');
+      setSortBy('access_score');
+      setSortDir('desc');
+    }
+  }, []);
+
+  const resetFilters = React.useCallback(() => {
+    setPreset('');
+    setMinCap('');
+    setMaxRentMult('');
+    setMinAccess('');
+    setMinPowerIndex('');
+    setMaxPowerPrice('');
+    setMaxDroughtRisk('');
+    setMaxFloodRisk('');
+    setMinSoilFarmlandPct('');
+    setState('');
+    setBasisFilter('');
+    setSortBy('implied_cap_rate');
+    setSortDir('desc');
+    setZCapMin('');
+    setZCapMax('');
+    setZFairMin('');
+    setZFairMax('');
+    setZRentMin('');
+    setZRentMax('');
+    setSelScreen('');
+  }, []);
 
   const loadScreens = React.useCallback(() => {
     api('/screens').then(d => setScreens(d)).catch(() => {});
@@ -146,6 +237,15 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
     if (zRentMin || zRentMax) filters.push('cash rent z-score');
     return filters;
   }, [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minPowerIndex, minSoilFarmlandPct, state, zCapMax, zCapMin, zFairMax, zFairMin, zRentMax, zRentMin]);
+  const activeScreenFilters = React.useMemo(() => ({
+    minCap,
+    minAccess,
+    maxDroughtRisk,
+    maxFloodRisk,
+    minSoilFarmlandPct,
+    minPowerIndex,
+    maxPowerPrice,
+  }), [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minAccess, minCap, minPowerIndex, minSoilFarmlandPct]);
 
   const persistScreen = async (openBacktest = false) => {
     if (reusableFilters.length === 0) {
@@ -207,11 +307,21 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
         <h3 style={{fontSize:'1rem'}}>Filter Builder</h3>
         <div style={{display:'flex',gap:'.5rem'}}>
+          <button className="btn btn-sm" onClick={resetFilters}>Reset Filters</button>
           <button className="btn btn-sm" onClick={exportCSV}>Export CSV</button>
           <button className="btn btn-sm btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Screen'}</button>
         </div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'.75rem'}}>
+        <div className="fg"><label>Evidence Preset</label>
+          <select value={preset} onChange={e => applyPreset(e.target.value)}>
+            <option value="">None</option>
+            <option value="quality_land">High-Quality Land</option>
+            <option value="resilient_value">Resilient Value</option>
+            <option value="irrigated_quality">Irrigated Quality</option>
+            <option value="decision_ready">Decision-Ready Counties</option>
+          </select>
+        </div>
         <div className="fg"><label>Min Cap Rate</label><input type="number" step="0.1" value={minCap} onChange={e => setMinCap(e.target.value)} placeholder="e.g. 2.0"/></div>
         <div className="fg"><label>Max Rent Multiple</label><input type="number" step="1" value={maxRentMult} onChange={e => setMaxRentMult(e.target.value)} placeholder="e.g. 25"/></div>
         <div className="fg"><label>Min Access Score</label><input type="number" step="1" value={minAccess} onChange={e => setMinAccess(e.target.value)} placeholder="e.g. 50"/></div>
@@ -307,6 +417,9 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
       <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
         NRCS farmland and soil-water fields are county-weighted from the official SSURGO survey areas that overlap each county. Use NRCS Farmland % as a land-quality screen and AWS 100cm as a soil moisture-buffering signal.
       </div>
+      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
+        New screener presets are evidence-aware, not synthetic. They simply prefill real Atlas filters for land quality, hazard burden, irrigation footprint, and decision-readiness so an analyst can get to a defendable first pass faster.
+      </div>
       {results.as_of_meta && <div style={{marginBottom:'.55rem',display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
         <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>
           COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
@@ -318,8 +431,12 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
       </div>}
       <STable
         cols={[
-          {key:'county',label:'County'},
+          {key:'county',label:'County',fmt:(_,r) => <div>
+            <div>{r.county}</div>
+            <div style={{fontSize:'.7rem',color:'var(--text2)',marginTop:'.18rem'}}>{r._why?.reasons?.[0] || 'County-level underwriting row'}</div>
+          </div>},
           {key:'state',label:'ST'},
+          {key:'_read',label:'Read',sortable:false,fmt:(_,r) => <span className={`badge ${r._why?.overall?.className || 'badge-a'}`}>{r._why?.overall?.label || 'N/A'}</span>},
           {key:'source_quality',label:'Data',fmt:(v,r) => {
             const badge = sourceBand(v);
             return <span className={`badge ${badge.className}`} title={r.benchmark_method_detail || r.source_quality_detail || 'Source quality detail unavailable.'}>{badge.label}</span>;
@@ -374,20 +491,24 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             const badge = zBand(r.zscores?.cash_rent || {});
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
+          {key:'_why_detail',label:'Why',sortable:false,fmt:(_,r) => <div style={{fontSize:'.74rem',lineHeight:1.45,color:'var(--text2)',minWidth:'260px'}}>
+            {(r._why?.reasons || []).slice(0, 3).map((reason, idx) => <div key={idx}>• {reason}</div>)}
+          </div>},
           {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r) => <div style={{display:'flex',gap:'.3rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
             <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.COUNTY, {fips:r.fips}); }}>View</button>
             <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research</button>
             <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.SCENARIO, workflowParams(r)); }}>Scenario</button>
           </div>},
         ]}
-        rows={visibleRows.map(r => {
-          const fair = r.metrics?.fair_value;
-          const benchmark = r.metrics?.benchmark_value;
-          const spread = fair != null && benchmark != null && benchmark > 0
-            ? ((fair - benchmark) / benchmark) * 100
-            : null;
-          return {
-            ...r,
+      rows={visibleRows.map(r => {
+        const fair = r.metrics?.fair_value;
+        const benchmark = r.metrics?.benchmark_value;
+        const spread = fair != null && benchmark != null && benchmark > 0
+          ? ((fair - benchmark) / benchmark) * 100
+          : null;
+        const why = buildScreenReasons(r, activeScreenFilters);
+        return {
+          ...r,
             _cash_rent:r.metrics?.cash_rent,
             _bv:benchmark,
             _cap:r.metrics?.implied_cap_rate,
@@ -407,6 +528,9 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             _zcap:r.zscores?.implied_cap_rate?.zscore,
             _zfv:r.zscores?.fair_value?.zscore,
             _zrent:r.zscores?.cash_rent?.zscore,
+            _read:why.overall?.label,
+            _why:why,
+            _why_detail:why.reasons?.join(' • '),
             _workflow:r.fips,
           };
         })}
