@@ -411,6 +411,9 @@ export async function loadCountySeriesWindow(
     'drought_risk_score',
     'drought_risk_rating_code',
     'drought_ag_loss_rate_pct',
+    'flood_hazard_score',
+    'flood_hazard_rating_code',
+    'flood_ag_loss_rate_pct',
   ];
   const localRegionalPlaceholders = localRegionalSeriesKeys.map(() => '?').join(',');
 
@@ -479,7 +482,9 @@ export async function loadCountySeriesWindow(
            'treasury_10y',
            'corn_price',
            'drought_risk_score',
-           'drought_ag_loss_rate_pct'
+           'drought_ag_loss_rate_pct',
+           'flood_hazard_score',
+           'flood_ag_loss_rate_pct'
          )
          AND CAST(dp.as_of_date AS INTEGER) BETWEEN ? AND ?
        ORDER BY CAST(dp.as_of_date AS INTEGER) ASC`,

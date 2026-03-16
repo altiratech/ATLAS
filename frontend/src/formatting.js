@@ -100,3 +100,17 @@ export function droughtRiskBand(drought) {
   if (score >= 60) return {label:`MOD ${$(score,0)}`, className:'badge-a'};
   return {label:`LOW ${$(score,0)}`, className:'badge-g'};
 }
+
+export function floodRiskBand(flood) {
+  const score = flood?.hazard_score;
+  const label = String(flood?.hazard_rating_label || '').trim().toLowerCase();
+  if (score == null) return {label:'FLOOD N/A', className:'badge-a'};
+  if (label === 'very low') return {label:`VERY LOW ${$(score,0)}`, className:'badge-g'};
+  if (label === 'relatively low') return {label:`LOW ${$(score,0)}`, className:'badge-g'};
+  if (label === 'relatively moderate') return {label:`MOD ${$(score,0)}`, className:'badge-a'};
+  if (label === 'relatively high') return {label:`HIGH ${$(score,0)}`, className:'badge-r'};
+  if (label === 'very high') return {label:`VERY HIGH ${$(score,0)}`, className:'badge-r'};
+  if (score >= 80) return {label:`HIGH ${$(score,0)}`, className:'badge-r'};
+  if (score >= 60) return {label:`MOD ${$(score,0)}`, className:'badge-a'};
+  return {label:`LOW ${$(score,0)}`, className:'badge-g'};
+}

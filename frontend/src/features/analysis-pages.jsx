@@ -6,6 +6,7 @@ import {
   $pct,
   benchmarkMethodBand,
   droughtRiskBand,
+  floodRiskBand,
   productivityBand,
   sourceBand,
   toast,
@@ -144,6 +145,7 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
           const basisBadge = benchmarkMethodBand(c.benchmark_method);
           const prodBadge = productivityBand(c.productivity_active);
           const droughtBadge = droughtRiskBand(c.drought);
+          const floodBadge = floodRiskBand(c.flood);
           return <div key={c.geo_key} className="sc">
             <div className="sc-l">County</div>
             <div className="sc-v" style={{fontSize:'.95rem'}}>{c.county_name}, {c.state}</div>
@@ -152,6 +154,7 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
               <span className={`badge ${basisBadge.className}`} title={c.benchmark_method_detail || 'Benchmark method detail unavailable.'}>{basisBadge.label}</span>
               <span className={`badge ${prodBadge.className}`} title={c.yield_productivity_detail || 'Productivity detail unavailable.'}>{prodBadge.label}</span>
               <span className={`badge ${droughtBadge.className}`} title={c.drought?.summary || 'FEMA drought evidence unavailable.'}>{droughtBadge.label}</span>
+              <span className={`badge ${floodBadge.className}`} title={c.flood?.summary || 'FEMA flood evidence unavailable.'}>{floodBadge.label}</span>
             </div>
             <div style={{fontSize:'.76rem',color:'var(--text2)',lineHeight:1.35}}>
               {c.benchmark_method_detail || 'Benchmark method detail unavailable.'}

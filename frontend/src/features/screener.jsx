@@ -6,6 +6,7 @@ import {
   $pct,
   benchmarkMethodBand,
   droughtRiskBand,
+  floodRiskBand,
   industrialLineageBand,
   industrialPowerSummaryBand,
   productivityBand,
@@ -29,6 +30,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   const [minPowerIndex, setMinPowerIndex] = React.useState('');
   const [maxPowerPrice, setMaxPowerPrice] = React.useState('');
   const [maxDroughtRisk, setMaxDroughtRisk] = React.useState('');
+  const [maxFloodRisk, setMaxFloodRisk] = React.useState('');
   const [state, setState] = React.useState('');
   const [basisFilter, setBasisFilter] = React.useState('');
   const [sortBy, setSortBy] = React.useState('implied_cap_rate');
@@ -62,6 +64,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
     if (minPowerIndex) qs += `&min_power_index=${minPowerIndex}`;
     if (maxPowerPrice) qs += `&max_power_price=${maxPowerPrice}`;
     if (maxDroughtRisk) qs += `&max_drought_risk=${maxDroughtRisk}`;
+    if (maxFloodRisk) qs += `&max_flood_risk=${maxFloodRisk}`;
     if (state) qs += `&state=${state}`;
     if (selScreen) qs += `&screen_id=${selScreen}`;
     if (zCapMin) qs += `&z_implied_cap_rate_min=${zCapMin}`;
@@ -77,6 +80,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   }, [
     maxPowerPrice,
     maxDroughtRisk,
+    maxFloodRisk,
     maxRentMult,
     minAccess,
     minCap,
@@ -131,11 +135,12 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
     if (minPowerIndex) filters.push(`min power index ${minPowerIndex}`);
     if (maxPowerPrice) filters.push(`max power price ${maxPowerPrice}`);
     if (maxDroughtRisk) filters.push(`max drought risk ${maxDroughtRisk}`);
+    if (maxFloodRisk) filters.push(`max flood risk ${maxFloodRisk}`);
     if (zCapMin || zCapMax) filters.push('cap z-score');
     if (zFairMin || zFairMax) filters.push('fair value z-score');
     if (zRentMin || zRentMax) filters.push('cash rent z-score');
     return filters;
-  }, [maxDroughtRisk, maxPowerPrice, minPowerIndex, state, zCapMax, zCapMin, zFairMax, zFairMin, zRentMax, zRentMin]);
+  }, [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minPowerIndex, state, zCapMax, zCapMin, zFairMax, zFairMin, zRentMax, zRentMin]);
 
   const persistScreen = async (openBacktest = false) => {
     if (reusableFilters.length === 0) {
@@ -208,6 +213,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
         <div className="fg"><label>Min Power Index</label><input type="number" step="1" value={minPowerIndex} onChange={e => setMinPowerIndex(e.target.value)} placeholder="e.g. 80"/></div>
         <div className="fg"><label>Max Power Price</label><input type="number" step="0.1" value={maxPowerPrice} onChange={e => setMaxPowerPrice(e.target.value)} placeholder="c/kWh"/></div>
         <div className="fg"><label>Max Drought Risk</label><input type="number" step="1" value={maxDroughtRisk} onChange={e => setMaxDroughtRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
+        <div className="fg"><label>Max Flood Risk</label><input type="number" step="1" value={maxFloodRisk} onChange={e => setMaxFloodRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
         <div className="fg"><label>Z Cap Min</label><input type="number" step="0.1" value={zCapMin} onChange={e => setZCapMin(e.target.value)} placeholder="e.g. 1.0"/></div>
         <div className="fg"><label>Z Cap Max</label><input type="number" step="0.1" value={zCapMax} onChange={e => setZCapMax(e.target.value)} placeholder="e.g. 2.5"/></div>
         <div className="fg"><label>Z Fair Min</label><input type="number" step="0.1" value={zFairMin} onChange={e => setZFairMin(e.target.value)} placeholder="e.g. -1.0"/></div>
@@ -235,6 +241,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             <option value="power_cost_index">Power Cost Index</option>
             <option value="industrial_power_price">Power Price</option>
             <option value="drought_risk_score">Drought Risk</option>
+            <option value="flood_hazard_score">Flood Risk</option>
             <option value="noi_per_acre">NOI/Acre</option>
             <option value="rent_multiple">Rent Multiple</option>
           </select>
@@ -329,7 +336,12 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             const badge = droughtRiskBand(r.drought);
             return <span className={`badge ${badge.className}`} title={r.drought?.summary || 'FEMA drought evidence not loaded yet.'}>{badge.label}</span>;
           }},
-          {key:'_agloss',label:'Ag Loss %',num:true,fmt:(_,r) => $pct(r.drought?.ag_loss_rate_pct)},
+          {key:'_agloss',label:'Drought Ag Loss %',num:true,fmt:(_,r) => $pct(r.drought?.ag_loss_rate_pct)},
+          {key:'_flood',label:'Flood',num:true,fmt:(_,r) => {
+            const badge = floodRiskBand(r.flood);
+            return <span className={`badge ${badge.className}`} title={r.flood?.summary || 'FEMA flood evidence not loaded yet.'}>{badge.label}</span>;
+          }},
+          {key:'_flood_agloss',label:'Flood Ag Loss %',num:true,fmt:(_,r) => $pct(r.flood?.ag_loss_rate_pct)},
           {key:'_pidx',label:'Pwr Idx',num:true,fmt:(_,r) => $(r.industrial?.power_cost_index,1)},
           {key:'_ppx',label:'Pwr $',num:true,fmt:(_,r) => $(r.industrial?.industrial_power_price,2)},
           {key:'_zcap',label:'Cap Z',num:true,fmt:(_,r) => {
@@ -366,6 +378,8 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             _rm:r.metrics?.rent_multiple,
             _noi:r.metrics?.noi_per_acre,
             _access:r.metrics?.access_score,
+            _flood:r.flood?.hazard_score,
+            _flood_agloss:r.flood?.ag_loss_rate_pct,
             _industrial_lineage:r.industrial?.lineage,
             _pidx:r.industrial?.power_cost_index,
             _ppx:r.industrial?.industrial_power_price,

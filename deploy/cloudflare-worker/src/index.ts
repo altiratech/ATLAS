@@ -42,6 +42,9 @@ import {
 import {
   computeDroughtEvidence,
 } from './services/drought';
+import {
+  computeFloodEvidence,
+} from './services/flood';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -238,6 +241,7 @@ async function computeCounty(
 
   const county = await getCounty(db, geoKey);
   const drought = computeDroughtEvidence(series, snapshot.lineage);
+  const flood = computeFloodEvidence(series, snapshot.lineage);
 
   return {
     geo_key: geoKey,
@@ -265,6 +269,7 @@ async function computeCounty(
     access_details: accessData?.distances ?? {},
     access_density: accessData?.density ?? {},
     drought,
+    flood,
   };
 }
 
@@ -304,6 +309,7 @@ function computeCountyFromSeries(
   computeAll(ctx);
   const sourceQuality = getSourceQuality(benchmarkMethod.method);
   const drought = computeDroughtEvidence(hydratedSeries, lineage);
+  const flood = computeFloodEvidence(hydratedSeries, lineage);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     ctx.explains.benchmark_value = {
       ...(ctx.explains.benchmark_value ?? {}),
@@ -350,6 +356,7 @@ function computeCountyFromSeries(
     source_quality_score: sourceQuality.score,
     source_quality_detail: benchmarkMethod.detail,
     drought,
+    flood,
   };
 }
 
@@ -2224,6 +2231,7 @@ app.get('/api/v1/screener', async (c) => {
   const minPowerIndex = c.req.query('min_power_index');
   const maxPowerPrice = c.req.query('max_power_price');
   const maxDroughtRisk = c.req.query('max_drought_risk');
+  const maxFloodRisk = c.req.query('max_flood_risk');
   const state = c.req.query('state');
   const sortBy = c.req.query('sort_by') ?? 'implied_cap_rate';
   const sortDir = c.req.query('sort_dir') ?? 'desc';
@@ -2387,6 +2395,12 @@ app.get('/api/v1/screener', async (c) => {
           passes = false;
         }
       }
+      if (passes && maxFloodRisk) {
+        const ceiling = Number(maxFloodRisk);
+        if (!Number.isNaN(ceiling) && ((data.flood?.hazard_score ?? Infinity) > ceiling)) {
+          passes = false;
+        }
+      }
     }
 
     if (passes) {
@@ -2406,6 +2420,7 @@ app.get('/api/v1/screener', async (c) => {
         source_quality_score: data.source_quality_score,
         source_quality_detail: data.source_quality_detail,
         drought: data.drought,
+        flood: data.flood,
         metrics: Object.fromEntries(
           Object.entries(m).map(([k, v]) => [k, v != null ? Math.round((v as number) * 100) / 100 : null]),
         ),
@@ -2416,21 +2431,25 @@ app.get('/api/v1/screener', async (c) => {
   const reverse = sortDir !== 'asc';
   results.sort((a, b) => {
     const av = sortBy === 'power_cost_index'
-      ? (a.industrial?.power_cost_index ?? null)
+        ? (a.industrial?.power_cost_index ?? null)
       : sortBy === 'industrial_power_price'
         ? (a.industrial?.industrial_power_price ?? null)
-        : sortBy === 'drought_risk_score'
-          ? (a.drought?.risk_score ?? null)
-        : (a.metrics[sortBy] ?? 0);
+      : sortBy === 'drought_risk_score'
+        ? (a.drought?.risk_score ?? null)
+      : sortBy === 'flood_hazard_score'
+        ? (a.flood?.hazard_score ?? null)
+      : (a.metrics[sortBy] ?? 0);
     const bv = sortBy === 'power_cost_index'
       ? (b.industrial?.power_cost_index ?? null)
       : sortBy === 'industrial_power_price'
         ? (b.industrial?.industrial_power_price ?? null)
-        : sortBy === 'drought_risk_score'
-          ? (b.drought?.risk_score ?? null)
-        : (b.metrics[sortBy] ?? 0);
+      : sortBy === 'drought_risk_score'
+        ? (b.drought?.risk_score ?? null)
+      : sortBy === 'flood_hazard_score'
+        ? (b.flood?.hazard_score ?? null)
+      : (b.metrics[sortBy] ?? 0);
 
-    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price' || sortBy === 'drought_risk_score')) {
+    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price' || sortBy === 'drought_risk_score' || sortBy === 'flood_hazard_score')) {
       if (av == null && bv != null) return 1;
       if (av != null && bv == null) return -1;
       if (av == null && bv == null) {

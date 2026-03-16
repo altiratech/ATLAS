@@ -151,7 +151,7 @@ export const INDUSTRIAL_SERIES_DEFS: IndustrialSeriesDef[] = [
   },
   {
     seriesKey: 'flood_risk_score',
-    geoLevels: ['county', 'state'],
+    geoLevels: ['county', 'state', 'national'],
     frequency: 'annual',
     unit: 'score_0_100',
     sourceName: 'FEMA',
