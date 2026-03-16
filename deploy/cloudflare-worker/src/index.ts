@@ -48,6 +48,9 @@ import {
 import {
   computeIrrigationEvidence,
 } from './services/irrigation';
+import {
+  computeSoilEvidence,
+} from './services/soil';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -246,6 +249,7 @@ async function computeCounty(
   const drought = computeDroughtEvidence(series, snapshot.lineage);
   const flood = computeFloodEvidence(series, snapshot.lineage);
   const irrigation = computeIrrigationEvidence(series, snapshot.lineage);
+  const soil = computeSoilEvidence(series, snapshot.lineage);
 
   return {
     geo_key: geoKey,
@@ -275,6 +279,7 @@ async function computeCounty(
     drought,
     flood,
     irrigation,
+    soil,
   };
 }
 
@@ -316,6 +321,7 @@ function computeCountyFromSeries(
   const drought = computeDroughtEvidence(hydratedSeries, lineage);
   const flood = computeFloodEvidence(hydratedSeries, lineage);
   const irrigation = computeIrrigationEvidence(hydratedSeries, lineage);
+  const soil = computeSoilEvidence(hydratedSeries, lineage);
   if (benchmarkMethod.benchmarkProxyValue != null) {
     ctx.explains.benchmark_value = {
       ...(ctx.explains.benchmark_value ?? {}),
@@ -364,6 +370,7 @@ function computeCountyFromSeries(
     drought,
     flood,
     irrigation,
+    soil,
   };
 }
 
@@ -2243,6 +2250,7 @@ app.get('/api/v1/screener', async (c) => {
   const maxPowerPrice = c.req.query('max_power_price');
   const maxDroughtRisk = c.req.query('max_drought_risk');
   const maxFloodRisk = c.req.query('max_flood_risk');
+  const minSoilFarmlandPct = c.req.query('min_soil_farmland_pct');
   const state = c.req.query('state');
   const sortBy = c.req.query('sort_by') ?? 'implied_cap_rate';
   const sortDir = c.req.query('sort_dir') ?? 'desc';
@@ -2412,6 +2420,12 @@ app.get('/api/v1/screener', async (c) => {
           passes = false;
         }
       }
+      if (passes && minSoilFarmlandPct) {
+        const floor = Number(minSoilFarmlandPct);
+        if (!Number.isNaN(floor) && ((data.soil?.significant_share_pct ?? -Infinity) < floor)) {
+          passes = false;
+        }
+      }
     }
 
     if (passes) {
@@ -2433,6 +2447,7 @@ app.get('/api/v1/screener', async (c) => {
         drought: data.drought,
         flood: data.flood,
         irrigation: data.irrigation,
+        soil: data.soil,
         metrics: Object.fromEntries(
           Object.entries(m).map(([k, v]) => [k, v != null ? Math.round((v as number) * 100) / 100 : null]),
         ),
@@ -2452,6 +2467,10 @@ app.get('/api/v1/screener', async (c) => {
         ? (a.flood?.hazard_score ?? null)
       : sortBy === 'irrigated_ag_land_acres'
         ? (a.irrigation?.irrigated_acres ?? null)
+      : sortBy === 'soil_significant_farmland_share_pct'
+        ? (a.soil?.significant_share_pct ?? null)
+      : sortBy === 'soil_rootzone_aws_100cm'
+        ? (a.soil?.rootzone_aws_100cm ?? null)
       : (a.metrics[sortBy] ?? 0);
     const bv = sortBy === 'power_cost_index'
       ? (b.industrial?.power_cost_index ?? null)
@@ -2463,9 +2482,13 @@ app.get('/api/v1/screener', async (c) => {
         ? (b.flood?.hazard_score ?? null)
       : sortBy === 'irrigated_ag_land_acres'
         ? (b.irrigation?.irrigated_acres ?? null)
+      : sortBy === 'soil_significant_farmland_share_pct'
+        ? (b.soil?.significant_share_pct ?? null)
+      : sortBy === 'soil_rootzone_aws_100cm'
+        ? (b.soil?.rootzone_aws_100cm ?? null)
       : (b.metrics[sortBy] ?? 0);
 
-    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price' || sortBy === 'drought_risk_score' || sortBy === 'flood_hazard_score' || sortBy === 'irrigated_ag_land_acres')) {
+    if ((sortBy === 'power_cost_index' || sortBy === 'industrial_power_price' || sortBy === 'drought_risk_score' || sortBy === 'flood_hazard_score' || sortBy === 'irrigated_ag_land_acres' || sortBy === 'soil_significant_farmland_share_pct' || sortBy === 'soil_rootzone_aws_100cm')) {
       if (av == null && bv != null) return 1;
       if (av != null && bv == null) return -1;
       if (av == null && bv == null) {

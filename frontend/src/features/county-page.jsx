@@ -159,6 +159,7 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
   const flood = data.flood || null;
   const floodBadge = floodRiskBand(flood);
   const irrigation = data.irrigation || null;
+  const soil = data.soil || null;
   const workflowParams = {
     fips: data.geo_key,
     countyName: data.county_name,
@@ -239,6 +240,9 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
     data.productivity_active && typeof m.yield_productivity_factor === 'number'
       ? `County productivity factor is active at ${$x(m.yield_productivity_factor)}.`
       : null,
+    soil?.significant_share_pct != null
+      ? `NRCS classifies ${$pct(soil.significant_share_pct)} of surveyed acres as farmland-significant.`
+      : null,
     m.dscr != null
       ? `Debt-service coverage is ${$(m.dscr, 2)}x under the active model set.`
       : null,
@@ -253,6 +257,9 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
     m.access_score != null
       ? null
       : 'Access score is still missing, so market-readiness is only partially underwritten.',
+    soil?.significant_share_pct != null && soil.significant_share_pct < 35
+      ? 'NRCS farmland-significant share is limited for this county.'
+      : null,
     industrial?.missing_critical_data?.length
       ? `Industrial lane still has missing evidence: ${industrial.missing_critical_data.slice(0, 2).join(', ')}${industrial.missing_critical_data.length > 2 ? '...' : ''}`
       : null,
@@ -436,10 +443,10 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
     <div className="card" style={{marginBottom:'1rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
         <div>
-          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Physical / Agronomic Risk</div>
-          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>FEMA hazard and USDA irrigation footprint for this county</div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Physical / Agronomic Context</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>FEMA hazard, USDA irrigation, and NRCS soil context for this county</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'760px'}}>
-            Atlas surfaces the official FEMA drought and flood hazard scores directly and pairs them with USDA Census irrigated acreage as a water-footprint layer. The USDA irrigation baseline is carried forward between census years rather than estimated synthetically.
+            Atlas surfaces the official FEMA drought and flood hazard scores directly, pairs them with USDA Census irrigated acreage, and adds NRCS SSURGO soil context for farmland significance and soil-water storage. The USDA irrigation baseline is carried forward between census years rather than estimated synthetically.
           </div>
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
@@ -474,15 +481,35 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
           <div className="sc-c">USDA Census irrigated agricultural acreage carried forward between census years</div>
         </div>
         <div className="sc">
+          <div className="sc-l">NRCS Farmland %</div>
+          <div className="sc-v">{$pct(soil?.significant_share_pct)}</div>
+          <div className="sc-c">Share of surveyed acres NRCS classifies as prime, statewide, unique, or local farmland</div>
+        </div>
+        <div className="sc">
+          <div className="sc-l">Prime Farmland %</div>
+          <div className="sc-v">{$pct(soil?.prime_share_pct)}</div>
+          <div className="sc-c">Prime farmland share including drained / irrigated variants where NRCS flags them</div>
+        </div>
+        <div className="sc">
+          <div className="sc-l">AWS 100cm</div>
+          <div className="sc-v">{soil?.rootzone_aws_100cm != null ? $(soil.rootzone_aws_100cm, 1) : 'N/A'}</div>
+          <div className="sc-c">NRCS weighted available water storage in the top 100 cm of soil</div>
+        </div>
+        <div className="sc">
+          <div className="sc-l">AWS 150cm</div>
+          <div className="sc-v">{soil?.rootzone_aws_150cm != null ? $(soil.rootzone_aws_150cm, 1) : 'N/A'}</div>
+          <div className="sc-c">NRCS weighted available water storage in the top 150 cm of soil</div>
+        </div>
+        <div className="sc">
           <div className="sc-l">Evidence Basis</div>
-          <div className="sc-v" style={{fontSize:'.95rem'}}>{[drought?.lineage, flood?.lineage, irrigation?.lineage].filter(Boolean).join(' / ').toUpperCase() || 'N/A'}</div>
-          <div className="sc-c">{irrigation?.summary || flood?.summary || drought?.summary || 'Flood, drought, and irrigation evidence have not been loaded for this county yet.'}</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{[drought?.lineage, flood?.lineage, irrigation?.lineage, soil?.lineage].filter(Boolean).join(' / ').toUpperCase() || 'N/A'}</div>
+          <div className="sc-c">{soil?.summary || irrigation?.summary || flood?.summary || drought?.summary || 'Flood, drought, irrigation, and soil evidence have not been loaded for this county yet.'}</div>
         </div>
       </div>
       <div style={{marginTop:'.75rem',fontSize:'.78rem',color:'var(--text2)',display:'grid',gap:'.35rem'}}>
         {(() => {
-          const notes = Array.from(new Set([...(drought?.notes || []), ...(flood?.notes || []), ...(irrigation?.notes || [])]));
-          if (!notes.length) return [<div key="missing">• FEMA drought, flood, and irrigation evidence have not been loaded yet.</div>];
+          const notes = Array.from(new Set([...(drought?.notes || []), ...(flood?.notes || []), ...(irrigation?.notes || []), ...(soil?.notes || [])]));
+          if (!notes.length) return [<div key="missing">• FEMA drought, flood, irrigation, and NRCS soil evidence have not been loaded yet.</div>];
           return notes.map((note, idx) => <div key={idx}>• {note}</div>);
         })()}
       </div>
@@ -632,16 +659,16 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
         <div className="sc-c">{data.source_quality_detail || 'Valuation input lineage unavailable'}</div>
       </div>
       <div className="sc">
-        <div className="sc-l">Physical Risk</div>
+        <div className="sc-l">Physical / Soil</div>
         <div className="sc-v" style={{fontSize:'.95rem'}}>
-          {drought?.risk_score != null || flood?.hazard_score != null || irrigation?.irrigated_acres != null
-            ? `D ${drought?.risk_score != null ? $(drought.risk_score,1) : 'N/A'} | F ${flood?.hazard_score != null ? $(flood.hazard_score,1) : 'N/A'} | Irr ${irrigation?.irrigated_acres != null ? $int(irrigation.irrigated_acres) : 'N/A'}`
+          {drought?.risk_score != null || flood?.hazard_score != null || irrigation?.irrigated_acres != null || soil?.significant_share_pct != null
+            ? `D ${drought?.risk_score != null ? $(drought.risk_score,1) : 'N/A'} | F ${flood?.hazard_score != null ? $(flood.hazard_score,1) : 'N/A'} | Irr ${irrigation?.irrigated_acres != null ? $int(irrigation.irrigated_acres) : 'N/A'} | Soil ${soil?.significant_share_pct != null ? $pct(soil.significant_share_pct) : 'N/A'}`
             : 'N/A'}
         </div>
         <div className="sc-c">
-          {flood?.hazard_rating_label || drought?.risk_rating_label || irrigation?.irrigated_acres != null
-            ? `Flood ${flood?.hazard_rating_label || 'N/A'} · Drought ${drought?.risk_rating_label || 'N/A'} · Irrigation ${irrigation?.irrigated_acres != null ? 'reported' : 'N/A'}`
-            : 'FEMA drought, flood, and irrigation evidence unavailable'}
+          {flood?.hazard_rating_label || drought?.risk_rating_label || irrigation?.irrigated_acres != null || soil?.significant_share_pct != null
+            ? `Flood ${flood?.hazard_rating_label || 'N/A'} · Drought ${drought?.risk_rating_label || 'N/A'} · Irrigation ${irrigation?.irrigated_acres != null ? 'reported' : 'N/A'} · NRCS soil ${soil?.significant_share_pct != null ? 'reported' : 'N/A'}`
+            : 'FEMA drought, flood, irrigation, and NRCS soil evidence unavailable'}
         </div>
       </div>
       <div className="sc">

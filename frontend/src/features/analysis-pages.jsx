@@ -163,6 +163,9 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
             <div style={{fontSize:'.76rem',color:'var(--text2)',lineHeight:1.35,marginTop:'.35rem'}}>
               Irrigated acres: {$int(c.irrigation?.irrigated_acres)}
             </div>
+            <div style={{fontSize:'.76rem',color:'var(--text2)',lineHeight:1.35,marginTop:'.35rem'}}>
+              NRCS farmland: {$pct(c.soil?.significant_share_pct)} · Prime: {$pct(c.soil?.prime_share_pct)} · AWS100: {$(c.soil?.rootzone_aws_100cm, 1)}
+            </div>
           </div>;
         })}
       </div>
