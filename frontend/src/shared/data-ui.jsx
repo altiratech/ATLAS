@@ -57,7 +57,19 @@ export function LineChart({series, color='var(--accent)', title, unitFormatter})
   </div>;
 }
 
-export function STable({cols, rows, onRow, initSort, stickyHeader=false}) {
+function resolveRowKey(row, index, rowKey) {
+  if (typeof rowKey === 'function') return rowKey(row, index);
+  if (typeof rowKey === 'string') {
+    const keyed = row?.[rowKey];
+    if (keyed != null) return String(keyed);
+  }
+  if (row?.geo_key != null) return String(row.geo_key);
+  if (row?.fips != null) return String(row.fips);
+  if (row?.id != null) return String(row.id);
+  return String(index);
+}
+
+export function STable({cols, rows, onRow, initSort, stickyHeader=false, rowKey}) {
   const [sort, setSort] = React.useState(initSort || null);
   const sorted = React.useMemo(() => {
     if (!sort || !rows) return rows || [];
@@ -75,7 +87,7 @@ export function STable({cols, rows, onRow, initSort, stickyHeader=false}) {
   };
   return <div className={`tc${stickyHeader ? ' tc-sticky' : ''}`}><table>
     <thead><tr>{cols.map(c => <th key={c.key} onClick={()=>toggle(c)} className={c.sortable === false ? '' : (sort && sort[0]===c.key ? (sort[1]==='asc' ? 's-a' : 's-d') : '')}>{c.label}</th>)}</tr></thead>
-    <tbody>{sorted.map((r,i) => <tr key={i} onClick={()=>onRow&&onRow(r)}>{cols.map(c => <td key={c.key} className={c.num?'n':''}>{c.fmt ? c.fmt(r[c.key],r) : r[c.key]}</td>)}</tr>)}</tbody>
+    <tbody>{sorted.map((r,i) => <tr key={resolveRowKey(r, i, rowKey)} onClick={()=>onRow&&onRow(r)}>{cols.map(c => <td key={c.key} className={c.num?'n':''}>{c.fmt ? c.fmt(r[c.key],r) : r[c.key]}</td>)}</tr>)}</tbody>
   </table></div>;
 }
 

@@ -184,21 +184,27 @@ CREATE INDEX IF NOT EXISTS ix_ingest_progress_status ON ingest_progress(status);
 -- ── Watchlist ───────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS watchlist_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  geo_key TEXT NOT NULL REFERENCES geo_county(fips) UNIQUE,
+  owner_key TEXT NOT NULL DEFAULT 'owner_default',
+  geo_key TEXT NOT NULL REFERENCES geo_county(fips),
   added_at TEXT DEFAULT (datetime('now')),
   notes TEXT,
   alert_cap_below REAL,
-  alert_cap_above REAL
+  alert_cap_above REAL,
+  UNIQUE(owner_key, geo_key)
 );
+CREATE INDEX IF NOT EXISTS ix_watchlist_owner ON watchlist_items(owner_key, added_at DESC);
+CREATE INDEX IF NOT EXISTS ix_watchlist_geo ON watchlist_items(geo_key);
 
 -- ── County Notes ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS county_notes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  owner_key TEXT NOT NULL DEFAULT 'owner_default',
   geo_key TEXT NOT NULL REFERENCES geo_county(fips),
   content TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS ix_county_notes_owner_geo ON county_notes(owner_key, geo_key, created_at DESC);
 
 -- ── Research Workspace ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS research_workspaces (
@@ -267,11 +273,14 @@ CREATE INDEX IF NOT EXISTS ix_auth_sessions_expires ON auth_sessions(expires_at)
 -- ── Portfolios ──────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS portfolios (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL UNIQUE,
+  owner_key TEXT NOT NULL DEFAULT 'owner_default',
+  name TEXT NOT NULL,
   description TEXT,
   created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now'))
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(owner_key, name)
 );
+CREATE INDEX IF NOT EXISTS ix_portfolios_owner ON portfolios(owner_key, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS portfolio_holdings (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -283,6 +292,7 @@ CREATE TABLE IF NOT EXISTS portfolio_holdings (
   notes TEXT,
   UNIQUE(portfolio_id, geo_key)
 );
+CREATE INDEX IF NOT EXISTS ix_portfolio_holdings_portfolio ON portfolio_holdings(portfolio_id);
 
 -- ── Future hooks ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS deals (

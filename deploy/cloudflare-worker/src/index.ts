@@ -355,15 +355,15 @@ function computeCountyFromSeries(
 
 function stats(arr: number[]) {
   if (!arr.length) return {};
-  arr.sort((a, b) => a - b);
-  const n = arr.length;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const n = sorted.length;
   return {
-    min: Math.round(Math.min(...arr) * 100) / 100,
-    max: Math.round(Math.max(...arr) * 100) / 100,
-    mean: Math.round((arr.reduce((s, v) => s + v, 0) / n) * 100) / 100,
-    median: Math.round(arr[Math.floor(n / 2)] * 100) / 100,
-    p25: Math.round(arr[Math.floor(n / 4)] * 100) / 100,
-    p75: Math.round(arr[Math.floor((3 * n) / 4)] * 100) / 100,
+    min: Math.round(Math.min(...sorted) * 100) / 100,
+    max: Math.round(Math.max(...sorted) * 100) / 100,
+    mean: Math.round((sorted.reduce((s, v) => s + v, 0) / n) * 100) / 100,
+    median: Math.round(sorted[Math.floor(n / 2)] * 100) / 100,
+    p25: Math.round(sorted[Math.floor(n / 4)] * 100) / 100,
+    p75: Math.round(sorted[Math.floor((3 * n) / 4)] * 100) / 100,
   };
 }
 
@@ -1121,7 +1121,66 @@ async function requireAuthOrError(
 }
 
 function workspaceVisibleToUser(workspace: ResearchWorkspaceRow, userKey: string): boolean {
-  return (workspace.owner_key || RESEARCH_LEGACY_USER) === userKey;
+  return recordVisibleToUser(workspace.owner_key, userKey);
+}
+
+const ASSUMPTION_NUMERIC_RULES: Record<string, { min: number; max: number; integer?: boolean }> = {
+  risk_premium: { min: 0, max: 20 },
+  long_run_growth: { min: -0.2, max: 0.2 },
+  near_term_rent_shock: { min: -1, max: 1 },
+  cost_pct: { min: 0, max: 1 },
+  grain_price: { min: 0, max: 50 },
+  ltv: { min: 0, max: 1 },
+  loan_rate: { min: 0, max: 1 },
+  loan_term_years: { min: 1, max: 50, integer: true },
+  base_rate_default: { min: 0, max: 20 },
+  vacancy: { min: 0, max: 1 },
+  capex_reserve_pct: { min: 0, max: 1 },
+};
+
+function validateAssumptionName(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 80) return null;
+  return trimmed;
+}
+
+function validateAssumptionParams(value: unknown): { params: Record<string, number | string> } | { error: string } {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { error: 'Assumption params must be an object' };
+  }
+  const params = value as Record<string, unknown>;
+  const sanitized: Record<string, number | string> = {};
+  const allowedKeys = new Set([...Object.keys(ASSUMPTION_NUMERIC_RULES), 'base_rate_series']);
+  for (const [key, raw] of Object.entries(params)) {
+    if (!allowedKeys.has(key)) {
+      return { error: `Unsupported assumption param: ${key}` };
+    }
+    if (key === 'base_rate_series') {
+      if (typeof raw !== 'string') {
+        return { error: 'base_rate_series must be a string' };
+      }
+      const normalized = raw.trim();
+      if (!normalized || normalized.length > 80 || !/^[a-z0-9_.-]+$/i.test(normalized)) {
+        return { error: 'base_rate_series must be a simple series key' };
+      }
+      sanitized[key] = normalized;
+      continue;
+    }
+    const numericRule = ASSUMPTION_NUMERIC_RULES[key];
+    const parsed = typeof raw === 'number' ? raw : Number(raw);
+    if (!Number.isFinite(parsed)) {
+      return { error: `${key} must be numeric` };
+    }
+    if (parsed < numericRule.min || parsed > numericRule.max) {
+      return { error: `${key} must be between ${numericRule.min} and ${numericRule.max}` };
+    }
+    sanitized[key] = numericRule.integer ? Math.round(parsed) : parsed;
+  }
+  if (Object.keys(sanitized).length === 0) {
+    return { error: 'At least one assumption param is required' };
+  }
+  return { params: sanitized };
 }
 
 function clampConviction(value: unknown): number {
@@ -1330,9 +1389,11 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
 
 let researchSchemaReady = false;
 let researchSchemaPromise: Promise<void> | null = null;
+let personalDataSchemaReady = false;
+let personalDataSchemaPromise: Promise<void> | null = null;
 
-async function getResearchWorkspaceColumns(db: D1Database): Promise<Set<string>> {
-  const cols = await db.prepare('PRAGMA table_info(research_workspaces)').all<{ name: string }>();
+async function getTableColumns(db: D1Database, tableName: string): Promise<Set<string>> {
+  const cols = await db.prepare(`PRAGMA table_info(${tableName})`).all<{ name: string }>();
   return new Set((cols.results ?? []).map((col) => col.name));
 }
 
@@ -1358,7 +1419,7 @@ async function ensureResearchSchema(db: D1Database) {
         )
         .run();
 
-      let workspaceCols = await getResearchWorkspaceColumns(db);
+      let workspaceCols = await getTableColumns(db, 'research_workspaces');
       if (!workspaceCols.has('owner_key') && workspaceCols.size > 0) {
         await db.prepare('PRAGMA foreign_keys=OFF').run();
         try {
@@ -1403,7 +1464,7 @@ async function ensureResearchSchema(db: D1Database) {
         } finally {
           await db.prepare('PRAGMA foreign_keys=ON').run();
         }
-        workspaceCols = await getResearchWorkspaceColumns(db);
+        workspaceCols = await getTableColumns(db, 'research_workspaces');
       }
 
       if (!workspaceCols.has('analysis_json')) {
@@ -1493,6 +1554,212 @@ async function ensureResearchSchema(db: D1Database) {
     });
   }
   await researchSchemaPromise;
+}
+
+function recordVisibleToUser(ownerKey: string | null | undefined, userKey: string): boolean {
+  const normalizedOwner = ownerKey || RESEARCH_LEGACY_USER;
+  return normalizedOwner === userKey || normalizedOwner === RESEARCH_LEGACY_USER;
+}
+
+async function ensurePersonalDataSchema(db: D1Database) {
+  if (personalDataSchemaReady) return;
+  if (!personalDataSchemaPromise) {
+    personalDataSchemaPromise = (async () => {
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS watchlist_items (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             owner_key TEXT NOT NULL DEFAULT 'owner_default',
+             geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+             added_at TEXT DEFAULT (datetime('now')),
+             notes TEXT,
+             alert_cap_below REAL,
+             alert_cap_above REAL,
+             UNIQUE(owner_key, geo_key)
+           )`,
+        )
+        .run();
+
+      let watchlistCols = await getTableColumns(db, 'watchlist_items');
+      if (!watchlistCols.has('owner_key') && watchlistCols.size > 0) {
+        await db.prepare('PRAGMA foreign_keys=OFF').run();
+        try {
+          await db.prepare('DROP TABLE IF EXISTS watchlist_items_new').run();
+          await db
+            .prepare(
+              `CREATE TABLE watchlist_items_new (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 owner_key TEXT NOT NULL DEFAULT 'owner_default',
+                 geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+                 added_at TEXT DEFAULT (datetime('now')),
+                 notes TEXT,
+                 alert_cap_below REAL,
+                 alert_cap_above REAL,
+                 UNIQUE(owner_key, geo_key)
+               )`,
+            )
+            .run();
+          await db
+            .prepare(
+              `INSERT INTO watchlist_items_new (
+                 id, owner_key, geo_key, added_at, notes, alert_cap_below, alert_cap_above
+               )
+               SELECT
+                 id,
+                 'owner_default',
+                 geo_key,
+                 added_at,
+                 notes,
+                 alert_cap_below,
+                 alert_cap_above
+               FROM watchlist_items`,
+            )
+            .run();
+          await db.prepare('DROP TABLE watchlist_items').run();
+          await db.prepare('ALTER TABLE watchlist_items_new RENAME TO watchlist_items').run();
+        } finally {
+          await db.prepare('PRAGMA foreign_keys=ON').run();
+        }
+        watchlistCols = await getTableColumns(db, 'watchlist_items');
+      }
+
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_watchlist_owner ON watchlist_items(owner_key, added_at DESC)').run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_watchlist_geo ON watchlist_items(geo_key)').run();
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS county_notes (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             owner_key TEXT NOT NULL DEFAULT 'owner_default',
+             geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+             content TEXT NOT NULL,
+             created_at TEXT DEFAULT (datetime('now')),
+             updated_at TEXT DEFAULT (datetime('now'))
+           )`,
+        )
+        .run();
+
+      let noteCols = await getTableColumns(db, 'county_notes');
+      if (!noteCols.has('owner_key') && noteCols.size > 0) {
+        await db.prepare('PRAGMA foreign_keys=OFF').run();
+        try {
+          await db.prepare('DROP TABLE IF EXISTS county_notes_new').run();
+          await db
+            .prepare(
+              `CREATE TABLE county_notes_new (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 owner_key TEXT NOT NULL DEFAULT 'owner_default',
+                 geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+                 content TEXT NOT NULL,
+                 created_at TEXT DEFAULT (datetime('now')),
+                 updated_at TEXT DEFAULT (datetime('now'))
+               )`,
+            )
+            .run();
+          await db
+            .prepare(
+              `INSERT INTO county_notes_new (
+                 id, owner_key, geo_key, content, created_at, updated_at
+               )
+               SELECT
+                 id,
+                 'owner_default',
+                 geo_key,
+                 content,
+                 created_at,
+                 updated_at
+               FROM county_notes`,
+            )
+            .run();
+          await db.prepare('DROP TABLE county_notes').run();
+          await db.prepare('ALTER TABLE county_notes_new RENAME TO county_notes').run();
+        } finally {
+          await db.prepare('PRAGMA foreign_keys=ON').run();
+        }
+        noteCols = await getTableColumns(db, 'county_notes');
+      }
+
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_county_notes_owner_geo ON county_notes(owner_key, geo_key, created_at DESC)').run();
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS portfolios (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             owner_key TEXT NOT NULL DEFAULT 'owner_default',
+             name TEXT NOT NULL,
+             description TEXT,
+             created_at TEXT DEFAULT (datetime('now')),
+             updated_at TEXT DEFAULT (datetime('now')),
+             UNIQUE(owner_key, name)
+           )`,
+        )
+        .run();
+
+      let portfolioCols = await getTableColumns(db, 'portfolios');
+      if (!portfolioCols.has('owner_key') && portfolioCols.size > 0) {
+        await db.prepare('PRAGMA foreign_keys=OFF').run();
+        try {
+          await db.prepare('DROP TABLE IF EXISTS portfolios_new').run();
+          await db
+            .prepare(
+              `CREATE TABLE portfolios_new (
+                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                 owner_key TEXT NOT NULL DEFAULT 'owner_default',
+                 name TEXT NOT NULL,
+                 description TEXT,
+                 created_at TEXT DEFAULT (datetime('now')),
+                 updated_at TEXT DEFAULT (datetime('now')),
+                 UNIQUE(owner_key, name)
+               )`,
+            )
+            .run();
+          await db
+            .prepare(
+              `INSERT INTO portfolios_new (
+                 id, owner_key, name, description, created_at, updated_at
+               )
+               SELECT
+                 id,
+                 'owner_default',
+                 name,
+                 description,
+                 created_at,
+                 updated_at
+               FROM portfolios`,
+            )
+            .run();
+          await db.prepare('DROP TABLE portfolios').run();
+          await db.prepare('ALTER TABLE portfolios_new RENAME TO portfolios').run();
+        } finally {
+          await db.prepare('PRAGMA foreign_keys=ON').run();
+        }
+        portfolioCols = await getTableColumns(db, 'portfolios');
+      }
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS portfolio_holdings (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             portfolio_id INTEGER NOT NULL REFERENCES portfolios(id) ON DELETE CASCADE,
+             geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+             acres REAL NOT NULL DEFAULT 100,
+             purchase_price_per_acre REAL,
+             purchase_year TEXT,
+             notes TEXT,
+             UNIQUE(portfolio_id, geo_key)
+           )`,
+        )
+        .run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_portfolios_owner ON portfolios(owner_key, updated_at DESC)').run();
+      await db.prepare('CREATE INDEX IF NOT EXISTS ix_portfolio_holdings_portfolio ON portfolio_holdings(portfolio_id)').run();
+
+      personalDataSchemaReady = true;
+    })().catch((error) => {
+      personalDataSchemaPromise = null;
+      throw error;
+    });
+  }
+  await personalDataSchemaPromise;
 }
 
 async function ensureAgCompositeIndexSchema(db: D1Database) {
@@ -1600,16 +1867,20 @@ app.post('/api/v1/assumptions', async (c) => {
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const body = await c.req.json<{ name: string; params: Record<string, any> }>();
+  const assumptionName = validateAssumptionName(body.name);
+  if (!assumptionName) return c.json({ error: 'Assumption set name is required and must be 80 characters or fewer' }, 400);
+  const validated = validateAssumptionParams(body.params);
+  if ('error' in validated) return c.json({ error: validated.error }, 400);
   const existing = await db
     .prepare('SELECT MAX(version) as max_v FROM assumption_sets WHERE name = ?')
-    .bind(body.name)
+    .bind(assumptionName)
     .first<{ max_v: number | null }>();
   const newVer = (existing?.max_v ?? 0) + 1;
   const result = await db
     .prepare('INSERT INTO assumption_sets (name, version, params_json) VALUES (?, ?, ?) RETURNING id')
-    .bind(body.name, newVer, JSON.stringify(body.params))
+    .bind(assumptionName, newVer, JSON.stringify(validated.params))
     .first<{ id: number }>();
-  return c.json({ id: result!.id, name: body.name, version: newVer, params: body.params });
+  return c.json({ id: result!.id, name: assumptionName, version: newVer, params: validated.params });
 });
 
 app.get('/api/v1/screens', async (c) => {
@@ -2887,21 +3158,33 @@ app.get('/api/v1/facilities', async (c) => {
 
 app.get('/api/v1/watchlist', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const assumptions = (await getAssumptions(db)) ?? {};
   const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const asOfYear = Number.parseInt(resolved.asOf, 10);
   const prevYear = Number.isNaN(asOfYear) ? null : String(asOfYear - 1);
 
-  const items = await db.prepare('SELECT id, geo_key, notes, added_at FROM watchlist_items').all<{
+  const items = await db.prepare(
+    `SELECT id, owner_key, geo_key, notes, added_at
+     FROM watchlist_items
+     WHERE owner_key = ? OR owner_key = ?
+     ORDER BY CASE WHEN owner_key = ? THEN 0 ELSE 1 END, added_at DESC, id DESC`,
+  ).bind(auth.userKey, RESEARCH_LEGACY_USER, auth.userKey).all<{
     id: number;
+    owner_key: string | null;
     geo_key: string;
     notes: string | null;
     added_at: string;
   }>();
 
   const result: any[] = [];
+  const seenGeoKeys = new Set<string>();
   for (const item of items.results) {
+    if (seenGeoKeys.has(item.geo_key)) continue;
+    seenGeoKeys.add(item.geo_key);
     const data = await computeCounty(db, item.geo_key, resolved.asOf, assumptions);
     const prev = prevYear ? await computeCounty(db, item.geo_key, prevYear, assumptions) : data;
     const m = data.metrics;
@@ -2923,6 +3206,7 @@ app.get('/api/v1/watchlist', async (c) => {
       state: data.state,
       added_at: item.added_at,
       notes: item.notes,
+      owner_scope: item.owner_key === auth.userKey ? 'private' : 'legacy_shared',
       metrics: Object.fromEntries(
         Object.entries(m).map(([k, v]) => [k, v != null ? Math.round((v as number) * 100) / 100 : null]),
       ),
@@ -2943,30 +3227,44 @@ app.get('/api/v1/watchlist', async (c) => {
 
 app.post('/api/v1/watchlist', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const body = await c.req.json<{ geo_key: string; notes?: string }>();
   const existing = await db
-    .prepare('SELECT id FROM watchlist_items WHERE geo_key = ?')
-    .bind(body.geo_key)
+    .prepare(
+      `SELECT id
+       FROM watchlist_items
+       WHERE geo_key = ? AND (owner_key = ? OR owner_key = ?)
+       ORDER BY CASE WHEN owner_key = ? THEN 0 ELSE 1 END
+       LIMIT 1`,
+    )
+    .bind(body.geo_key, auth.userKey, RESEARCH_LEGACY_USER, auth.userKey)
     .first<{ id: number }>();
   if (existing) return c.json({ id: existing.id, status: 'already_watching' });
 
   const result = await db
-    .prepare('INSERT INTO watchlist_items (geo_key, notes) VALUES (?, ?) RETURNING id')
-    .bind(body.geo_key, body.notes ?? null)
+    .prepare('INSERT INTO watchlist_items (owner_key, geo_key, notes) VALUES (?, ?, ?) RETURNING id')
+    .bind(auth.userKey, body.geo_key, body.notes ?? null)
     .first<{ id: number }>();
   return c.json({ id: result!.id, status: 'added' });
 });
 
 app.delete('/api/v1/watchlist/:geoKey', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
-  const item = await db.prepare('SELECT id FROM watchlist_items WHERE geo_key = ?').bind(geoKey).first();
+  const item = await db.prepare(
+    `SELECT id
+     FROM watchlist_items
+     WHERE geo_key = ? AND (owner_key = ? OR owner_key = ?)
+     ORDER BY CASE WHEN owner_key = ? THEN 0 ELSE 1 END
+     LIMIT 1`,
+  ).bind(geoKey, auth.userKey, RESEARCH_LEGACY_USER, auth.userKey).first<{ id: number }>();
   if (!item) return c.json({ error: 'Not in watchlist' }, 404);
-  await db.prepare('DELETE FROM watchlist_items WHERE geo_key = ?').bind(geoKey).run();
+  await db.prepare('DELETE FROM watchlist_items WHERE id = ?').bind(item.id).run();
   return c.json({ status: 'removed' });
 });
 
@@ -2976,34 +3274,48 @@ app.delete('/api/v1/watchlist/:geoKey', async (c) => {
 
 app.get('/api/v1/notes/:geoKey', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const notes = await db
-    .prepare('SELECT id, content, created_at FROM county_notes WHERE geo_key = ? ORDER BY created_at DESC')
-    .bind(geoKey)
-    .all<{ id: number; content: string; created_at: string }>();
+    .prepare(
+      `SELECT id, owner_key, content, created_at
+       FROM county_notes
+       WHERE geo_key = ? AND (owner_key = ? OR owner_key = ?)
+       ORDER BY created_at DESC, id DESC`,
+    )
+    .bind(geoKey, auth.userKey, RESEARCH_LEGACY_USER)
+    .all<{ id: number; owner_key: string | null; content: string; created_at: string }>();
   return c.json(notes.results);
 });
 
 app.post('/api/v1/notes/:geoKey', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const body = await c.req.json<{ content: string }>();
   const result = await db
-    .prepare('INSERT INTO county_notes (geo_key, content) VALUES (?, ?) RETURNING id, content, created_at')
-    .bind(geoKey, body.content)
+    .prepare('INSERT INTO county_notes (owner_key, geo_key, content) VALUES (?, ?, ?) RETURNING id, content, created_at')
+    .bind(auth.userKey, geoKey, body.content)
     .first<{ id: number; content: string; created_at: string }>();
   return c.json(result);
 });
 
 app.delete('/api/v1/notes/:noteId', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const noteId = c.req.param('noteId');
-  const note = await db.prepare('SELECT id FROM county_notes WHERE id = ?').bind(Number(noteId)).first();
+  const note = await db
+    .prepare('SELECT id, owner_key FROM county_notes WHERE id = ?')
+    .bind(Number(noteId))
+    .first<{ id: number; owner_key: string | null }>();
   if (!note) return c.json({ error: 'Note not found' }, 404);
+  if (!recordVisibleToUser(note.owner_key, auth.userKey)) return c.json({ error: 'Note not found' }, 404);
   await db.prepare('DELETE FROM county_notes WHERE id = ?').bind(Number(noteId)).run();
   return c.json({ status: 'deleted' });
 });
@@ -3386,8 +3698,17 @@ app.post('/api/v1/research/workspaces/:geoKey/scenario-runs', async (c) => {
 
 app.get('/api/v1/portfolios', async (c) => {
   const db = c.env.DB;
-  const portfolios = await db.prepare('SELECT id, name, description, created_at FROM portfolios').all<{
+  await ensurePersonalDataSchema(db);
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
+  const portfolios = await db.prepare(
+    `SELECT id, owner_key, name, description, created_at
+     FROM portfolios
+     WHERE owner_key = ? OR owner_key = ?
+     ORDER BY CASE WHEN owner_key = ? THEN 0 ELSE 1 END, updated_at DESC, id DESC`,
+  ).bind(auth.userKey, RESEARCH_LEGACY_USER, auth.userKey).all<{
     id: number;
+    owner_key: string | null;
     name: string;
     description: string | null;
     created_at: string;
@@ -3406,6 +3727,7 @@ app.get('/api/v1/portfolios', async (c) => {
       holdings_count: holdings.results.length,
       total_acres: holdings.results.reduce((sum, h) => sum + h.acres, 0),
       created_at: p.created_at,
+      owner_scope: p.owner_key === auth.userKey ? 'private' : 'legacy_shared',
     });
   }
   return c.json(result);
@@ -3413,16 +3735,20 @@ app.get('/api/v1/portfolios', async (c) => {
 
 app.get('/api/v1/portfolios/:portfolioId', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
+  const auth = await requireAuthOrError(c, db);
+  if (auth instanceof Response) return auth;
   const portfolioId = Number(c.req.param('portfolioId'));
   const requestedAsOf = c.req.query('as_of') ?? 'latest';
   const resolved = await resolveRequestAsOf(db, requestedAsOf, null, [...CORE_MODEL_SERIES]);
   const assumptions = (await getAssumptions(db)) ?? {};
 
   const p = await db
-    .prepare('SELECT id, name, description FROM portfolios WHERE id = ?')
+    .prepare('SELECT id, owner_key, name, description FROM portfolios WHERE id = ?')
     .bind(portfolioId)
-    .first<{ id: number; name: string; description: string | null }>();
+    .first<{ id: number; owner_key: string | null; name: string; description: string | null }>();
   if (!p) return c.json({ error: 'Portfolio not found' }, 404);
+  if (!recordVisibleToUser(p.owner_key, auth.userKey)) return c.json({ error: 'Portfolio not found' }, 404);
 
   const holdings = await db
     .prepare('SELECT geo_key, acres, purchase_price_per_acre, purchase_year FROM portfolio_holdings WHERE portfolio_id = ?')
@@ -3455,18 +3781,22 @@ app.get('/api/v1/portfolios/:portfolioId', async (c) => {
 
 app.post('/api/v1/portfolios', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const body = await c.req.json<{ name: string; description?: string }>();
+  const name = (body.name ?? '').trim();
+  if (!name) return c.json({ error: 'Portfolio name is required' }, 400);
   const result = await db
-    .prepare('INSERT INTO portfolios (name, description) VALUES (?, ?) RETURNING id')
-    .bind(body.name, body.description ?? null)
+    .prepare('INSERT INTO portfolios (owner_key, name, description) VALUES (?, ?, ?) RETURNING id')
+    .bind(auth.userKey, name, body.description ?? null)
     .first<{ id: number }>();
-  return c.json({ id: result!.id, name: body.name });
+  return c.json({ id: result!.id, name });
 });
 
 app.post('/api/v1/portfolios/:portfolioId/holdings', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const portfolioId = Number(c.req.param('portfolioId'));
@@ -3477,8 +3807,12 @@ app.post('/api/v1/portfolios/:portfolioId/holdings', async (c) => {
     purchase_year?: string;
   }>();
 
-  const p = await db.prepare('SELECT id FROM portfolios WHERE id = ?').bind(portfolioId).first();
+  const p = await db
+    .prepare('SELECT id, owner_key FROM portfolios WHERE id = ?')
+    .bind(portfolioId)
+    .first<{ id: number; owner_key: string | null }>();
   if (!p) return c.json({ error: 'Portfolio not found' }, 404);
+  if (!recordVisibleToUser(p.owner_key, auth.userKey)) return c.json({ error: 'Portfolio not found' }, 404);
 
   const result = await db
     .prepare(
@@ -3491,10 +3825,17 @@ app.post('/api/v1/portfolios/:portfolioId/holdings', async (c) => {
 
 app.delete('/api/v1/portfolios/:portfolioId/holdings/:geoKey', async (c) => {
   const db = c.env.DB;
+  await ensurePersonalDataSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
   const portfolioId = Number(c.req.param('portfolioId'));
   const geoKey = c.req.param('geoKey');
+  const p = await db
+    .prepare('SELECT id, owner_key FROM portfolios WHERE id = ?')
+    .bind(portfolioId)
+    .first<{ id: number; owner_key: string | null }>();
+  if (!p) return c.json({ error: 'Portfolio not found' }, 404);
+  if (!recordVisibleToUser(p.owner_key, auth.userKey)) return c.json({ error: 'Portfolio not found' }, 404);
   const h = await db
     .prepare('SELECT id FROM portfolio_holdings WHERE portfolio_id = ? AND geo_key = ?')
     .bind(portfolioId, geoKey)
