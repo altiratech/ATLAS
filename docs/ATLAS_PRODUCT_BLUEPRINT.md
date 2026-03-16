@@ -1,12 +1,12 @@
 # Altira Atlas Product Blueprint
 
-Last updated: 2026-03-08 (ET)
+Last updated: 2026-03-16 (ET)
 Owner: Ryan + Codex + Claude
 Status: Operating product blueprint for Atlas execution
 
 ## 1) Purpose
 
-Atlas should be built as a decision system for land and geography.
+Atlas should be built as a decision system for location-sensitive real assets.
 
 It should help a serious user answer five questions:
 
@@ -18,13 +18,13 @@ It should help a serious user answer five questions:
 
 Everything in Atlas should support one or more of those questions.
 
-Atlas is not a dashboard-first product, not a listing portal, and not a generic note-taking tool. It is a geographic intelligence, underwriting, modeling, and research platform.
+Atlas is not a dashboard-first product, not a listing portal, and not a generic note-taking tool. It is a real-assets intelligence, underwriting, modeling, and research platform.
 
 ## 2) Wedge and Sequencing
 
 ### Current wedge
 
-Atlas remains agriculture-first.
+Atlas starts with farmland.
 
 Primary users for the current build:
 - farmland investors and funds
@@ -34,17 +34,26 @@ Primary users for the current build:
 Why this wedge comes first:
 - the data is accessible
 - the valuation logic is understandable
-- the workflow is reusable later for industrial, energy, and risk use cases
+- the workflow is reusable later for industrial, logistics, data-center, energy, and development-oriented land use cases
 
 ### Strategic expansion
 
 Atlas expands later into:
-- industrial land and data-center site research
-- energy project land scoring
+- industrial land and logistics site research
+- data-center site research
+- energy and infrastructure land scoring
+- development-oriented land workflows
 - portfolio and aggregation workflows
 - risk and insurance analytics
+- selected commercial real estate workflows where site, infrastructure, and location drive value
 
 That expansion should reuse the same workflow spine rather than create disconnected feature silos.
+
+For now, Atlas should not expand into:
+- full office, retail, hospitality, or multifamily operating workflows
+- lease abstraction
+- tenant-credit workflows
+- broad asset-management systems
 
 ## 3) Core Product Shape
 
@@ -615,7 +624,7 @@ Build:
 - alert center
 - portfolio scenario aggregation
 
-### Phase 4: Extend into industrial and energy
+### Phase 4: Extend into location-sensitive real assets
 
 Build:
 - same workflow spine
@@ -623,7 +632,14 @@ Build:
 - new model types
 - same research system
 
-### Phase 5: Extend into risk and insurance
+### Phase 5: Extend into selected commercial real estate workflows
+
+Build:
+- only the segments where site, infrastructure, and location drive value
+- keep underwriting-first scope
+- avoid lease-roll, tenant-credit, and asset-management sprawl
+
+### Phase 6: Extend into risk and insurance
 
 Build:
 - portfolio normalization
@@ -637,6 +653,8 @@ Atlas should not become:
 - a generic listing marketplace
 - a broker CRM
 - a farm-operations dashboard
+- a generic PE research platform
+- a full-spectrum commercial real estate operating system
 - a broad “everything about land” encyclopedia
 - a collection of disconnected side modules
 
@@ -644,7 +662,7 @@ The product should stay centered on better geographic decisions.
 
 ## 15) Bottom Line
 
-Atlas should be built as a geographic intelligence and decision platform for land.
+Atlas should be built as a geographic intelligence and underwriting platform for location-sensitive real assets.
 
 The structure is:
 - Discover
@@ -655,4 +673,6 @@ The structure is:
 - Data
 
 The first proof point is farmland.
+The next proof points are industrial, logistics, data-center, energy, and development-oriented land.
+Selected commercial real estate workflows come later, where Atlas can stay true to its site- and infrastructure-driven strengths.
 The core value is not the number of features. It is the ability to move from signal to conviction without leaving the system.

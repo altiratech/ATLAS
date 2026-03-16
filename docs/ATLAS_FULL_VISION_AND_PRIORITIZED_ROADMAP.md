@@ -1,7 +1,7 @@
 # Altira Atlas — Full Vision & Prioritized Implementation Roadmap
 
 **Created:** 2026-03-02 (ET)
-**Revised:** 2026-03-03 (ET) — Alternative Land Intelligence pivot (D-051)
+**Revised:** 2026-03-16 (ET) — Real-Assets Underwriting scope revision
 **Owner:** Ryan + Claude + Codex
 **Status:** Living document — canonical north star + execution priority stack
 
@@ -11,11 +11,17 @@ This document has two purposes:
 
 ### Revision Note (2026-03-03)
 
-Atlas scope expanded from agriculture-only to **alternative land intelligence**. Core thesis: the metric engine, z-score framework, scenario lab, and research workspace are asset-class-agnostic. Farmland remains Module 1 and the launched product. Data center sites, energy project land, timberland, and industrial land are additional asset classes that run through the same engine in future phases.
+Atlas scope expanded from agriculture-only to **real-assets intelligence and underwriting**. Core thesis: the metric engine, z-score framework, scenario lab, and research workspace are reusable across adjacent location-sensitive real-assets workflows. Farmland remains the active proving wedge. Industrial, logistics, data-center, energy, and development-oriented land are the next planned expansion lanes.
 
 Dropped: AgTech Research & Intelligence (Module 5), Farm Operations Dashboard (Module 7).
-Reframed: Deal Flow & Investment (Module 6) shifts from agtech/farmland to real estate broadly.
-Added: Data Center & Digital Infrastructure Intelligence, Energy & Renewables Land Intelligence as future modules.
+Reframed: Deal Flow & Investment (Module 6) shifts from agtech/farmland to real-assets investing first, with selected commercial real estate workflows later.
+Added: Data Center & Digital Infrastructure Intelligence, Energy & Renewables Land Intelligence, and development-oriented land workflows as future modules.
+
+Explicitly out of scope for now:
+- full office, retail, hospitality, and multifamily operating workflows
+- lease abstraction
+- tenant-credit workflows
+- broad property-operations / asset-management systems
 
 The near-term execution plan (3-week sprint ending 2026-03-22) is unchanged — it remains fully focused on the ag data foundation and research workflow. The pivot affects the vision and post-sprint roadmap, not the current sprint.
 
@@ -25,11 +31,11 @@ The near-term execution plan (3-week sprint ending 2026-03-22) is unchanged — 
 
 ### What Atlas Becomes
 
-Altira Atlas is the **single pane of glass for alternative land intelligence** — a Bloomberg-grade research terminal purpose-built for institutional investors, lenders, and operators who need to understand where opportunity and risk are shifting across land asset classes that are undergoing structural transition: farmland, data center sites, energy project land, timberland, and industrial land.
+Altira Atlas is a **real-assets intelligence and underwriting platform** purpose-built for institutional investors, lenders, operators, and analysts who need to understand where opportunity and risk are shifting across location-sensitive real-assets use cases. The current live lane starts with farmland. The next planned lanes are industrial, logistics, data-center, energy, and development-oriented land. Selected commercial real estate workflows come later where site, infrastructure, and location drive value.
 
 The platform unifies data that today lives in 15+ disconnected sources (USDA-NASS, FRED, EIA, state PUCs, NREL, county assessor records, Regrid, NOAA, SSURGO) into one dense, keyboard-navigable interface with a core UX principle borrowed from CurrentMarketValuation.com: **every metric tells you where it sits relative to its own history** — z-scores, percentile gauges, standard deviation bands — so a user can glance at any number and instantly know whether it's historically cheap, expensive, or normal.
 
-The unifying insight: land is being repriced by converging forces — agricultural consolidation, data center buildout, renewable energy deployment, climate risk, and water scarcity. The same county in Iowa might be valued simultaneously as cropland, as a solar site, and as a data center campus. No platform offers that unified analytical view today.
+The unifying insight: land and site value are being repriced by converging forces — agricultural consolidation, logistics buildout, data-center demand, renewable energy deployment, climate risk, and water scarcity. The same county in Iowa might matter as cropland today, as a logistics or energy site tomorrow, and later as a development-oriented real-assets market. Atlas should unify that analytical view without pretending to be a full-spectrum commercial real estate operating system.
 
 ### Who It Serves (Named Targets)
 
@@ -106,8 +112,8 @@ Infrastructure overlay: power transmission proximity, substation capacity, fiber
 AI-curated news feed covering farmland markets, data center development, energy project siting, and land transaction activity. Algorithmic scanning of AgFunderNews, utility commission filings, zoning board decisions, FERC/PUC orders, and real estate transaction databases. Claude API-powered summarization.
 
 **Module 6: Deal Flow & Investment Platform**
-Real estate-focused deal flow: land deal listings (farmland, data center sites, energy project land, timberland), fund performance benchmarks (NCREIF farmland, data center REITs, infrastructure funds, timberland indices), due diligence templates by asset class, portfolio analytics with geographic and asset-type diversification, private credit deal tracking.
-Tools-first, marketplace later (per D-018). No agtech startup pipeline — this is strictly real estate and land-based investment intelligence.
+Real-assets-focused deal flow: land and site listings (farmland, industrial/logistics land, data-center sites, energy project land, development-oriented land), fund performance benchmarks (NCREIF farmland, data center REITs, infrastructure funds), due diligence templates by asset class, portfolio analytics with geographic and asset-type diversification, private credit deal tracking.
+Tools-first, marketplace later (per D-018). No agtech startup pipeline and no generic PE-company workflow — this is strictly real-assets investment intelligence.
 
 ### Core UX Principles
 
@@ -338,7 +344,7 @@ These items define the post-sprint expansion path. Ordered by strategic priority
 
 **5.1 — Data Center Site Intelligence Layer**
 Score: 3 × 1 = 3 (high strategic value, high implementation cost)
-UX: The signature differentiator for the alternative land pivot. Score any US county for data center suitability.
+UX: The signature differentiator for the real-assets expansion. Score any US county for data center suitability.
 Build: Composite scoring model using power infrastructure (EIA transmission data, utility rate maps), fiber/backbone proximity (FCC broadband data), water availability (USGS, state water rights), seismic risk (USGS hazard maps), climate risk (cooling degree days, extreme weather frequency), and zoning friendliness. Display as a "Data Center Suitability" overlay on county detail and maps.
 Effort: ~4-6 weeks. Multiple government data APIs, each with its own format. Scoring model needs calibration against known data center locations.
 Data sources: EIA (power), FCC (broadband), USGS (water, seismic), NOAA (climate), state PUC filings (utility rates), PJM/CAISO/ERCOT (interconnection queues).
@@ -382,7 +388,7 @@ Effort: ~6-8 weeks. Highly fragmented data across 50 state systems.
 **5.8 — Deal Flow Platform (Real Estate Focus)**
 Score: 3 × 1 = 3
 UX: Deal listings, fund performance benchmarks, due diligence templates, portfolio analytics — strictly real estate and land-based.
-Build: Marketplace infrastructure, deal listing workflow, due diligence rooms. Fund performance tracking (NCREIF Farmland, data center REITs, infrastructure indices, timberland). Requires securities compliance partnership for any transaction facilitation (per D-019).
+Build: Marketplace infrastructure, deal listing workflow, due diligence rooms. Fund performance tracking (NCREIF Farmland, data center REITs, infrastructure indices). Selected commercial real estate workflows can follow later where site, infrastructure, and location drive value. Requires securities compliance partnership for any transaction facilitation (per D-019).
 Effort: ~6-12 months. Platform infrastructure + legal/compliance partnership.
 
 ---
@@ -483,7 +489,7 @@ These are resolved. Don't re-litigate.
 | AI layer | Claude API on top of complete data lake. Data first. | D-021 |
 | Auth | Session-based, CF Access in production. | D-028, D-033 |
 | Deploy | GitHub Actions CI/CD → Cloudflare Workers. | D-036 |
-| Asset-class expansion | Farmland first, then data centers, then energy, then timberland. | D-051 |
+| Asset-class expansion | Farmland first, then industrial/logistics, data centers, energy, and development-oriented land. Selected commercial real estate workflows later. | D-051 |
 | Dropped modules | AgTech Research & Intelligence, Farm Operations Dashboard. | D-051 |
 | Deal flow scope | Real estate and land-based investment only. No agtech startups. | D-051 |
 | Screener/Dashboard UX | Composable metric pool with domain grouping, not rigid asset-class subtabs. Users toggle metrics on/off. Saved presets for quick defaults. | D-057 |

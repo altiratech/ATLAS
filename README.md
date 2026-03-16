@@ -1,6 +1,8 @@
 # Altira Atlas
 
-**Agriculture intelligence platform** for land research, scenario modeling, and investment diligence across farmland markets.
+**Real-assets intelligence and underwriting platform** for land research, scenario modeling, and investment diligence, starting with farmland.
+
+Current live coverage starts with farmland research and underwriting. Near-term expansion stays focused on industrial, logistics, data-center, energy, and development-oriented land. Selected commercial real estate workflows are later-phase work where site, infrastructure, and location drive value. Atlas is not intended to become a generic PE research terminal or a full-spectrum CRE operating system.
 
 ## Quick Start
 

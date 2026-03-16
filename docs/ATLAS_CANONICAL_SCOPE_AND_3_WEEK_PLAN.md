@@ -1,6 +1,6 @@
 # Altira Atlas Canonical Scope and 3-Week Plan
 
-Last updated: 2026-03-03 (ET)
+Last updated: 2026-03-16 (ET)
 Owner: Ryan + Codex + Claude
 
 This file is the canonical scope statement for Atlas execution.
@@ -9,19 +9,36 @@ It supersedes stale wording that still frames this product as "Farmland Terminal
 
 ## 1) Canonical Product Scope
 
-Altira Atlas is an agriculture intelligence and research platform for decision-makers who need to:
+Altira Atlas is a real-assets intelligence and underwriting platform for decision-makers who need to:
 - identify where opportunity/risk is changing,
 - model what could happen under different assumptions,
 - document conviction with traceable evidence.
 
-Primary users for this sprint:
+Primary users for the current live wedge:
 - farmland investors and funds,
 - ag lenders and advisors,
 - independent analysts and operators doing county-level diligence.
 
 Current positioning:
-- research and modeling first,
+- farmland first,
+- research and underwriting first,
 - transaction/network/community layers later.
+
+Near-term expansion after the farmland wedge:
+- industrial land
+- logistics sites
+- data-center sites
+- energy and infrastructure land
+- development-oriented land
+
+Later expansion:
+- selected commercial real estate workflows where site, infrastructure, and location drive value
+
+Explicitly out of scope for now:
+- full office/retail/hospitality/multifamily operating workflows
+- lease abstraction
+- tenant-credit workflows
+- broad property-operations / asset-management systems
 
 ## 2) V1 Boundaries (Target: 2026-03-22)
 
@@ -122,18 +139,18 @@ Codex:
 
 ## 6) Ambition After This Sprint (Revised Vision — D-051)
 
-After research/modeling V1 is stable, Atlas expands as an **alternative land intelligence platform**. Farmland is Module 1 (launched). The engine is asset-class-agnostic.
+After research/modeling V1 is stable, Atlas expands as a **real-assets intelligence and underwriting platform**. Farmland is the current live lane. The engine is reusable across adjacent location-sensitive real-assets workflows.
 
 Expansion order:
 1. Land intelligence deepening (state + county + parcel depth for farmland),
-2. Pricing/input intelligence (commodity, basis, margin stack + wholesale energy pricing),
-3. Soil/climate and environmental risk layers (cross-asset: ag, solar, data center siting),
-4. **Data center site intelligence** (power proximity, fiber density, water access, zoning scoring),
-5. **Energy project land scoring** (solar irradiance, wind capacity, interconnection queue, PPA benchmarks),
-6. Deal flow platform (real estate-focused: land listings, fund benchmarks, due diligence, portfolio analytics),
-7. Parcel-level data (Regrid), natural language queries (Claude API), water/carbon intelligence.
+2. Industrial, logistics, and data-center site intelligence (power, fiber, water, zoning, access),
+3. Energy and infrastructure land scoring (solar irradiance, wind capacity, interconnection queue, PPA benchmarks),
+4. Soil/climate and environmental risk layers (cross-asset: ag, industrial, energy, development),
+5. Deal flow platform focused on real-assets investing (land listings, fund benchmarks, due diligence, portfolio analytics),
+6. Selected commercial real estate workflows later where Atlas can stay site- and infrastructure-centric,
+7. Parcel-level data (Regrid), water/carbon intelligence, and natural-language query layers.
 
 Dropped from prior vision: AgTech Research & Intelligence, Farm Operations Dashboard.
-Reframed: Deal Flow shifted from agtech/farmland to real estate broadly.
+Reframed: Deal flow stays centered on real-assets investing rather than broad PE research.
 
 The ambition expanded. The sequencing remains disciplined.

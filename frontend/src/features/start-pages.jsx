@@ -22,16 +22,16 @@ export function MissionPage({nav}) {
   ];
   const buildout = [
     {status:'Live', title:'Farmland Discovery + Modeling', body:'Dashboard, Screener, County Detail, Research Workspace, Scenario Lab, and Backtest now run on real Atlas data and model logic.'},
-    {status:'In Build', title:'Workflow Closure', body:'Atlas is actively being tightened so counties can move cleanly from discovery into research, scenarios, and historical testing without manual context resets.'},
-    {status:'Partial', title:'Industrial Land Signals', body:'Data-center suitability is scaffolded with live power-cost evidence. More infrastructure and hazard layers are still missing and remain clearly marked as such.'},
-    {status:'Planned', title:'Portfolio Risk Dashboard', body:'County-normalized portfolio aggregation, hazard overlays, and hotspot views are planned next as a dedicated risk lens, not as fake live analytics.'},
+    {status:'In Build', title:'Workflow Closure', body:'Atlas is actively being tightened so counties can move cleanly from discovery into research, scenarios, underwriting, and historical testing without manual context resets.'},
+    {status:'Partial', title:'Location-Sensitive Real Assets Expansion', body:'Industrial and data-center screening are starting with live power and hazard evidence. More logistics, site-readiness, and infrastructure layers are still missing and remain clearly marked as such.'},
+    {status:'Planned', title:'Selected Commercial Real Estate Workflows', body:'Later expansion should focus on commercial real estate workflows where site, infrastructure, and location drive value. Broad lease-roll, tenant-credit, and asset-management systems are out of scope for now.'},
   ];
 
   return <div>
     <div className="card hero-card">
-      <div className="hero-k">Altira Platform</div>
+      <div className="hero-k">Atlas</div>
       <h2 className="hero-h">{APP_NAME}</h2>
-      <p className="hero-p">{APP_TAGLINE}. This product combines property-level discovery, institutional research workflows, and investment modeling so users can move from raw data to decisions without juggling disconnected tools.</p>
+      <p className="hero-p">{APP_TAGLINE}. Atlas is a real-assets intelligence and underwriting platform that starts with farmland, then expands into industrial, logistics, data-center, energy, and development-oriented land use cases as the same workflow spine proves itself.</p>
       <div className="hero-actions">
         <button className="btn btn-p" onClick={() => nav(PG.DASH)}>Open Market Dashboard</button>
         <button className="btn" onClick={() => nav(PG.ABOUT)}>Read About</button>
@@ -72,40 +72,39 @@ export function MissionPage({nav}) {
 
 export function AboutPage() {
   const roadmap = [
-    {phase:'Now', body:'Farmland research, screening, valuation, scenario modeling, and workflow closure.'},
-    {phase:'Next', body:'Industrial/data-center site evidence using real power, flood, slope, and connectivity layers with explicit missing-data states.'},
-    {phase:'Later', body:'Portfolio risk and insurance workflows for concentration, hazard aggregation, and explainable hotspot detection.'},
+    {phase:'Now', body:'Farmland discovery, underwriting, scenario modeling, and workflow closure remain the active proving wedge.'},
+    {phase:'Next', body:'Industrial, logistics, data-center, energy, and development-oriented land expand through real site, power, hazard, and infrastructure evidence.'},
+    {phase:'Later', body:'Selected commercial real estate workflows can follow where site, infrastructure, and location drive value. Broad lease-roll, tenant-credit, and asset-management systems remain out of scope for now.'},
   ];
   return <div>
     <div className="card hero-card" style={{marginBottom:'.8rem'}}>
       <div className="hero-k">About</div>
       <h2 className="hero-h">{APP_NAME}</h2>
-      <p className="hero-p">Altira Atlas is an agriculture intelligence platform built to connect land economics, market research, and investment workflows. It is designed for users who need clarity, defensible assumptions, and faster decisions.</p>
+      <p className="hero-p">Altira Atlas is a real-assets intelligence and underwriting platform built to connect site discovery, market research, underwriting, and investment workflows. The current live lane starts with farmland, with broader location-sensitive real-assets coverage planned in later phases.</p>
     </div>
 
     <div className="about-grid">
       <div className="about-block">
         <div className="about-h">Why This Project</div>
-        <div className="about-p">Key farmland decisions still require pulling fragmented data from USDA datasets, macro feeds, county research, and manual spreadsheets. Altira Atlas exists to reduce that friction and make analysis repeatable.</div>
+        <div className="about-p">Important real-assets decisions still require pulling fragmented market data, geography, hazard context, and manual models into one place. Atlas exists to reduce that friction and make analysis repeatable, starting with farmland where the workflow is already strong enough to prove the system.</div>
       </div>
       <div className="about-block">
         <div className="about-h">What It Merges</div>
-        <div className="about-p">The platform blends financial modeling, property intelligence, market research, and deal workflow support into one operating system so users can move from discovery to diligence without context switching.</div>
+        <div className="about-p">The platform blends geographic intelligence, underwriting, market research, and decision workflow support into one operating system so users can move from discovery to diligence without context switching.</div>
       </div>
       <div className="about-block">
         <div className="about-h">Who It Serves</div>
-        <div className="about-p">Independent operators, advisors, lenders, investment teams, and analysts who need a rigorous way to research counties, test assumptions, and track conviction over time.</div>
+        <div className="about-p">Investors, lenders, advisors, operators, and analysts who need a rigorous way to research counties, test assumptions, and track conviction across location-sensitive real-assets decisions.</div>
       </div>
       <div className="about-block">
         <div className="about-h">Current Product Scope</div>
-        <div className="about-p">Current releases prioritize research and modeling workflows first: market scanning, county deep dives, scenarios, and backtests. Transaction and network layers are planned after this foundation is stable.</div>
+        <div className="about-p">Current releases prioritize farmland research and underwriting workflows first: market scanning, county deep dives, scenarios, backtests, and investment research. Near-term expansion stays focused on industrial, logistics, data-center, energy, and development-oriented land. Selected commercial real estate workflows come later.</div>
       </div>
     </div>
 
     <div className="card">
       <h3 style={{fontSize:'.94rem',marginBottom:'.45rem'}}>Product Description</h3>
-      <p className="about-p" style={{marginBottom:'.5rem'}}>Altira Atlas helps users answer three practical questions: where should we focus, what could happen under different conditions, and which opportunities are strong enough to act on. The design emphasizes data density, traceability, and fast iteration.</p>
-      <p className="about-p">For a standalone company projects homepage concept, open <a className="lnk" href="/altiratech-home" target="_blank" rel="noreferrer">/altiratech-home</a>.</p>
+      <p className="about-p">Altira Atlas helps users answer three practical questions: where should we focus, what could happen under different conditions, and which opportunities are strong enough to act on. The design emphasizes data density, traceability, and fast iteration without pretending to be a full-spectrum commercial real estate operating system.</p>
     </div>
 
     <div className="card" style={{marginTop:'.8rem'}}>
