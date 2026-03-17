@@ -27,6 +27,166 @@ function findFilterValue(filters, metric, op) {
   return filters.find((filter) => filter.metric === metric && filter.op === op)?.value;
 }
 
+const SCREENER_CORE_FILTER_DEFS = [
+  {
+    id: 'implied_cap_rate_min',
+    metric: 'implied_cap_rate',
+    op: '>',
+    label: 'Min Cap Rate',
+    shortLabel: 'Cap Rate',
+    placeholder: 'e.g. 2.0',
+    step: '0.1',
+    queryParam: 'min_cap',
+  },
+  {
+    id: 'rent_multiple_max',
+    metric: 'rent_multiple',
+    op: '<',
+    label: 'Max Rent Multiple',
+    shortLabel: 'Rent Multiple',
+    placeholder: 'e.g. 25',
+    step: '1',
+    queryParam: 'max_rent_mult',
+  },
+  {
+    id: 'access_score_min',
+    metric: 'access_score',
+    op: '>',
+    label: 'Min Access Score',
+    shortLabel: 'Access Score',
+    placeholder: 'e.g. 50',
+    step: '1',
+    queryParam: 'min_access',
+  },
+  {
+    id: 'yield_productivity_factor_min',
+    metric: 'yield_productivity_factor',
+    op: '>',
+    label: 'Min Yield Factor',
+    shortLabel: 'Yield Factor',
+    placeholder: 'e.g. 1.02',
+    step: '0.01',
+    queryParam: 'min_yield_factor',
+  },
+];
+
+function getCoreFilterDefById(id) {
+  return SCREENER_CORE_FILTER_DEFS.find((definition) => definition.id === id) || null;
+}
+
+function getCoreFilterDef(metric, op) {
+  return SCREENER_CORE_FILTER_DEFS.find((definition) => definition.metric === metric && definition.op === op) || null;
+}
+
+function normalizeCoreFilters(filters) {
+  return (filters || [])
+    .filter((filter) => getCoreFilterDef(filter.metric, filter.op))
+    .map((filter) => ({
+      metric: filter.metric,
+      op: filter.op,
+      value: asInputValue(filter.value),
+    }));
+}
+
+function buildDefaultCoreFilters() {
+  return [];
+}
+
+function buildCoreQueryParams(filters) {
+  const params = [];
+  for (const filter of filters || []) {
+    const definition = getCoreFilterDef(filter.metric, filter.op);
+    const value = filter?.value;
+    if (!definition || value == null || value === '') continue;
+    params.push(`${definition.queryParam}=${encodeURIComponent(String(value))}`);
+  }
+  return params;
+}
+
+function CoreFilterBuilder({ filters, onChange }) {
+  const availableDefs = SCREENER_CORE_FILTER_DEFS.filter((definition) => !filters.some((filter) => filter.metric === definition.metric && filter.op === definition.op));
+
+  const updateFilterValue = (index, nextValue) => {
+    onChange(filters.map((filter, filterIndex) => (
+      filterIndex === index ? { ...filter, value: nextValue } : filter
+    )));
+  };
+
+  const updateFilterDefinition = (index, nextId) => {
+    const definition = getCoreFilterDefById(nextId);
+    if (!definition) return;
+    onChange(filters.map((filter, filterIndex) => (
+      filterIndex === index
+        ? { metric: definition.metric, op: definition.op, value: '' }
+        : filter
+    )));
+  };
+
+  const removeFilter = (index) => {
+    onChange(filters.filter((_, filterIndex) => filterIndex !== index));
+  };
+
+  const addFilter = () => {
+    if (availableDefs.length === 0) return;
+    const definition = availableDefs[0];
+    onChange([
+      ...filters,
+      {
+        metric: definition.metric,
+        op: definition.op,
+        value: '',
+      },
+    ]);
+  };
+
+  return <div className="sc" style={{ marginTop: 0, marginBottom: '.85rem' }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.75rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '.55rem' }}>
+      <div>
+        <div className="sc-l">Core Metric Filters</div>
+        <div className="sc-c">Reusable API-backed filters that Atlas can save, reopen, and replay in Backtest later.</div>
+      </div>
+      <button className="btn btn-sm" onClick={addFilter} disabled={availableDefs.length === 0}>Add Core Filter</button>
+    </div>
+
+    {filters.length === 0 && <div style={{ fontSize: '.76rem', color: 'var(--text2)' }}>
+      No core metric filters yet. Add one to create a reusable screen Atlas can save and reopen.
+    </div>}
+
+    <div style={{ display: 'grid', gap: '.55rem' }}>
+      {filters.map((filter, index) => {
+        const definition = getCoreFilterDef(filter.metric, filter.op) || SCREENER_CORE_FILTER_DEFS[0];
+        const rowDefs = [
+          definition,
+          ...availableDefs,
+        ];
+        return <div key={`${filter.metric}-${filter.op}-${index}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1.2fr) 80px minmax(120px,1fr) auto', gap: '.45rem', alignItems: 'end' }}>
+          <div className="fg" style={{ margin: 0 }}>
+            <label>Metric</label>
+            <select value={definition.id} onChange={(e) => updateFilterDefinition(index, e.target.value)}>
+              {rowDefs.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            </select>
+          </div>
+          <div className="fg" style={{ margin: 0 }}>
+            <label>Rule</label>
+            <input type="text" value={definition.op} readOnly />
+          </div>
+          <div className="fg" style={{ margin: 0 }}>
+            <label>Value</label>
+            <input
+              type="number"
+              step={definition.step}
+              value={filter.value}
+              onChange={(e) => updateFilterValue(index, e.target.value)}
+              placeholder={definition.placeholder}
+            />
+          </div>
+          <button className="btn btn-sm" onClick={() => removeFilter(index)}>Remove</button>
+        </div>;
+      })}
+    </div>
+  </div>;
+}
+
 export function Screener({
   addToast,
   nav,
@@ -44,10 +204,7 @@ export function Screener({
   const [results, setResults] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState(null);
-  const [minCap, setMinCap] = React.useState('');
-  const [maxRentMult, setMaxRentMult] = React.useState('');
-  const [minAccess, setMinAccess] = React.useState('');
-  const [minYieldFactor, setMinYieldFactor] = React.useState('');
+  const [coreFilters, setCoreFilters] = React.useState(() => buildDefaultCoreFilters());
   const [minPowerIndex, setMinPowerIndex] = React.useState('');
   const [maxPowerPrice, setMaxPowerPrice] = React.useState('');
   const [maxDroughtRisk, setMaxDroughtRisk] = React.useState('');
@@ -75,6 +232,10 @@ export function Screener({
     [activePlaybookKey],
   );
 
+  const setPresetCoreFilters = React.useCallback((nextFilters) => {
+    setCoreFilters(normalizeCoreFilters(nextFilters));
+  }, []);
+
   const applyPreset = React.useCallback((value) => {
     setPreset(value);
     setBasisFilter('');
@@ -86,13 +247,11 @@ export function Screener({
     setZRentMin('');
     setZRentMax('');
     if (value === '') {
+      setPresetCoreFilters([]);
       return;
     }
     if (value === 'quality_land') {
-      setMinCap('');
-      setMaxRentMult('');
-      setMinAccess('');
-      setMinYieldFactor('');
+      setPresetCoreFilters([]);
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('60');
@@ -103,10 +262,9 @@ export function Screener({
       return;
     }
     if (value === 'resilient_value') {
-      setMinCap('2.5');
-      setMaxRentMult('');
-      setMinAccess('');
-      setMinYieldFactor('');
+      setPresetCoreFilters([
+        { metric: 'implied_cap_rate', op: '>', value: '2.5' },
+      ]);
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('50');
@@ -117,10 +275,7 @@ export function Screener({
       return;
     }
     if (value === 'irrigated_quality') {
-      setMinCap('');
-      setMaxRentMult('');
-      setMinAccess('');
-      setMinYieldFactor('');
+      setPresetCoreFilters([]);
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('70');
@@ -131,10 +286,10 @@ export function Screener({
       return;
     }
     if (value === 'decision_ready') {
-      setMinCap('2.5');
-      setMaxRentMult('');
-      setMinAccess('40');
-      setMinYieldFactor('');
+      setPresetCoreFilters([
+        { metric: 'implied_cap_rate', op: '>', value: '2.5' },
+        { metric: 'access_score', op: '>', value: '40' },
+      ]);
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('60');
@@ -145,10 +300,10 @@ export function Screener({
       return;
     }
     if (value === 'ag_transition_thesis') {
-      setMinCap('');
-      setMaxRentMult('');
-      setMinAccess('35');
-      setMinYieldFactor('1.02');
+      setPresetCoreFilters([
+        { metric: 'access_score', op: '>', value: '35' },
+        { metric: 'yield_productivity_factor', op: '>', value: '1.02' },
+      ]);
       setMinPowerIndex('45');
       setMaxPowerPrice('');
       setMaxDroughtRisk('75');
@@ -159,10 +314,9 @@ export function Screener({
       return;
     }
     if (value === 'resilient_production_base') {
-      setMinCap('');
-      setMaxRentMult('');
-      setMinAccess('');
-      setMinYieldFactor('1.01');
+      setPresetCoreFilters([
+        { metric: 'yield_productivity_factor', op: '>', value: '1.01' },
+      ]);
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('50');
@@ -171,7 +325,7 @@ export function Screener({
       setSortBy('soil_rootzone_aws_100cm');
       setSortDir('desc');
     }
-  }, []);
+  }, [setPresetCoreFilters]);
 
   const applyThesisLens = React.useCallback((lensKey, shouldApplyDefaults = true) => {
     setActiveThesisKey?.(lensKey);
@@ -182,10 +336,7 @@ export function Screener({
 
   const resetFilters = React.useCallback(() => {
     setPreset('');
-    setMinCap('');
-    setMaxRentMult('');
-    setMinAccess('');
-    setMinYieldFactor('');
+    setCoreFilters(buildDefaultCoreFilters());
     setMinPowerIndex('');
     setMaxPowerPrice('');
     setMaxDroughtRisk('');
@@ -229,10 +380,7 @@ export function Screener({
     setScreenName(view?.name || '');
     setScreenNotes(view?.notes || '');
     setPreset(asInputValue(viewState.preset));
-    setMinCap(asInputValue(findFilterValue(filters, 'implied_cap_rate', '>')));
-    setMaxRentMult(asInputValue(findFilterValue(filters, 'rent_multiple', '<')));
-    setMinAccess(asInputValue(findFilterValue(filters, 'access_score', '>')));
-    setMinYieldFactor(asInputValue(findFilterValue(filters, 'yield_productivity_factor', '>')));
+    setCoreFilters(normalizeCoreFilters(filters));
     setMinPowerIndex(asInputValue(viewState.minPowerIndex));
     setMaxPowerPrice(asInputValue(viewState.maxPowerPrice));
     setMaxDroughtRisk(asInputValue(viewState.maxDroughtRisk));
@@ -278,10 +426,8 @@ export function Screener({
     setLoading(true);
     setErr(null);
     let qs = `?sort_by=${sortBy}&sort_dir=${sortDir}`;
-    if (minCap) qs += `&min_cap=${minCap}`;
-    if (maxRentMult) qs += `&max_rent_mult=${maxRentMult}`;
-    if (minAccess) qs += `&min_access=${minAccess}`;
-    if (minYieldFactor) qs += `&min_yield_factor=${minYieldFactor}`;
+    const coreQueryParams = buildCoreQueryParams(coreFilters);
+    if (coreQueryParams.length > 0) qs += `&${coreQueryParams.join('&')}`;
     if (minPowerIndex) qs += `&min_power_index=${minPowerIndex}`;
     if (maxPowerPrice) qs += `&max_power_price=${maxPowerPrice}`;
     if (maxDroughtRisk) qs += `&max_drought_risk=${maxDroughtRisk}`;
@@ -300,14 +446,11 @@ export function Screener({
       .catch(e => setErr(e.message))
       .finally(() => setLoading(false));
   }, [
+    coreFilters,
     maxPowerPrice,
     maxDroughtRisk,
     maxFloodRisk,
     minSoilFarmlandPct,
-    maxRentMult,
-    minAccess,
-    minYieldFactor,
-    minCap,
     minPowerIndex,
     selScreen,
     sortBy,
@@ -349,13 +492,20 @@ export function Screener({
     targetUseCase: activeThesis?.targetUseCase || activePlaybook?.targetUseCase || 'farmland_income',
   }), [activePlaybook, activePlaybookKey, activeThesis, activeThesisKey]);
   const reusableFilters = React.useMemo(() => {
-    const filters = [];
-    if (minCap) filters.push({ metric: 'implied_cap_rate', op: '>', value: Number(minCap) });
-    if (maxRentMult) filters.push({ metric: 'rent_multiple', op: '<', value: Number(maxRentMult) });
-    if (minAccess) filters.push({ metric: 'access_score', op: '>', value: Number(minAccess) });
-    if (minYieldFactor) filters.push({ metric: 'yield_productivity_factor', op: '>', value: Number(minYieldFactor) });
-    return filters.filter((filter) => Number.isFinite(filter.value));
-  }, [maxRentMult, minAccess, minCap, minYieldFactor]);
+    return (coreFilters || [])
+      .map((filter) => ({
+        metric: filter.metric,
+        op: filter.op,
+        value: Number(filter.value),
+      }))
+      .filter((filter) => Number.isFinite(filter.value));
+  }, [coreFilters]);
+  const coreFilterValues = React.useMemo(() => ({
+    minCap: asInputValue(findFilterValue(coreFilters, 'implied_cap_rate', '>')),
+    maxRentMult: asInputValue(findFilterValue(coreFilters, 'rent_multiple', '<')),
+    minAccess: asInputValue(findFilterValue(coreFilters, 'access_score', '>')),
+    minYieldFactor: asInputValue(findFilterValue(coreFilters, 'yield_productivity_factor', '>')),
+  }), [coreFilters]);
   const liveOnlyFilters = React.useMemo(() => {
     const filters = [];
     if (state) filters.push(`state=${state.toUpperCase()}`);
@@ -371,22 +521,22 @@ export function Screener({
     return filters;
   }, [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minPowerIndex, minSoilFarmlandPct, state, zCapMax, zCapMin, zFairMax, zFairMin, zRentMax, zRentMin]);
   const activeScreenFilters = React.useMemo(() => ({
-    minCap,
-    minAccess,
-    minYieldFactor,
+    minCap: coreFilterValues.minCap,
+    minAccess: coreFilterValues.minAccess,
+    minYieldFactor: coreFilterValues.minYieldFactor,
     maxDroughtRisk,
     maxFloodRisk,
     minSoilFarmlandPct,
     minPowerIndex,
     maxPowerPrice,
-  }), [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minAccess, minCap, minPowerIndex, minSoilFarmlandPct, minYieldFactor]);
+  }), [coreFilterValues.minAccess, coreFilterValues.minCap, coreFilterValues.minYieldFactor, maxDroughtRisk, maxFloodRisk, maxPowerPrice, minPowerIndex, minSoilFarmlandPct]);
 
   const viewState = React.useMemo(() => ({
     preset,
     thesisKey: activeThesisKey,
     state: state.toUpperCase(),
     basisFilter,
-    minYieldFactor,
+    minYieldFactor: coreFilterValues.minYieldFactor,
     minPowerIndex,
     maxPowerPrice,
     maxDroughtRisk,
@@ -413,7 +563,7 @@ export function Screener({
     maxDroughtRisk,
     maxFloodRisk,
     maxPowerPrice,
-    minYieldFactor,
+    coreFilterValues.minYieldFactor,
     minPowerIndex,
     minSoilFarmlandPct,
     preset,
@@ -533,6 +683,10 @@ export function Screener({
           <strong style={{ color: 'var(--text1)' }}>Use carefully:</strong> {activeThesis.gapSignals.join(', ')}
         </div>
       </div>}
+      <CoreFilterBuilder filters={coreFilters} onChange={setCoreFilters} />
+      <div style={{ fontSize: '.72rem', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: '.45rem' }}>
+        Advanced + Live-Only Controls
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'.75rem'}}>
         <div className="fg"><label>Thesis Lens</label>
           <select value={activeThesisKey || ''} onChange={e => applyThesisLens(e.target.value, true)}>
@@ -550,10 +704,6 @@ export function Screener({
             <option value="resilient_production_base">Resilient Production Base</option>
           </select>
         </div>
-        <div className="fg"><label>Min Cap Rate</label><input type="number" step="0.1" value={minCap} onChange={e => setMinCap(e.target.value)} placeholder="e.g. 2.0"/></div>
-        <div className="fg"><label>Max Rent Multiple</label><input type="number" step="1" value={maxRentMult} onChange={e => setMaxRentMult(e.target.value)} placeholder="e.g. 25"/></div>
-        <div className="fg"><label>Min Access Score</label><input type="number" step="1" value={minAccess} onChange={e => setMinAccess(e.target.value)} placeholder="e.g. 50"/></div>
-        <div className="fg"><label>Min Yield Factor</label><input type="number" step="0.01" value={minYieldFactor} onChange={e => setMinYieldFactor(e.target.value)} placeholder="e.g. 1.02"/></div>
         <div className="fg"><label>Min Power Index</label><input type="number" step="1" value={minPowerIndex} onChange={e => setMinPowerIndex(e.target.value)} placeholder="e.g. 80"/></div>
         <div className="fg"><label>Max Power Price</label><input type="number" step="0.1" value={maxPowerPrice} onChange={e => setMaxPowerPrice(e.target.value)} placeholder="c/kWh"/></div>
         <div className="fg"><label>Max Drought Risk</label><input type="number" step="1" value={maxDroughtRisk} onChange={e => setMaxDroughtRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
