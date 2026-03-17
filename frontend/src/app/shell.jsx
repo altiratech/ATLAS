@@ -1,8 +1,9 @@
 import { APP_NAME, PG } from '../config.js';
 import { api } from '../auth.js';
 import { playbookBadgeClass, playbookNavLabel } from '../shared/playbooks.js';
+import { thesisBadgeClass } from '../shared/thesis-lenses.js';
 
-function CmdPalette({ isOpen, onClose, nav, activePlaybook }) {
+function CmdPalette({ isOpen, onClose, nav, activePlaybook, activeThesis }) {
   const [q, setQ] = React.useState('');
   const [sel, setSel] = React.useState(0);
   const [results, setResults] = React.useState([]);
@@ -31,10 +32,16 @@ function CmdPalette({ isOpen, onClose, nav, activePlaybook }) {
   if (!isOpen) return null;
 
   const pages = [
-    { name: 'Home', desc: 'Choose a playbook and resume work', action: () => nav(PG.HOME) },
+    { name: 'Home', desc: 'Choose a perspective, pick a thesis lens, and resume work', action: () => nav(PG.HOME) },
     { name: 'Mission', desc: 'What this platform does and why', action: () => nav(PG.MISSION) },
     { name: 'About', desc: 'Project purpose and scope', action: () => nav(PG.ABOUT) },
-    { name: activePlaybook?.label || 'Playbook Home', desc: 'Current playbook home', action: () => nav(PG.DASH) },
+    {
+      name: activePlaybook?.label || 'Perspective Home',
+      desc: activeThesis?.label
+        ? `Current perspective home with ${activeThesis.label}`
+        : 'Current perspective home',
+      action: () => nav(PG.DASH),
+    },
     { name: 'Research Workspace', desc: 'Capture thesis, tags, and conviction', action: () => nav(PG.RESEARCH) },
     { name: 'Screener', desc: 'Filter counties', action: () => nav(PG.SCREEN) },
     { name: 'Watchlist', desc: 'Tracked counties', action: () => nav(PG.WATCH) },
@@ -42,7 +49,7 @@ function CmdPalette({ isOpen, onClose, nav, activePlaybook }) {
     { name: 'Scenario Lab', desc: 'What-if analysis', action: () => nav(PG.SCENARIO) },
     { name: 'Backtest', desc: 'Historical testing', action: () => nav(PG.BACKTEST) },
     { name: 'Portfolio', desc: 'Holdings', action: () => nav(PG.PORTFOLIO) },
-    { name: 'Saved Views', desc: 'Reusable playbook-aware screens', action: () => nav(PG.SCREENS_MGR) },
+    { name: 'Saved Views', desc: 'Reusable perspective- and thesis-aware screens', action: () => nav(PG.SCREENS_MGR) },
   ];
 
   const pageResults = pages.filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || p.desc.toLowerCase().includes(q.toLowerCase()));
@@ -92,7 +99,7 @@ const titles = {
   [PG.MISSION]: 'Mission',
   [PG.ABOUT]: 'About',
   [PG.RESEARCH]: 'Research Workspace',
-  [PG.DASH]: 'Playbook Home',
+  [PG.DASH]: 'Perspective Home',
   [PG.SCREEN]: 'Screener',
   [PG.COUNTY]: 'County Detail',
   [PG.WATCH]: 'Watchlist',
@@ -149,6 +156,7 @@ export function AppShell({
   nav,
   content,
   activePlaybook,
+  activeThesis,
   authSource,
   researchUser,
   authReady,
@@ -187,7 +195,10 @@ export function AppShell({
         <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', minWidth: 0 }}>
           <div className="top-t">{pageTitle}</div>
           {activePlaybook && currentPage !== PG.HOME && currentPage !== PG.MISSION && currentPage !== PG.ABOUT && (
-            <span className={`badge ${playbookBadgeClass(activePlaybook.status)}`}>PLAYBOOK {activePlaybook.shortLabel}</span>
+            <span className={`badge ${playbookBadgeClass(activePlaybook.status)}`}>PERSPECTIVE {activePlaybook.shortLabel}</span>
+          )}
+          {activeThesis && currentPage !== PG.HOME && currentPage !== PG.MISSION && currentPage !== PG.ABOUT && (
+            <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel}</span>
           )}
         </div>
         <div className="top-a">
@@ -206,7 +217,7 @@ export function AppShell({
       </div>}
       <div className="content">{content}</div>
     </div>
-    <CmdPalette isOpen={cmdOpen} onClose={() => setCmdOpen(false)} nav={nav} activePlaybook={activePlaybook}/>
+    <CmdPalette isOpen={cmdOpen} onClose={() => setCmdOpen(false)} nav={nav} activePlaybook={activePlaybook} activeThesis={activeThesis}/>
     <div className="toast-c">{toasts.map((t) => <div key={t.id} className={`toast ${t.type === 'ok' ? 'ok' : t.type === 'err' ? 'err' : ''}`}>
       <div style={{ fontSize: '.85rem', flex: 1 }}>{t.msg}</div>
       <button className="toast-x" onClick={() => dismissToast(t.id)}>✕</button>

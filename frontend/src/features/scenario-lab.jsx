@@ -20,7 +20,18 @@ const SCENARIO_PRESETS = [
   { key: 'credit_stress', label: 'Credit Stress', description: 'Higher premium, lower growth, rent downside', rp: 6.0, gr: 1.0, rs: -10 },
 ];
 
-export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
+export function ScenarioLab({
+  addToast,
+  nav,
+  params,
+  researchUser,
+  assumptionSets,
+  activeAssumptionSetId,
+  activeAssumptionSet,
+  setActiveAssumptionSetId,
+  activeThesis,
+  activeThesisKey,
+}) {
   const [county, setCounty] = React.useState(params?.fips || '');
   const [rp, setRp] = React.useState(4.5);
   const [gr, setGr] = React.useState(2.0);
@@ -283,7 +294,16 @@ export function ScenarioLab({addToast, nav, params, researchUser, assumptionSets
         </div>
         <div className="rw-actions" style={{margin:0}}>
           <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
-          <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, {fips: county, countyName: params?.countyName, state: params?.state, sourcePage: 'scenario', assetType: 'agriculture_land', targetUseCase: 'farmland_investment'})}>Open Research Workspace</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, {
+            fips: county,
+            countyName: params?.countyName,
+            state: params?.state,
+            sourcePage: 'scenario',
+            thesisKey: activeThesisKey,
+            thesisLabel: activeThesis?.label,
+            assetType: activeThesis?.assetType || 'agriculture_land',
+            targetUseCase: activeThesis?.targetUseCase || 'farmland_investment',
+          })}>Open Research Workspace</button>
         </div>
       </div>
     </div>}

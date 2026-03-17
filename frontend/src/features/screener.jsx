@@ -19,6 +19,7 @@ import {
 import { api } from '../auth.js';
 import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
 import { buildScreenReasons } from '../shared/atlas-read.js';
+import { getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
 import { ErrBox } from '../shared/system.jsx';
 import { STable } from '../shared/data-ui.jsx';
 
@@ -61,6 +62,9 @@ export function Screener({
   setActiveAssumptionSetId,
   activePlaybook,
   activePlaybookKey,
+  activeThesis,
+  activeThesisKey,
+  setActiveThesisKey,
 }) {
   const [results, setResults] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
@@ -89,6 +93,10 @@ export function Screener({
   const [screenName, setScreenName] = React.useState('');
   const [screenNotes, setScreenNotes] = React.useState('');
   const [savingScreen, setSavingScreen] = React.useState(false);
+  const thesisLenses = React.useMemo(
+    () => getThesisLensesForPlaybook(activePlaybookKey),
+    [activePlaybookKey],
+  );
 
   const applyPreset = React.useCallback((value) => {
     setPreset(value);
@@ -153,8 +161,41 @@ export function Screener({
       setMinSoilFarmlandPct('60');
       setSortBy('access_score');
       setSortDir('desc');
+      return;
+    }
+    if (value === 'ag_transition_thesis') {
+      setMinCap('');
+      setMaxRentMult('');
+      setMinAccess('35');
+      setMinPowerIndex('');
+      setMaxPowerPrice('');
+      setMaxDroughtRisk('75');
+      setMaxFloodRisk('75');
+      setMinSoilFarmlandPct('45');
+      setSortBy('access_score');
+      setSortDir('desc');
+      return;
+    }
+    if (value === 'resilient_production_base') {
+      setMinCap('');
+      setMaxRentMult('');
+      setMinAccess('');
+      setMinPowerIndex('');
+      setMaxPowerPrice('');
+      setMaxDroughtRisk('50');
+      setMaxFloodRisk('50');
+      setMinSoilFarmlandPct('60');
+      setSortBy('soil_rootzone_aws_100cm');
+      setSortDir('desc');
     }
   }, []);
+
+  const applyThesisLens = React.useCallback((lensKey, shouldApplyDefaults = true) => {
+    setActiveThesisKey?.(lensKey);
+    if (!shouldApplyDefaults) return;
+    const presetKey = thesisLenses.find((lens) => lens.key === lensKey)?.defaultPreset;
+    if (presetKey) applyPreset(presetKey);
+  }, [applyPreset, setActiveThesisKey, thesisLenses]);
 
   const resetFilters = React.useCallback(() => {
     setPreset('');
@@ -198,6 +239,9 @@ export function Screener({
     const filters = view?.filters || [];
     const ranking = view?.ranking || {};
     const viewState = view?.view_state || {};
+    if (viewState.thesisKey) {
+      setActiveThesisKey?.(viewState.thesisKey);
+    }
     setScreenName(view?.name || '');
     setScreenNotes(view?.notes || '');
     setPreset(asInputValue(viewState.preset));
@@ -222,13 +266,14 @@ export function Screener({
     if (view?.assumption_set_id != null) {
       setActiveAssumptionSetId?.(String(view.assumption_set_id));
     }
-  }, [setActiveAssumptionSetId]);
+  }, [setActiveAssumptionSetId, setActiveThesisKey]);
 
   React.useEffect(() => {
     if (params?.preset) applyPreset(params.preset);
+    if (params?.thesisKey) setActiveThesisKey?.(params.thesisKey);
     if (params?.screen_id) setSelScreen(String(params.screen_id));
     if (params?.screen_name) setScreenName(params.screen_name);
-  }, [applyPreset, params?.preset, params?.screen_id, params?.screen_name]);
+  }, [applyPreset, params?.preset, params?.screen_id, params?.screen_name, params?.thesisKey, setActiveThesisKey]);
 
   React.useEffect(() => {
     if (!selScreen) return;
@@ -303,9 +348,11 @@ export function Screener({
     state: row.state,
     sourcePage,
     playbookKey: activePlaybookKey,
-    assetType: activePlaybook?.assetType || 'agriculture_land',
-    targetUseCase: activePlaybook?.targetUseCase || 'farmland_income',
-  }), [activePlaybook, activePlaybookKey]);
+    thesisKey: activeThesisKey,
+    thesisLabel: activeThesis?.label,
+    assetType: activeThesis?.assetType || activePlaybook?.assetType || 'agriculture_land',
+    targetUseCase: activeThesis?.targetUseCase || activePlaybook?.targetUseCase || 'farmland_income',
+  }), [activePlaybook, activePlaybookKey, activeThesis, activeThesisKey]);
   const reusableFilters = React.useMemo(() => {
     const filters = [];
     if (minCap) filters.push({ metric: 'implied_cap_rate', op: '>', value: Number(minCap) });
@@ -339,6 +386,7 @@ export function Screener({
 
   const viewState = React.useMemo(() => ({
     preset,
+    thesisKey: activeThesisKey,
     state: state.toUpperCase(),
     basisFilter,
     minPowerIndex,
@@ -362,6 +410,7 @@ export function Screener({
     minPowerIndex,
     minSoilFarmlandPct,
     preset,
+    activeThesisKey,
     sortBy,
     sortDir,
     state,
@@ -433,7 +482,7 @@ export function Screener({
       activeAssumptionSet={activeAssumptionSet}
       onChange={setActiveAssumptionSetId}
       title="Screening Assumptions"
-      description={`${activePlaybook?.label || 'This playbook'} uses this active assumption set for screening, saved views, and any downstream backtests.`}
+      description={`${activePlaybook?.label || 'This perspective'} uses this active assumption set for screening, saved views, and any downstream backtests.`}
     />
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
@@ -444,7 +493,28 @@ export function Screener({
           <button className="btn btn-sm btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Screen'}</button>
         </div>
       </div>
+      {activeThesis && <div className="sc" style={{ marginTop: 0, marginBottom: '.75rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.45rem' }}>
+          <div>
+            <div className="sc-l">Active Thesis Lens</div>
+            <div className="sc-v" style={{ fontSize: '.92rem' }}>{activeThesis.label}</div>
+            <div className="sc-c">{activeThesis.question}</div>
+          </div>
+          <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>{activeThesis.statusLabel}</span>
+        </div>
+        <div style={{ fontSize: '.76rem', color: 'var(--text2)', marginBottom: '.3rem' }}>
+          <strong style={{ color: 'var(--text1)' }}>Atlas uses now:</strong> {activeThesis.nowSignals.join(', ')}
+        </div>
+        <div style={{ fontSize: '.76rem', color: 'var(--text2)' }}>
+          <strong style={{ color: 'var(--text1)' }}>Use carefully:</strong> {activeThesis.gapSignals.join(', ')}
+        </div>
+      </div>}
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'.75rem'}}>
+        <div className="fg"><label>Thesis Lens</label>
+          <select value={activeThesisKey || ''} onChange={e => applyThesisLens(e.target.value, true)}>
+            {thesisLenses.map((lens) => <option key={lens.key} value={lens.key}>{lens.label}</option>)}
+          </select>
+        </div>
         <div className="fg"><label>Evidence Preset</label>
           <select value={preset} onChange={e => applyPreset(e.target.value)}>
             <option value="">None</option>
@@ -452,6 +522,8 @@ export function Screener({
             <option value="resilient_value">Resilient Value</option>
             <option value="irrigated_quality">Irrigated Quality</option>
             <option value="decision_ready">Decision-Ready Counties</option>
+            <option value="ag_transition_thesis">Ag Transition Thesis</option>
+            <option value="resilient_production_base">Resilient Production Base</option>
           </select>
         </div>
         <div className="fg"><label>Min Cap Rate</label><input type="number" step="0.1" value={minCap} onChange={e => setMinCap(e.target.value)} placeholder="e.g. 2.0"/></div>
@@ -506,9 +578,9 @@ export function Screener({
       </div>
       <div style={{marginTop:'.85rem',paddingTop:'.85rem',borderTop:'1px solid var(--line)'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.75rem',flexWrap:'wrap',marginBottom:'.55rem'}}>
-          <div>
-            <div style={{fontSize:'.78rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.18rem'}}>Saved View</div>
-            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>Save the playbook context, sort, notes, and reusable core metric filters that Atlas can reopen later.</div>
+            <div>
+              <div style={{fontSize:'.78rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.18rem'}}>Saved View</div>
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>Save the perspective, thesis lens, sort, notes, and reusable core metric filters that Atlas can reopen later.</div>
           </div>
           <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
             <button className="btn btn-sm" onClick={() => persistScreen(false)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save View'}</button>
@@ -526,7 +598,8 @@ export function Screener({
           </div>
         </div>
         <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center'}}>
-          <span className="badge badge-b">PLAYBOOK {(activePlaybook?.shortLabel || 'Farmland Income').toUpperCase()}</span>
+          <span className="badge badge-b">PERSPECTIVE {(activePlaybook?.shortLabel || 'Farmland Income').toUpperCase()}</span>
+          {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel.toUpperCase()}</span>}
           {activeAssumptionSet && <span className="badge badge-a">MODEL {activeAssumptionSet.name} v{activeAssumptionSet.version}</span>}
         </div>
         <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center',marginTop:'.55rem'}}>
@@ -536,7 +609,7 @@ export function Screener({
             {liveOnlyFilters.length > 0 && <span className="badge badge-a">LIVE-ONLY: {liveOnlyFilters.join(' • ')}</span>}
         </div>
         <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.45rem'}}>
-          Saved views now keep the playbook, notes, sort order, active model basis, and full Screener state for reopening. Backtest still reuses the core metric filters only, because historical replay is not yet wired to every live-only screen control.
+          Saved views now keep the perspective, thesis lens, notes, sort order, active model basis, and full Screener state for reopening. Backtest still reuses the core metric filters only, because historical replay is not yet wired to every live-only screen control.
         </div>
       </div>
     </div>
@@ -560,7 +633,12 @@ export function Screener({
       <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
         New screener presets are evidence-aware, not synthetic. They simply prefill real Atlas filters for land quality, hazard burden, irrigation footprint, and decision-readiness so an analyst can get to a defendable first pass faster.
       </div>
+      {activeThesis && <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
+        Active lens <strong style={{color:'var(--text1)'}}>{activeThesis.label}</strong> is using current Atlas proxies: {activeThesis.nowSignals.join(', ')}. Missing inputs such as {activeThesis.gapSignals.join(', ')} are not being faked into the screen.
+      </div>}
       {results.as_of_meta && <div style={{marginBottom:'.55rem',display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
+        <span className="badge badge-b">PERSPECTIVE {(activePlaybook?.shortLabel || 'Farmland Income').toUpperCase()}</span>
+        {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel.toUpperCase()}</span>}
         <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>
           COVERAGE {Math.round((results.as_of_meta.coverage_pct || 0) * 100)}%
         </span>

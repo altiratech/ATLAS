@@ -4,6 +4,7 @@ import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptio
 import { LineChart, STable } from '../shared/data-ui.jsx';
 import { ErrBox } from '../shared/system.jsx';
 import { PG } from '../config.js';
+import { thesisBadgeClass } from '../shared/thesis-lenses.js';
 
 function playbookStat(value, fallback = '--') {
   return value == null ? fallback : value;
@@ -32,6 +33,8 @@ export function Dashboard({
   setActiveAssumptionSetId,
   activePlaybook,
   activePlaybookKey,
+  activeThesis,
+  activeThesisKey,
 }) {
   const [data, setData] = React.useState(null);
   const [coverage, setCoverage] = React.useState(null);
@@ -50,7 +53,7 @@ export function Dashboard({
         if (!cancelled) setData(dashboardData);
       })
       .catch((e) => {
-        if (!cancelled) setErr(e.message || 'Failed to load playbook home');
+        if (!cancelled) setErr(e.message || 'Failed to load perspective home');
       })
       .finally(() => {
         if (!cancelled) setLoadingSummary(false);
@@ -89,7 +92,7 @@ export function Dashboard({
   const sourceQualitySummary = data?.source_quality_summary || {};
   const capBuckets = data?.cap_rate_distribution || [];
 
-  const starterCards = [
+  const starterCards = activeThesis?.starterCards?.length ? activeThesis.starterCards : [
     {
       key: 'quality_land',
       title: 'Undervalued Quality Farmland',
@@ -116,9 +119,10 @@ export function Dashboard({
     nav(PG.SCREEN, {
       preset,
       playbookKey: activePlaybookKey,
+      thesisKey: activeThesisKey,
       sourcePage: 'playbook_home',
-      assetType: activePlaybook?.assetType,
-      targetUseCase: activePlaybook?.targetUseCase,
+      assetType: activeThesis?.assetType || activePlaybook?.assetType,
+      targetUseCase: activeThesis?.targetUseCase || activePlaybook?.targetUseCase,
     });
   };
 
@@ -129,31 +133,32 @@ export function Dashboard({
       activeAssumptionSet={activeAssumptionSet}
       onChange={setActiveAssumptionSetId}
       title="Active Model Basis"
-      description="The Farmland Income playbook uses this saved assumption set for modeled context, scenario defaults, and any saved view launched from this page."
+      description={`${activePlaybook?.label || 'This perspective'} uses this saved assumption set for modeled context, scenario defaults, and any saved view launched from this page.`}
     />
 
     <div className="card hero-card" style={{ marginBottom: '.9rem' }}>
-      <div className="hero-k">Playbook Home</div>
+      <div className="hero-k">Perspective Home</div>
       <h2 className="hero-h">{activePlaybook?.label || 'Farmland Income'}</h2>
-      <p className="hero-p">This playbook covers {activePlaybook?.universeLabel || 'modeled U.S. counties with farmland-style valuation inputs'}. Atlas shows per-acre values and rents, separates observed/basis-quality context from modeled interpretation, and routes you into starter screens instead of pretending one default county list is “the answer.”</p>
+      <p className="hero-p">This perspective covers {activePlaybook?.universeLabel || 'modeled U.S. counties with farmland-style valuation inputs'}. Atlas keeps the universe definition and observed lineage visible, then lets a thesis lens define the question you are asking of that universe before you move into screening or underwriting.</p>
       <div className="hero-actions">
-        <button className="btn btn-p" onClick={() => nav(PG.SCREEN, { playbookKey: activePlaybookKey })}>Open Screener</button>
+        <button className="btn btn-p" onClick={() => nav(PG.SCREEN, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Screener</button>
         <button className="btn" onClick={() => nav(PG.HOME)}>Back to Atlas Home</button>
       </div>
     </div>
 
-    {err && <ErrBox title="Playbook Home Error" msg={err}/>}
+    {err && <ErrBox title="Perspective Home Error" msg={err}/>}
 
     <div className="card" style={{ marginBottom: '.9rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.75rem' }}>
         <div>
-          <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>What This Playbook Covers</h3>
+          <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>What This Perspective Covers</h3>
           <div style={{ fontSize: '.78rem', color: 'var(--text2)', maxWidth: '980px' }}>
             Current universe: modeled U.S. counties with farmland-style valuation inputs. Current units: benchmark value, fair value, NOI, and cash rent are shown per acre. Benchmark value is Atlas&apos;s farmland underwriting anchor, not a whole-county appraisal of every land use.
           </div>
         </div>
         <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <span className="badge badge-b">PLAYBOOK {activePlaybook?.shortLabel || 'Farmland Income'}</span>
+          <span className="badge badge-b">PERSPECTIVE {activePlaybook?.shortLabel || 'Farmland Income'}</span>
+          {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel}</span>}
           <span className="badge badge-a">UNITS {activePlaybook?.unitsLabel || 'Per-acre values and rent'}</span>
           <span className="badge badge-g">COVERAGE {summarizeCoverage(coverage)}</span>
         </div>
@@ -208,7 +213,7 @@ export function Dashboard({
           </div>
         </div>
         <div style={{ fontSize: '.78rem', color: 'var(--text2)', marginTop: '.65rem' }}>
-          Atlas uses benchmark value as its farmland underwriting anchor. When county land value is unavailable, Atlas derives the benchmark from county cash rent multiplied by the state land-value rent multiple. Treat this playbook as farmland-oriented underwriting context, not a full appraisal of every county land use.
+          Atlas uses benchmark value as its farmland underwriting anchor. When county land value is unavailable, Atlas derives the benchmark from county cash rent multiplied by the state land-value rent multiple. Treat this perspective as farmland-oriented underwriting context, not a full appraisal of every county land use.
         </div>
       </div>
 
@@ -218,7 +223,7 @@ export function Dashboard({
           <div className="sc" style={{ margin: 0 }}>
             <div className="sc-l">Median Implied Cap Rate</div>
             <div className="sc-v">{loadingSummary ? '--' : $pct(cap.median)}</div>
-            <div className="sc-c">Atlas-modeled median across the farmland playbook universe</div>
+            <div className="sc-c">Atlas-modeled median across the farmland perspective universe</div>
           </div>
           <div className="sc" style={{ margin: 0 }}>
             <div className="sc-l">Median Fair Value / ac</div>
@@ -234,11 +239,42 @@ export function Dashboard({
       </div>
     </div>
 
+    {activeThesis && <div className="card" style={{ marginBottom: '.9rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.7rem' }}>
+        <div>
+          <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Active Thesis Lens</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)', maxWidth: '980px' }}>
+            The perspective defines the universe. This lens defines the investment question Atlas is using when it routes you into starter screens and research workflow.
+          </div>
+        </div>
+        <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>{activeThesis.statusLabel}</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr 1fr', gap: '.75rem' }}>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Question</div>
+          <div className="sc-v" style={{ fontSize: '.88rem' }}>{activeThesis.question}</div>
+          <div className="sc-c">{activeThesis.description}</div>
+        </div>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Atlas Uses Now</div>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
+            {activeThesis.nowSignals.map((signal) => <div key={signal}>• {signal}</div>)}
+          </div>
+        </div>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Use Carefully</div>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
+            {activeThesis.gapSignals.map((signal) => <div key={signal}>• {signal}</div>)}
+          </div>
+        </div>
+      </div>
+    </div>}
+
     <div className="card" style={{ marginBottom: '.9rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.75rem', gap: '.75rem', flexWrap: 'wrap' }}>
         <div>
           <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>Starter Screens</h3>
-          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Use these as strong starting points, then edit filters, columns, and assumptions inside Screener and save your own view.</div>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Use these as strong starting points for the active perspective and lens, then edit filters, columns, and assumptions inside Screener and save your own view.</div>
         </div>
         <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR)}>Open Saved Views</button>
       </div>
@@ -256,13 +292,13 @@ export function Dashboard({
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.9rem', marginBottom: '.9rem' }}>
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
-          <h3 style={{ fontSize: '.95rem' }}>Recent Work in This Playbook</h3>
-          <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, { playbookKey: activePlaybookKey })}>Open Workspace</button>
+          <h3 style={{ fontSize: '.95rem' }}>Recent Work in This Perspective</h3>
+          <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Workspace</button>
         </div>
         {loadingContext ? <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Loading recent work...</div>
           : research.length === 0 ? <div className="empty"><p>No recent research records yet.</p></div>
             : <div style={{ display: 'grid', gap: '.55rem' }}>
-              {research.map((record) => <div key={record.geo_key} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.RESEARCH, { fips: record.geo_key, playbookKey: activePlaybookKey })}>
+              {research.map((record) => <div key={record.geo_key} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.RESEARCH, { fips: record.geo_key, playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.18rem' }}>
                   <div style={{ fontWeight: 600 }}>{record.county_name ? `${record.county_name}, ${record.state}` : record.geo_key}</div>
                   <span className="badge badge-b">{record.status || 'exploring'}</span>
@@ -273,7 +309,7 @@ export function Dashboard({
       </div>
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
-          <h3 style={{ fontSize: '.95rem' }}>Saved Views for This Playbook</h3>
+          <h3 style={{ fontSize: '.95rem' }}>Saved Views for This Perspective</h3>
           <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR)}>Manage Saved Views</button>
         </div>
         {loadingContext ? <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Loading saved views...</div>
@@ -294,7 +330,7 @@ export function Dashboard({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.75rem' }}>
         <div>
           <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>Supporting Market Context</h3>
-          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>These panels support the playbook story. They are context and diagnostics, not the primary decision path.</div>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>These panels support the perspective story. They are context and diagnostics, not the primary decision path.</div>
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem', marginBottom: '.9rem' }}>

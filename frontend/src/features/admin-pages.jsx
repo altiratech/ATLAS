@@ -1,6 +1,7 @@
 import { PG } from '../config.js';
 import { api } from '../auth.js';
 import { getPlaybook, playbookBadgeClass } from '../shared/playbooks.js';
+import { getThesisLens, thesisBadgeClass } from '../shared/thesis-lenses.js';
 import {
   AssumptionContextBar,
   buildVersionedAssumptionParams,
@@ -11,7 +12,7 @@ import {
 import { Loading } from '../shared/system.jsx';
 import { STable } from '../shared/data-ui.jsx';
 
-export function ScreensMgr({ nav, params, activePlaybookKey }) {
+export function ScreensMgr({ nav, params, activePlaybookKey, activeThesisKey }) {
   const [screens, setScreens] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -28,7 +29,7 @@ export function ScreensMgr({ nav, params, activePlaybookKey }) {
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1rem'}}>
       <div>
         <h3 style={{fontSize:'1rem',marginBottom:'.2rem'}}>Saved Views</h3>
-        <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Playbook-aware saved views for Screener reopening, with core metric filters that Atlas can also replay in Backtest.</div>
+        <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Perspective- and thesis-aware saved views for Screener reopening, with core metric filters that Atlas can also replay in Backtest.</div>
       </div>
       <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
         <button className="btn btn-sm" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
@@ -47,10 +48,14 @@ export function ScreensMgr({ nav, params, activePlaybookKey }) {
               <span className="badge badge-b">ID: {s.id}</span>
               {(() => {
                 const playbook = getPlaybook(s.playbook_key || activePlaybookKey);
-                return <span className={`badge ${playbookBadgeClass(playbook.status)}`}>{playbook.shortLabel}</span>;
+                const thesis = getThesisLens(s.view_state?.thesisKey || activeThesisKey, s.playbook_key || activePlaybookKey);
+                return <>
+                  <span className={`badge ${playbookBadgeClass(playbook.status)}`}>{playbook.shortLabel}</span>
+                  {thesis && <span className={`badge ${thesisBadgeClass(thesis.status)}`}>{thesis.shortLabel}</span>}
+                </>;
               })()}
               <button className="btn btn-sm" onClick={() => nav(PG.BACKTEST, { screen_id: String(s.id), screen_name: s.name, sourcePage: 'screens_mgr' })}>Backtest</button>
-              <button className="btn btn-sm" onClick={() => nav(PG.SCREEN, { screen_id: String(s.id), screen_name: s.name, playbookKey: s.playbook_key || activePlaybookKey, sourcePage: 'screens_mgr' })}>Open</button>
+              <button className="btn btn-sm" onClick={() => nav(PG.SCREEN, { screen_id: String(s.id), screen_name: s.name, playbookKey: s.playbook_key || activePlaybookKey, thesisKey: s.view_state?.thesisKey || activeThesisKey, sourcePage: 'screens_mgr' })}>Open</button>
             </div>
           </div>
           {s.notes && <div style={{marginTop:'.4rem',fontSize:'.78rem',color:'var(--text2)'}}>{s.notes}</div>}
@@ -131,7 +136,7 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
       activeAssumptionSet={activeAssumptionSet}
       onChange={setActiveAssumptionSetId}
       title="Active Global Assumption Set"
-      description="Playbook Home, Screener, County Detail, Compare, Backtest, and Scenario Lab all use this active saved set unless Scenario Lab applies temporary overrides."
+      description="Perspective Home, Screener, County Detail, Compare, Backtest, and Scenario Lab all use this active saved set unless Scenario Lab applies temporary overrides."
     />
 
     <div className="card" style={{marginBottom:'1rem'}}>
@@ -208,7 +213,7 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
                 </div>
                 <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
                   <button className="btn btn-sm" onClick={() => setActiveAssumptionSetId(String(s.id))}>Use</button>
-                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.DASH)}>Playbook Home</button>
+                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.DASH)}>Perspective Home</button>
                   <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.SCREEN)}>Screener</button>
                   <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.BACKTEST)}>Backtest</button>
                   <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.SCENARIO)}>Scenario</button>

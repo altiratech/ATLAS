@@ -39,6 +39,8 @@ export function defaultResearchRecord() {
       decision_state:'exploring',
       asset_type:'',
       target_use_case:'',
+      thesis_lens_key:'',
+      thesis_lens_label:'',
       critical_dependencies:[],
       missing_data_notes:[],
       approval_state:'',

@@ -30,7 +30,17 @@ function confidenceBand(level) {
   }
 }
 
-export function CountyPage({addToast, params, nav, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
+export function CountyPage({
+  addToast,
+  params,
+  nav,
+  assumptionSets,
+  activeAssumptionSetId,
+  activeAssumptionSet,
+  setActiveAssumptionSetId,
+  activeThesis,
+  activeThesisKey,
+}) {
   const [data, setData] = React.useState(null);
   const [baselineSummary, setBaselineSummary] = React.useState(null);
   const [industrial, setIndustrial] = React.useState(null);
@@ -166,8 +176,10 @@ export function CountyPage({addToast, params, nav, assumptionSets, activeAssumpt
     countyName: data.county_name,
     state: data.state,
     sourcePage: 'county',
-    assetType: 'agriculture_land',
-    targetUseCase: 'farmland_investment',
+    thesisKey: activeThesisKey,
+    thesisLabel: activeThesis?.label,
+    assetType: activeThesis?.assetType || 'agriculture_land',
+    targetUseCase: activeThesis?.targetUseCase || 'farmland_investment',
   };
   const fairValue = m.fair_value;
   const benchmarkValue = m.benchmark_value;

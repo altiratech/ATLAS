@@ -9,7 +9,7 @@ It supersedes stale wording that still frames this product as "Farmland Terminal
 
 ## 1) Canonical Product Scope
 
-Altira Atlas is the geo/opportunity underwriting layer for location-sensitive real assets. It is a real-assets intelligence and underwriting platform for decision-makers who need to:
+Altira Atlas is the thesis-driven geo/opportunity underwriting layer for location-sensitive real assets. It is a real-assets intelligence and underwriting platform for decision-makers who need to:
 - identify where opportunity/risk is changing,
 - model what could happen under different assumptions,
 - document conviction with traceable evidence.
@@ -21,6 +21,7 @@ Primary users for the current live wedge:
 
 Current positioning:
 - farmland first,
+- thesis-driven investigation on top of that farmland wedge,
 - research and underwriting first,
 - transaction/network/community layers later.
 
@@ -160,3 +161,14 @@ Dropped from prior vision: AgTech Research & Intelligence, Farm Operations Dashb
 Reframed: Atlas deepens the underwriting and portfolio workflow rather than trying to become a parcel/site-native or listings-centric product.
 
 The ambition expanded. The sequencing remains disciplined.
+
+## 7) Thesis Layer Clarification
+
+Atlas should not only be understood in terms of asset buckets.
+
+Atlas now has three product layers:
+- `perspective` = the default universe and workflow, such as Farmland Income
+- `thesis lens` = the investment question applied to that perspective, such as Ag Transition Thesis
+- `opportunity` = the concrete county/market candidate the analyst chooses to work on
+
+This allows Atlas to support theme-driven investigation, including work at the intersection of land, ag transition, automation, policy, and infrastructure, without turning Atlas into an agtech product or a parcel-native site tool.

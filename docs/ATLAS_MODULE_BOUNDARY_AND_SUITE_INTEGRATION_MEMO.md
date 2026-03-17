@@ -22,6 +22,11 @@ Atlas should help investment teams answer:
 4. What are the major risks and constraints at the geography/opportunity level?
 5. Is this strong enough to pursue, monitor, lend against, compare, or pass on?
 
+Atlas should also support a second layer of questioning:
+- what specific investment thesis are we applying to this geography/opportunity universe?
+- which parts of that thesis are supported by current data?
+- which parts remain missing and should not be faked?
+
 Atlas owns:
 - market / county / region opportunity discovery
 - geo-level evidence and explainability
@@ -67,6 +72,8 @@ Atlas should center on these objects:
 
 - `perspective`
   - the investment lens or workflow default, such as farmland income
+- `thesis_lens`
+  - the investment question applied to a perspective, such as ag transition or resilient production base
 - `saved_view`
   - a reusable screen/view configuration with filters, sort, and context
 - `geo_entity`
@@ -96,6 +103,7 @@ Atlas should optimize this loop:
 
 More explicitly:
 - start from perspective-aware discovery
+- apply the relevant thesis lens
 - move into geography/opportunity detail
 - run underwriting and downside analysis
 - record memo-quality research and decision state
@@ -199,6 +207,7 @@ Atlas should keep improving as a **geo/opportunity workbench**.
 
 Prioritize:
 - opportunity-centric workflow
+- perspective + thesis-lens aware discovery
 - underwriting clarity
 - memo / decision record quality
 - portfolio exposure and monitoring

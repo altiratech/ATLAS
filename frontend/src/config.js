@@ -1,9 +1,10 @@
 export const API = window.location.origin + '/api/v1';
 export const APP_NAME = 'Altira Atlas';
-export const APP_TAGLINE = 'Real-Assets Intelligence, Underwriting, and Research';
+export const APP_TAGLINE = 'Thesis-Driven Geo Intelligence, Underwriting, and Research';
 export const AUTH_TOKEN_KEY = 'altira_atlas_auth_token_v1';
 export const ACTIVE_ASSUMPTION_SET_KEY = 'altira_atlas_active_assumption_set_v1';
 export const ACTIVE_PLAYBOOK_KEY = 'altira_atlas_active_playbook_v1';
+export const ACTIVE_THESIS_KEY = 'altira_atlas_active_thesis_v1';
 export const PG = {
   HOME:'home', MISSION:'mission', ABOUT:'about', RESEARCH:'research',
   DASH:'dash', SCREEN:'screen', COUNTY:'county', WATCH:'watch',

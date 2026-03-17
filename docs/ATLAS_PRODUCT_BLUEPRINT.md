@@ -6,7 +6,7 @@ Status: Operating product blueprint for Atlas execution
 
 ## 1) Purpose
 
-Atlas should be built as a geo/opportunity underwriting system for location-sensitive real assets.
+Atlas should be built as a thesis-driven geo/opportunity underwriting system for location-sensitive real assets.
 
 It should help a serious user answer five questions:
 
@@ -18,7 +18,7 @@ It should help a serious user answer five questions:
 
 Everything in Atlas should support one or more of those questions.
 
-Atlas is not a dashboard-first product, not a listing portal, not a parcel-native site engine, and not a generic note-taking tool. It is a real-assets intelligence, underwriting, modeling, and research platform centered on geography/opportunity decisions.
+Atlas is not a dashboard-first product, not a listing portal, not a parcel-native site engine, and not a generic note-taking tool. It is a thesis-driven real-assets intelligence, underwriting, modeling, and research platform centered on geography/opportunity decisions.
 
 Boundary rule:
 - Atlas owns geography-level opportunity discovery, geo-level evidence, underwriting, research, and portfolio exposure.
@@ -40,6 +40,7 @@ Why this wedge comes first:
 - the data is accessible
 - the valuation logic is understandable
 - the workflow is reusable later for industrial, logistics, data-center, energy, and development-oriented land use cases
+- the current farmland evidence stack is strong enough to support early thesis-driven investigation around agricultural transition without pretending Atlas is already an agtech product
 
 ### Strategic expansion
 
@@ -79,6 +80,10 @@ Primary product surfaces:
 - Screener
 - Saved Views
 - Alerts later
+
+Supporting structure:
+- perspectives define the default universe and workflow
+- thesis lenses define the investment question applied to that universe
 
 ### B. Analyze
 
@@ -170,6 +175,7 @@ Atlas should settle into this navigation model:
 - Perspective Home
 - Screener
 - Saved Views
+- Thesis Lenses inside those surfaces
 
 ### Analyze
 - County Detail
@@ -205,14 +211,15 @@ Target workflow:
 
 1. Open Atlas Home
 2. Choose the relevant perspective
-3. Run Screener
-4. Open County Detail
-5. Review valuation, history, lineage, and risk context
-6. Add the opportunity to Research Workspace
-7. Run scenarios
-8. Save scenario pack and conviction
-9. Compare alternatives
-10. Move the opportunity to Watchlist, Portfolio, or Pass
+3. Apply the relevant thesis lens
+4. Run Screener
+5. Open County Detail
+6. Review valuation, history, lineage, and risk context
+7. Add the opportunity to Research Workspace
+8. Run scenarios
+9. Save scenario pack and conviction
+10. Compare alternatives
+11. Move the opportunity to Watchlist, Portfolio, or Pass
 
 This is the operating loop Atlas should optimize first.
 
@@ -671,7 +678,7 @@ The product should stay centered on better geographic decisions.
 
 ## 15) Bottom Line
 
-Atlas should be built as a geographic intelligence and underwriting platform for location-sensitive real assets.
+Atlas should be built as a thesis-driven geographic intelligence and underwriting platform for location-sensitive real assets.
 
 The structure is:
 - Discover
@@ -680,6 +687,11 @@ The structure is:
 - Decide
 - Aggregate
 - Data
+
+Inside that structure:
+- perspectives define the default opportunity universe
+- thesis lenses define the investment question
+- shared tools carry that context into screening, underwriting, memo work, and portfolio views
 
 The first proof point is farmland.
 The next proof points are industrial, logistics, data-center, energy, and development-oriented land at the geography/opportunity layer.

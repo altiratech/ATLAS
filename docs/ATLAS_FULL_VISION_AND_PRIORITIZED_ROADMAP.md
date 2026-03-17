@@ -1,7 +1,7 @@
 # Altira Atlas — Full Vision & Prioritized Implementation Roadmap
 
 **Created:** 2026-03-02 (ET)
-**Revised:** 2026-03-17 (ET) — Geo/opportunity boundary clarification
+**Revised:** 2026-03-17 (ET) — Geo/opportunity boundary clarification + thesis layer
 **Owner:** Ryan + Claude + Codex
 **Status:** Living document — canonical north star + execution priority stack
 
@@ -17,6 +17,7 @@ That means:
 - Atlas owns geography-level opportunity discovery, geo-level evidence, underwriting, research/decision capture, and portfolio exposure.
 - Atlas does **not** own parcel-native infrastructure truth, assemblage workflow, entitlement execution, listings/marketplace behavior, or generic GIS browsing as its primary product center.
 - Any mention of a future parcel/site-native module in Atlas docs is included only to preserve Atlas boundaries and future suite integration. This document is **not** an authoritative scope spec for that future module.
+- Atlas should also support thesis-driven investigation on top of that geo/opportunity layer. Perspectives define the default universe; thesis lenses define the investment question applied to that universe.
 
 ### Revision Note (2026-03-16)
 
@@ -40,11 +41,13 @@ The near-term execution plan (3-week sprint ending 2026-03-22) is unchanged — 
 
 ### What Atlas Becomes
 
-Altira Atlas is a **real-assets intelligence and underwriting platform** purpose-built for institutional investors, lenders, operators, and analysts who need to understand where opportunity and risk are shifting across location-sensitive real-assets use cases. More specifically, Atlas is the **geo/opportunity underwriting layer** inside that broader real-assets lane. The current live lane starts with farmland. The next planned lanes are industrial, logistics, data-center, energy, and development-oriented land at the geography/opportunity level. Selected commercial real estate workflows come later where site, infrastructure, and location drive value.
+Altira Atlas is a **real-assets intelligence and underwriting platform** purpose-built for institutional investors, lenders, operators, and analysts who need to understand where opportunity and risk are shifting across location-sensitive real-assets use cases. More specifically, Atlas is the **thesis-driven geo/opportunity underwriting layer** inside that broader real-assets lane. The current live lane starts with farmland. The next planned lanes are industrial, logistics, data-center, energy, and development-oriented land at the geography/opportunity level. Selected commercial real estate workflows come later where site, infrastructure, and location drive value.
 
 The platform unifies data that today lives in 15+ disconnected sources (USDA-NASS, FRED, EIA, state PUCs, NREL, county assessor records, NOAA, SSURGO, and similar public/private geo-level sources) into one dense, keyboard-navigable interface with a core UX principle borrowed from CurrentMarketValuation.com: **every metric tells you where it sits relative to its own history** — z-scores, percentile gauges, standard deviation bands — so a user can glance at any number and instantly know whether it's historically cheap, expensive, or normal.
 
 The unifying insight: land and market value are being repriced by converging forces — agricultural consolidation, logistics buildout, data-center demand, renewable energy deployment, climate risk, and water scarcity. The same county in Iowa might matter as cropland today, as a logistics or energy market tomorrow, and later as a development-oriented real-assets market. Atlas should unify that analytical view without pretending to be a parcel-native site engine or a full-spectrum commercial real estate operating system.
+
+An equally important product rule: Atlas should support **theme-driven investigation**. An analyst should be able to apply a thesis such as agricultural transition stress, resilient production base, or future processing/infrastructure convergence to the same geography/opportunity engine without Atlas pretending it has direct data for every part of that thesis.
 
 ### Who It Serves (Named Targets)
 

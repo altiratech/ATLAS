@@ -8,10 +8,21 @@ import {
 } from '../auth.js';
 import { appendAssumptionParam, assumptionSetLabel, summarizeScenarioAssumptions } from '../shared/assumptions-ui.jsx';
 import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
+import { getThesisLens, getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, STable } from '../shared/data-ui.jsx';
 
-export function ResearchWorkspace({addToast, nav, params, researchUser, activeAssumptionSet, activeAssumptionSetId}) {
+export function ResearchWorkspace({
+  addToast,
+  nav,
+  params,
+  researchUser,
+  activeAssumptionSet,
+  activeAssumptionSetId,
+  activePlaybookKey,
+  activeThesis,
+  activeThesisKey,
+}) {
   const [store, setStore] = React.useState({});
   const [storeLoading, setStoreLoading] = React.useState(true);
   const [storeErr, setStoreErr] = React.useState(null);
@@ -29,12 +40,17 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
   const [decisionState, setDecisionState] = React.useState('exploring');
   const [assetType, setAssetType] = React.useState('');
   const [targetUseCase, setTargetUseCase] = React.useState('');
+  const [thesisLensKey, setThesisLensKey] = React.useState(activeThesisKey || '');
   const [criticalDependenciesInput, setCriticalDependenciesInput] = React.useState('');
   const [missingDataNotesInput, setMissingDataNotesInput] = React.useState('');
   const [approvalState, setApprovalState] = React.useState('');
   const [scenarioRuns, setScenarioRuns] = React.useState([]);
   const [countySummary, setCountySummary] = React.useState(null);
   const [countySummaryLoading, setCountySummaryLoading] = React.useState(false);
+  const thesisLenses = React.useMemo(
+    () => getThesisLensesForPlaybook(params?.playbookKey || activePlaybookKey),
+    [activePlaybookKey, params?.playbookKey],
+  );
 
   const statuses = [
     { value:'exploring', label:'Exploring' },
@@ -81,6 +97,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
       setDecisionState(base.analysis.decision_state);
       setAssetType(base.analysis.asset_type);
       setTargetUseCase(base.analysis.target_use_case);
+      setThesisLensKey(params?.thesisKey || activeThesisKey || '');
       setCriticalDependenciesInput(base.analysis.critical_dependencies.join(', '));
       setMissingDataNotesInput(base.analysis.missing_data_notes.join(', '));
       setApprovalState(base.analysis.approval_state);
@@ -101,6 +118,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
       setDecisionState(base.analysis.decision_state);
       setAssetType(params?.assetType || 'agriculture_land');
       setTargetUseCase(params?.targetUseCase || 'farmland_investment');
+      setThesisLensKey(params?.thesisKey || activeThesisKey || '');
       setCriticalDependenciesInput(base.analysis.critical_dependencies.join(', '));
       setMissingDataNotesInput(base.analysis.missing_data_notes.join(', '));
       setApprovalState(base.analysis.approval_state);
@@ -119,10 +137,11 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     setDecisionState(rec.analysis?.decision_state || 'exploring');
     setAssetType(rec.analysis?.asset_type || '');
     setTargetUseCase(rec.analysis?.target_use_case || '');
+    setThesisLensKey(rec.analysis?.thesis_lens_key || params?.thesisKey || activeThesisKey || '');
     setCriticalDependenciesInput((rec.analysis?.critical_dependencies || []).join(', '));
     setMissingDataNotesInput((rec.analysis?.missing_data_notes || []).join(', '));
     setApprovalState(rec.analysis?.approval_state || '');
-  }, [county, store, params?.assetType, params?.targetUseCase]);
+  }, [county, store, params?.assetType, params?.targetUseCase, params?.thesisKey, activeThesisKey]);
 
   React.useEffect(() => {
     if (!county) return;
@@ -176,6 +195,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     .map((entry) => ({ scenario: entry.scenario, driver: Array.isArray(entry.drivers) ? entry.drivers[0] : null }))
     .find((entry) => entry.driver?.driver && entry.driver?.delta != null) || null;
   const latestScenarioAssumptionSummary = summarizeScenarioAssumptions(latestScenarioRun?.assumptions);
+  const selectedThesisLens = getThesisLens(thesisLensKey, params?.playbookKey || activePlaybookKey) || activeThesis || null;
   const selectedCountyLabel = county
     ? (countyMap[county] || (params?.countyName ? `${params.countyName}${params?.state ? `, ${params.state}` : ''}` : county))
     : 'None';
@@ -237,8 +257,13 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
     countyName: currentCountyName,
     state: currentState,
     sourcePage: 'research',
+    playbookKey: params?.playbookKey || activePlaybookKey,
+    thesisKey: thesisLensKey,
+    thesisLabel: selectedThesisLens?.label || '',
     acquisitionInputs: readAcquisitionInputs(scenarioRun) || latestScenarioAcquisitionInputs || undefined,
     creditInputs: readCreditInputs(scenarioRun) || latestScenarioCreditInputs || undefined,
+    assetType: assetType || selectedThesisLens?.assetType || params?.assetType || 'agriculture_land',
+    targetUseCase: targetUseCase || selectedThesisLens?.targetUseCase || params?.targetUseCase || 'farmland_investment',
   });
 
   const saveWorkspace = async () => {
@@ -258,6 +283,8 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
             decision_state: decisionState,
             asset_type: assetType,
             target_use_case: targetUseCase,
+            thesis_lens_key: thesisLensKey,
+            thesis_lens_label: getThesisLens(thesisLensKey, params?.playbookKey || activePlaybookKey)?.label || '',
             critical_dependencies: parseTags(criticalDependenciesInput),
             missing_data_notes: parseTags(missingDataNotesInput),
             approval_state: approvalState,
@@ -338,7 +365,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
           </div>
         </div>
         <div className="rw-actions" style={{margin:0}}>
-          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county, thesisKey: thesisLensKey})}>Open County Detail</button>
           <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>
         </div>
       </div>
@@ -358,6 +385,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
           {countyDecisionRead && <span className={`badge ${countyDecisionRead.overall.className}`}>{countyDecisionRead.overall.label}</span>}
           {assetType && <span className="badge badge-b">{assetType.replace(/_/g, ' ').toUpperCase()}</span>}
           {targetUseCase && <span className="badge badge-b">{targetUseCase.replace(/_/g, ' ').toUpperCase()}</span>}
+          {selectedThesisLens && <span className={`badge ${thesisBadgeClass(selectedThesisLens.status)}`}>{selectedThesisLens.shortLabel.toUpperCase()}</span>}
         </div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr 1fr',gap:'.75rem'}}>
@@ -392,7 +420,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div className="sc" style={{margin:0}}>
           <div className="sc-l">Active Modeling Context</div>
           <div className="sc-v" style={{fontSize:'.95rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div>
-          <div className="sc-c">Playbook Home, Screener, County Detail, Compare, Backtest, and new Scenario Lab runs all inherit this saved assumption set.</div>
+          <div className="sc-c">Perspective Home, Screener, County Detail, Compare, Backtest, and new Scenario Lab runs all inherit this saved assumption set.</div>
         </div>
         <div className="sc" style={{margin:0}}>
           <div className="sc-l">Research Guardrail</div>
@@ -506,6 +534,19 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
             </select>
           </div>
         </div>
+        <div className="fg"><label>Thesis Lens</label>
+          <select value={thesisLensKey} onChange={e => setThesisLensKey(e.target.value)}>
+            <option value="">None</option>
+            {thesisLenses.map((lens) => <option key={lens.key} value={lens.key}>{lens.label}</option>)}
+          </select>
+          {selectedThesisLens && <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.3rem'}}>
+            <strong style={{color:'var(--text1)'}}>Question:</strong> {selectedThesisLens.question}
+            <br/>
+            <strong style={{color:'var(--text1)'}}>Uses now:</strong> {selectedThesisLens.nowSignals.join(', ')}
+            <br/>
+            <strong style={{color:'var(--text1)'}}>Still missing:</strong> {selectedThesisLens.gapSignals.join(', ')}
+          </div>}
+        </div>
         <div className="fg"><label>Tags (comma separated)</label><input type="text" value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="water, cap-rate, soils, logistics"/></div>
         <div className="fg"><label>Thesis</label>
           <textarea value={thesis} onChange={e => setThesis(e.target.value)} placeholder="Why this county matters, what must be true, and what could break..." style={{minHeight:'92px'}}/>
@@ -557,6 +598,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Active Assumption Set</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Asset Type</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assetType || active.analysis?.asset_type || '--'}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Target Use Case</div><div className="sc-v" style={{fontSize:'.82rem'}}>{targetUseCase || active.analysis?.target_use_case || '--'}</div></div>
+        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Thesis Lens</div><div className="sc-v" style={{fontSize:'.82rem'}}>{selectedThesisLens?.label || active.analysis?.thesis_lens_label || '--'}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Runs</div><div className="sc-v">{scenarioRuns.length}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Research Notes</div><div className="sc-v">{active.notes.length}</div></div>
