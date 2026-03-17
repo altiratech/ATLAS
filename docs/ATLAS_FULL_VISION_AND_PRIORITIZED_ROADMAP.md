@@ -3,9 +3,15 @@
 **Created:** 2026-03-02 (ET)
 **Revised:** 2026-03-17 (ET) — Geo/opportunity boundary clarification + thesis layer
 **Owner:** Ryan + Claude + Codex
-**Status:** Living document — canonical north star + execution priority stack
+**Status:** Broad vision / roadmap reference; canonical planning now split by layer
 
-This document has two purposes:
+Planning note:
+- Use [ATLAS_NORTH_STAR.md](./ATLAS_NORTH_STAR.md) as the canonical Atlas north-star document.
+- Use [ATLAS_CURRENT_SCOPED_BUILD_PLAN.md](./ATLAS_CURRENT_SCOPED_BUILD_PLAN.md) for active implementation scope.
+- Use [ATLAS_EXPANSION_MAP.md](./ATLAS_EXPANSION_MAP.md) for future capabilities that are desirable but not current scope.
+- This document remains useful as a broader idea bank and legacy roadmap, but it should not be treated as the single active planning source.
+
+Historically this document served two purposes:
 1. **Preserve the complete product vision** so it never gets lost in sprint plumbing.
 2. **Prioritize every feature** by (UX impact × implementation ease), highest first.
 

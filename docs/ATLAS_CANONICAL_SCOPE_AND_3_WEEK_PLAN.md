@@ -3,7 +3,13 @@
 Last updated: 2026-03-17 (ET)
 Owner: Ryan + Codex + Claude
 
-This file is the canonical scope statement for Atlas execution.
+Planning note:
+- This document is now best treated as a historical sprint artifact plus useful scope context.
+- Use [ATLAS_CURRENT_SCOPED_BUILD_PLAN.md](./ATLAS_CURRENT_SCOPED_BUILD_PLAN.md) for the canonical active Atlas scope.
+- Use [ATLAS_NORTH_STAR.md](./ATLAS_NORTH_STAR.md) for the long-term vision.
+- Use [ATLAS_EXPANSION_MAP.md](./ATLAS_EXPANSION_MAP.md) for future capability ideas outside current scope.
+
+This file is retained as a historical sprint-scope artifact plus useful scope context.
 
 It supersedes stale wording that still frames this product as "Farmland Terminal" or as a static dashboard-first tool.
 

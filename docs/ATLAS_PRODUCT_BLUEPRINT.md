@@ -2,7 +2,13 @@
 
 Last updated: 2026-03-17 (ET)
 Owner: Ryan + Codex + Claude
-Status: Operating product blueprint for Atlas execution
+Status: Workflow architecture reference; canonical planning now split by layer
+
+Planning note:
+- Use [ATLAS_NORTH_STAR.md](./ATLAS_NORTH_STAR.md) for Atlas's long-term product vision.
+- Use [ATLAS_CURRENT_SCOPED_BUILD_PLAN.md](./ATLAS_CURRENT_SCOPED_BUILD_PLAN.md) for active implementation scope and build order.
+- Use [ATLAS_EXPANSION_MAP.md](./ATLAS_EXPANSION_MAP.md) for future-but-not-current capability ideas.
+- This document remains useful for workflow architecture and product-shape reasoning, but it should not be treated as the single canonical planning source.
 
 ## 1) Purpose
 
