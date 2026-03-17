@@ -7,7 +7,7 @@ import {
   normalizeResearchRecord,
 } from '../auth.js';
 import { appendAssumptionParam, assumptionSetLabel, summarizeScenarioAssumptions } from '../shared/assumptions-ui.jsx';
-import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
+import { evaluateAtlasCountyRead, evaluateAtlasThesisSupport } from '../shared/atlas-read.js';
 import { getThesisLens, getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, STable } from '../shared/data-ui.jsx';
@@ -250,6 +250,18 @@ export function ResearchWorkspace({
         benchmarkMethodDetail: countySummary.benchmark_method_detail,
       })
     : null;
+  const countyThesisRead = countySummary
+    ? evaluateAtlasThesisSupport({
+        lensKey: thesisLensKey || activeThesisKey,
+        metrics: countyMetrics,
+        productivityActive: countySummary.productivity_active,
+        yieldProductivityFactor: countyMetrics.yield_productivity_factor,
+        soil: countySoil,
+        irrigation: countyIrrigation,
+        drought: countyDrought,
+        flood: countyFlood,
+      })
+    : null;
   const countyDroughtBadge = droughtRiskBand(countyDrought);
   const countyFloodBadge = floodRiskBand(countyFlood);
   const buildScenarioNavParams = (scenarioRun = null) => ({
@@ -444,6 +456,7 @@ export function ResearchWorkspace({
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
           {countyDecisionRead && <span className={`badge ${countyDecisionRead.overall.className}`}>{countyDecisionRead.overall.label}</span>}
+          {selectedThesisLens && countyThesisRead && <span className={`badge ${countyThesisRead.overall.className}`}>LENS {countyThesisRead.overall.label}</span>}
           {countySummary?.source_quality && <span className={`badge ${sourceBand(countySummary.source_quality).className}`}>{sourceBand(countySummary.source_quality).label}</span>}
           {countySummary?.benchmark_method && <span className={`badge ${benchmarkMethodBand(countySummary.benchmark_method).className}`}>{benchmarkMethodBand(countySummary.benchmark_method).label}</span>}
           {countyDrought?.risk_score != null && <span className={`badge ${countyDroughtBadge.className}`}>{countyDroughtBadge.label}</span>}
@@ -487,6 +500,15 @@ export function ResearchWorkspace({
                 : 'No strong support signals are currently surfaced beyond the visible model outputs.'}
           </div>
         </div>
+        {selectedThesisLens && countyThesisRead && <div className="workflow-card">
+          <div className="workflow-step">Thesis Lens Read</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.28rem'}}><span className={`badge ${countyThesisRead.overall.className}`}>{countyThesisRead.overall.label}</span> <span style={{marginLeft:'.35rem'}}>{countyThesisRead.overall.summary}</span></div>
+            {countyThesisRead.supportPoints.length
+              ? countyThesisRead.supportPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)
+              : 'No lens-specific support signals are surfaced beyond the county read.'}
+          </div>
+        </div>}
         <div className="workflow-card">
           <div className="workflow-step">What Could Change The Call</div>
           <div className="workflow-p">

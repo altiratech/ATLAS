@@ -2345,6 +2345,7 @@ app.get('/api/v1/screener', async (c) => {
   const minCap = c.req.query('min_cap');
   const maxRentMult = c.req.query('max_rent_mult');
   const minAccess = c.req.query('min_access');
+  const minYieldFactor = c.req.query('min_yield_factor');
   const minPowerIndex = c.req.query('min_power_index');
   const maxPowerPrice = c.req.query('max_power_price');
   const maxDroughtRisk = c.req.query('max_drought_risk');
@@ -2381,6 +2382,7 @@ app.get('/api/v1/screener', async (c) => {
     if (minCap) filters.push({ metric: 'implied_cap_rate', op: '>', value: Number(minCap) });
     if (maxRentMult) filters.push({ metric: 'rent_multiple', op: '<', value: Number(maxRentMult) });
     if (minAccess) filters.push({ metric: 'access_score', op: '>', value: Number(minAccess) });
+    if (minYieldFactor) filters.push({ metric: 'yield_productivity_factor', op: '>', value: Number(minYieldFactor) });
   }
 
   const zFilters: Record<string, { min?: number; max?: number }> = {};

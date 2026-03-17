@@ -18,7 +18,7 @@ import {
 } from '../formatting.js';
 import { api } from '../auth.js';
 import { appendAssumptionParam, AssumptionContextBar, assumptionSetLabel, findDefaultAssumptionSet } from '../shared/assumptions-ui.jsx';
-import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
+import { evaluateAtlasCountyRead, evaluateAtlasThesisSupport } from '../shared/atlas-read.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { MiniBar, Spark } from '../shared/data-ui.jsx';
 
@@ -251,6 +251,17 @@ export function CountyPage({
     credit,
     benchmarkMethodDetail: data.benchmark_method_detail,
   });
+  const thesisRead = evaluateAtlasThesisSupport({
+    lensKey: activeThesisKey,
+    metrics: m,
+    productivityActive: data.productivity_active,
+    yieldProductivityFactor: m.yield_productivity_factor,
+    soil,
+    irrigation,
+    drought,
+    flood,
+    industrial,
+  });
   const fairValueDelta = m.fair_value != null && baselineMetrics.fair_value != null ? m.fair_value - baselineMetrics.fair_value : null;
   const requiredReturnDelta = m.required_return != null && baselineMetrics.required_return != null ? m.required_return - baselineMetrics.required_return : null;
   const dscrDelta = m.dscr != null && baselineMetrics.dscr != null ? m.dscr - baselineMetrics.dscr : null;
@@ -347,13 +358,14 @@ export function CountyPage({
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
           <span className={`badge ${decisionRead.overall.className}`}>{decisionRead.overall.label}</span>
+          {activeThesis && thesisRead && <span className={`badge ${thesisRead.overall.className}`}>LENS {thesisRead.overall.label}</span>}
           <span className={`badge ${valueSignal.className}`}>{valueSignal.label}</span>
           <span className={`badge ${underwritingStatus.className}`}>{underwritingStatus.label}</span>
           <span className={`badge ${confidence.className}`}>{confidence.label}</span>
           <span className={`badge ${sourceBand(data.source_quality).className}`}>{sourceBand(data.source_quality).label}</span>
         </div>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1.05fr 1.05fr .9fr',gap:'.75rem'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'.75rem'}}>
         <div className="workflow-card">
           <div className="workflow-step">Decision Signals</div>
           <div className="workflow-p">
@@ -369,6 +381,15 @@ export function CountyPage({
             {supportPoints.length === 0 ? 'Atlas does not yet have enough structured support signals to summarize this county.' : supportPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)}
           </div>
         </div>
+        {activeThesis && thesisRead && <div className="workflow-card">
+          <div className="workflow-step">Thesis Lens Read</div>
+          <div className="workflow-p">
+            <div style={{marginBottom:'.28rem'}}><span className={`badge ${thesisRead.overall.className}`}>{thesisRead.overall.label}</span> <span style={{marginLeft:'.35rem'}}>{thesisRead.overall.summary}</span></div>
+            {thesisRead.supportPoints.length
+              ? thesisRead.supportPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)
+              : 'No lens-specific support signals are surfaced beyond the county read.'}
+          </div>
+        </div>}
         <div className="workflow-card">
           <div className="workflow-step">What Changes The View</div>
           <div className="workflow-p">

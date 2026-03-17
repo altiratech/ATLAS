@@ -30,6 +30,7 @@ const DEFAULT_VIEW_COLUMNS = [
   'source_quality',
   'benchmark_method',
   'productivity_active',
+  '_yield_factor',
   '_cash_rent',
   '_bv',
   '_noi',
@@ -72,6 +73,7 @@ export function Screener({
   const [minCap, setMinCap] = React.useState('');
   const [maxRentMult, setMaxRentMult] = React.useState('');
   const [minAccess, setMinAccess] = React.useState('');
+  const [minYieldFactor, setMinYieldFactor] = React.useState('');
   const [minPowerIndex, setMinPowerIndex] = React.useState('');
   const [maxPowerPrice, setMaxPowerPrice] = React.useState('');
   const [maxDroughtRisk, setMaxDroughtRisk] = React.useState('');
@@ -115,6 +117,7 @@ export function Screener({
       setMinCap('');
       setMaxRentMult('');
       setMinAccess('');
+      setMinYieldFactor('');
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('60');
@@ -128,6 +131,7 @@ export function Screener({
       setMinCap('2.5');
       setMaxRentMult('');
       setMinAccess('');
+      setMinYieldFactor('');
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('50');
@@ -141,6 +145,7 @@ export function Screener({
       setMinCap('');
       setMaxRentMult('');
       setMinAccess('');
+      setMinYieldFactor('');
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('70');
@@ -154,6 +159,7 @@ export function Screener({
       setMinCap('2.5');
       setMaxRentMult('');
       setMinAccess('40');
+      setMinYieldFactor('');
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('60');
@@ -167,12 +173,13 @@ export function Screener({
       setMinCap('');
       setMaxRentMult('');
       setMinAccess('35');
-      setMinPowerIndex('');
+      setMinYieldFactor('1.02');
+      setMinPowerIndex('45');
       setMaxPowerPrice('');
       setMaxDroughtRisk('75');
       setMaxFloodRisk('75');
       setMinSoilFarmlandPct('45');
-      setSortBy('access_score');
+      setSortBy('yield_productivity_factor');
       setSortDir('desc');
       return;
     }
@@ -180,6 +187,7 @@ export function Screener({
       setMinCap('');
       setMaxRentMult('');
       setMinAccess('');
+      setMinYieldFactor('1.01');
       setMinPowerIndex('');
       setMaxPowerPrice('');
       setMaxDroughtRisk('50');
@@ -202,6 +210,7 @@ export function Screener({
     setMinCap('');
     setMaxRentMult('');
     setMinAccess('');
+    setMinYieldFactor('');
     setMinPowerIndex('');
     setMaxPowerPrice('');
     setMaxDroughtRisk('');
@@ -248,6 +257,7 @@ export function Screener({
     setMinCap(asInputValue(findFilterValue(filters, 'implied_cap_rate', '>')));
     setMaxRentMult(asInputValue(findFilterValue(filters, 'rent_multiple', '<')));
     setMinAccess(asInputValue(findFilterValue(filters, 'access_score', '>')));
+    setMinYieldFactor(asInputValue(findFilterValue(filters, 'yield_productivity_factor', '>')));
     setMinPowerIndex(asInputValue(viewState.minPowerIndex));
     setMaxPowerPrice(asInputValue(viewState.maxPowerPrice));
     setMaxDroughtRisk(asInputValue(viewState.maxDroughtRisk));
@@ -288,6 +298,7 @@ export function Screener({
     if (minCap) qs += `&min_cap=${minCap}`;
     if (maxRentMult) qs += `&max_rent_mult=${maxRentMult}`;
     if (minAccess) qs += `&min_access=${minAccess}`;
+    if (minYieldFactor) qs += `&min_yield_factor=${minYieldFactor}`;
     if (minPowerIndex) qs += `&min_power_index=${minPowerIndex}`;
     if (maxPowerPrice) qs += `&max_power_price=${maxPowerPrice}`;
     if (maxDroughtRisk) qs += `&max_drought_risk=${maxDroughtRisk}`;
@@ -312,6 +323,7 @@ export function Screener({
     minSoilFarmlandPct,
     maxRentMult,
     minAccess,
+    minYieldFactor,
     minCap,
     minPowerIndex,
     selScreen,
@@ -358,8 +370,9 @@ export function Screener({
     if (minCap) filters.push({ metric: 'implied_cap_rate', op: '>', value: Number(minCap) });
     if (maxRentMult) filters.push({ metric: 'rent_multiple', op: '<', value: Number(maxRentMult) });
     if (minAccess) filters.push({ metric: 'access_score', op: '>', value: Number(minAccess) });
+    if (minYieldFactor) filters.push({ metric: 'yield_productivity_factor', op: '>', value: Number(minYieldFactor) });
     return filters.filter((filter) => Number.isFinite(filter.value));
-  }, [maxRentMult, minAccess, minCap]);
+  }, [maxRentMult, minAccess, minCap, minYieldFactor]);
   const liveOnlyFilters = React.useMemo(() => {
     const filters = [];
     if (state) filters.push(`state=${state.toUpperCase()}`);
@@ -377,18 +390,20 @@ export function Screener({
   const activeScreenFilters = React.useMemo(() => ({
     minCap,
     minAccess,
+    minYieldFactor,
     maxDroughtRisk,
     maxFloodRisk,
     minSoilFarmlandPct,
     minPowerIndex,
     maxPowerPrice,
-  }), [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minAccess, minCap, minPowerIndex, minSoilFarmlandPct]);
+  }), [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minAccess, minCap, minPowerIndex, minSoilFarmlandPct, minYieldFactor]);
 
   const viewState = React.useMemo(() => ({
     preset,
     thesisKey: activeThesisKey,
     state: state.toUpperCase(),
     basisFilter,
+    minYieldFactor,
     minPowerIndex,
     maxPowerPrice,
     maxDroughtRisk,
@@ -407,6 +422,7 @@ export function Screener({
     maxDroughtRisk,
     maxFloodRisk,
     maxPowerPrice,
+    minYieldFactor,
     minPowerIndex,
     minSoilFarmlandPct,
     preset,
@@ -529,6 +545,7 @@ export function Screener({
         <div className="fg"><label>Min Cap Rate</label><input type="number" step="0.1" value={minCap} onChange={e => setMinCap(e.target.value)} placeholder="e.g. 2.0"/></div>
         <div className="fg"><label>Max Rent Multiple</label><input type="number" step="1" value={maxRentMult} onChange={e => setMaxRentMult(e.target.value)} placeholder="e.g. 25"/></div>
         <div className="fg"><label>Min Access Score</label><input type="number" step="1" value={minAccess} onChange={e => setMinAccess(e.target.value)} placeholder="e.g. 50"/></div>
+        <div className="fg"><label>Min Yield Factor</label><input type="number" step="0.01" value={minYieldFactor} onChange={e => setMinYieldFactor(e.target.value)} placeholder="e.g. 1.02"/></div>
         <div className="fg"><label>Min Power Index</label><input type="number" step="1" value={minPowerIndex} onChange={e => setMinPowerIndex(e.target.value)} placeholder="e.g. 80"/></div>
         <div className="fg"><label>Max Power Price</label><input type="number" step="0.1" value={maxPowerPrice} onChange={e => setMaxPowerPrice(e.target.value)} placeholder="c/kWh"/></div>
         <div className="fg"><label>Max Drought Risk</label><input type="number" step="1" value={maxDroughtRisk} onChange={e => setMaxDroughtRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
@@ -558,6 +575,7 @@ export function Screener({
             <option value="cash_rent">Cash Rent</option>
             <option value="benchmark_value">Benchmark Value</option>
             <option value="access_score">Access Score</option>
+            <option value="yield_productivity_factor">Yield Factor</option>
             <option value="irrigated_ag_land_acres">Irrigated Acres</option>
             <option value="power_cost_index">Power Cost Index</option>
             <option value="industrial_power_price">Power Price</option>
@@ -671,6 +689,7 @@ export function Screener({
             const badge = productivityBand(v);
             return <span className={`badge ${badge.className}`}>{badge.label}</span>;
           }},
+          {key:'_yield_factor',label:'Yld Fx',num:true,fmt:(_,r) => $(r.metrics?.yield_productivity_factor,2)},
           {key:'_cash_rent',label:'Cash Rent',num:true,fmt:(_,r) => $$(r.metrics?.cash_rent)},
           {key:'_bv',label:'Benchmark Value',num:true,fmt:(_,r) => <span title={r.benchmark_method_detail || 'Benchmark method detail unavailable.'}>{$$(r.metrics?.benchmark_value)}</span>},
           {key:'_noi',label:'NOI/ac',num:true,fmt:(_,r) => $$(r.metrics?.noi_per_acre)},
@@ -724,7 +743,7 @@ export function Screener({
         const spread = fair != null && benchmark != null && benchmark > 0
           ? ((fair - benchmark) / benchmark) * 100
           : null;
-        const why = buildScreenReasons(r, activeScreenFilters);
+        const why = buildScreenReasons(r, activeScreenFilters, activeThesisKey);
         return {
           ...r,
             _cash_rent:r.metrics?.cash_rent,
@@ -735,6 +754,7 @@ export function Screener({
             _rm:r.metrics?.rent_multiple,
             _noi:r.metrics?.noi_per_acre,
             _access:r.metrics?.access_score,
+            _yield_factor:r.metrics?.yield_productivity_factor,
             _flood:r.flood?.hazard_score,
             _flood_agloss:r.flood?.ag_loss_rate_pct,
             _irrigated:r.irrigation?.irrigated_acres,

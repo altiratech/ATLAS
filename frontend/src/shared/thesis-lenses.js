@@ -12,9 +12,9 @@ export const THESIS_LENSES = [
     question: 'Where could labor pressure, automation, and policy shifts create enough stress or adaptation demand to move land, infrastructure, or underwriting outcomes?',
     nowSignals: [
       'Valuation pressure through cap rate, rent multiple, and fair-value spread',
-      'Productive base through NRCS farmland share, soil water storage, and irrigation footprint',
+      'Productive base through yield productivity factor, NRCS farmland share, soil water storage, and irrigation footprint',
       'Physical fragility through drought and flood burden',
-      'Movement and infrastructure context through access score and power proxies where available',
+      'Movement and infrastructure context through access score and current power proxies where available',
     ],
     gapSignals: [
       'No direct labor scarcity, H-2A, wage, broadband, or robotics-adoption series are live yet',
@@ -51,7 +51,7 @@ export const THESIS_LENSES = [
     description: 'Find counties with strong land quality, visible irrigation footprint, and more manageable physical risk before layering on a narrower thesis.',
     question: 'Which counties look like durable agricultural production bases once soil, water, and physical risk are weighed together?',
     nowSignals: [
-      'NRCS farmland share and AWS 100cm for land quality',
+      'Yield productivity factor, NRCS farmland share, and AWS 100cm for the productive base',
       'Irrigated acres for water-footprint context',
       'Drought and flood burden for resilience pressure',
       'Benchmark, fair value, and cap rate for underwriting context',

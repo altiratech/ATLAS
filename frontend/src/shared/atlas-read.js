@@ -178,6 +178,177 @@ function classifyFinance({ credit, metrics }) {
   };
 }
 
+function classifyThesisInfrastructure({ metrics, industrial }) {
+  const accessScore = metrics?.access_score ?? null;
+  const powerIndex = industrial?.power_cost_index ?? null;
+  const powerPrice = industrial?.industrial_power_price ?? null;
+
+  if (
+    (accessScore != null && accessScore >= 60)
+    || (powerIndex != null && powerIndex >= 70)
+    || (accessScore != null && accessScore >= 45 && powerIndex != null && powerIndex >= 50)
+    || (accessScore != null && accessScore >= 40 && powerPrice != null && powerPrice <= 8.5)
+  ) {
+    return {
+      score: 2,
+      label: 'SUPPORTIVE',
+      className: 'badge-g',
+      detail: accessScore != null && powerIndex != null
+        ? `Access ${num(accessScore, 1)} and power index ${num(powerIndex, 1)} both support transition work.`
+        : accessScore != null
+          ? `Access score is ${num(accessScore, 1)} / 100.`
+          : `Power index is ${num(powerIndex, 1)}.`,
+    };
+  }
+
+  if (accessScore != null || powerIndex != null || powerPrice != null) {
+    return {
+      score: 1,
+      label: 'PARTIAL',
+      className: 'badge-a',
+      detail: accessScore != null
+        ? `Access is visible at ${num(accessScore, 1)} / 100, but movement / power context is still incomplete.`
+        : powerIndex != null
+          ? `Power context is partially visible at ${num(powerIndex, 1)}.`
+          : `Power price is ${$(powerPrice, 2)}.`,
+    };
+  }
+
+  return {
+    score: -1,
+    label: 'MISSING',
+    className: 'badge-r',
+    detail: 'Movement and power proxies are still thin for this county.',
+  };
+}
+
+function classifyThesisHazardWindow({ drought, flood }) {
+  const droughtScore = drought?.risk_score ?? null;
+  const floodScore = flood?.hazard_score ?? null;
+
+  if (droughtScore == null && floodScore == null) {
+    return {
+      score: 0,
+      label: 'UNKNOWN',
+      className: 'badge-a',
+      detail: 'Hazard evidence is incomplete for this thesis read.',
+    };
+  }
+
+  if (
+    (droughtScore != null && droughtScore >= 85)
+    || (floodScore != null && floodScore >= 85)
+  ) {
+    return {
+      score: -1,
+      label: 'CONSTRAINED',
+      className: 'badge-r',
+      detail: `Hazard burden is elevated: drought ${droughtScore != null ? num(droughtScore, 0) : 'N/A'} / flood ${floodScore != null ? num(floodScore, 0) : 'N/A'}.`,
+    };
+  }
+
+  if (
+    (droughtScore == null || droughtScore <= 75)
+    && (floodScore == null || floodScore <= 75)
+  ) {
+    return {
+      score: 1,
+      label: 'MANAGEABLE',
+      className: 'badge-g',
+      detail: `Hazards look manageable at drought ${droughtScore != null ? num(droughtScore, 0) : 'N/A'} / flood ${floodScore != null ? num(floodScore, 0) : 'N/A'}.`,
+    };
+  }
+
+  return {
+    score: 0,
+    label: 'MIXED',
+    className: 'badge-a',
+    detail: `Hazard read is mixed at drought ${droughtScore != null ? num(droughtScore, 0) : 'N/A'} / flood ${floodScore != null ? num(floodScore, 0) : 'N/A'}.`,
+  };
+}
+
+function classifyThesisUnderwrite({ metrics, valueSpreadPct }) {
+  const capRate = metrics?.implied_cap_rate ?? null;
+  const fairValue = metrics?.fair_value ?? null;
+  const benchmarkValue = metrics?.benchmark_value ?? null;
+
+  if (valueSpreadPct != null && valueSpreadPct >= 5) {
+    return {
+      score: 2,
+      label: 'OPEN',
+      className: 'badge-g',
+      detail: `Fair value sits ${pct(valueSpreadPct, 1)} above benchmark.`,
+    };
+  }
+
+  if (valueSpreadPct != null && valueSpreadPct <= -10) {
+    return {
+      score: -1,
+      label: 'TIGHT',
+      className: 'badge-r',
+      detail: `Benchmark runs ${pct(Math.abs(valueSpreadPct), 1)} above fair value.`,
+    };
+  }
+
+  if (capRate != null || fairValue != null || benchmarkValue != null) {
+    return {
+      score: 1,
+      label: 'VISIBLE',
+      className: 'badge-a',
+      detail: capRate != null
+        ? `Cap rate is ${pct(capRate, 2)} with visible benchmark/fair-value context.`
+        : 'Underwrite context is partially visible.',
+    };
+  }
+
+  return {
+    score: 0,
+    label: 'INCOMPLETE',
+    className: 'badge-a',
+    detail: 'Atlas does not yet have enough underwrite context for this thesis read.',
+  };
+}
+
+function classifyWaterBuffer({ soil, irrigation }) {
+  const aws100 = soil?.rootzone_aws_100cm ?? null;
+  const irrigatedAcres = irrigation?.irrigated_acres ?? null;
+
+  if (
+    (aws100 != null && aws100 >= 18)
+    || (irrigatedAcres != null && irrigatedAcres >= 10000)
+  ) {
+    return {
+      score: 2,
+      label: 'BUFFERED',
+      className: 'badge-g',
+      detail: aws100 != null
+        ? `AWS 100cm is ${num(aws100, 1)} with strong water-buffer support.`
+        : `${Math.round(irrigatedAcres).toLocaleString('en-US')} irrigated acres support the production base.`,
+    };
+  }
+
+  if (
+    (aws100 != null && aws100 >= 14)
+    || (irrigatedAcres != null && irrigatedAcres >= 1000)
+  ) {
+    return {
+      score: 1,
+      label: 'VISIBLE',
+      className: 'badge-a',
+      detail: aws100 != null
+        ? `AWS 100cm is ${num(aws100, 1)}.`
+        : `${Math.round(irrigatedAcres).toLocaleString('en-US')} irrigated acres are visible.`,
+    };
+  }
+
+  return {
+    score: -1,
+    label: 'THIN',
+    className: 'badge-r',
+    detail: 'Water-buffer support is thin or missing in current Atlas evidence.',
+  };
+}
+
 export function evaluateAtlasCountyRead({
   metrics = {},
   sourceQuality,
@@ -302,7 +473,148 @@ export function evaluateAtlasCountyRead({
   };
 }
 
-export function buildScreenReasons(row, activeFilters = {}) {
+export function evaluateAtlasThesisSupport({
+  lensKey,
+  metrics = {},
+  productivityActive,
+  yieldProductivityFactor,
+  soil,
+  irrigation,
+  drought,
+  flood,
+  industrial,
+}) {
+  if (!lensKey) return null;
+
+  const fairValue = metrics?.fair_value ?? null;
+  const benchmarkValue = metrics?.benchmark_value ?? null;
+  const valueSpreadPct = fairValue != null && benchmarkValue != null && benchmarkValue > 0
+    ? ((fairValue - benchmarkValue) / benchmarkValue) * 100
+    : null;
+
+  const productiveBase = classifySiteQuality({
+    soil,
+    irrigation,
+    productivityActive,
+    yieldProductivityFactor,
+  });
+  const infrastructure = classifyThesisInfrastructure({ metrics, industrial });
+  const hazards = classifyThesisHazardWindow({ drought, flood });
+  const underwrite = classifyThesisUnderwrite({ metrics, valueSpreadPct });
+  const waterBuffer = classifyWaterBuffer({ soil, irrigation });
+
+  if (lensKey === 'ag_transition_thesis') {
+    let overall;
+    if (productiveBase.score >= 1 && infrastructure.score >= 1 && hazards.score >= 0) {
+      overall = {
+        label: 'TRANSITION PLAUSIBLE',
+        className: 'badge-g',
+        summary: 'The county has enough productive-base and movement support to belong in an ag-transition workflow today.',
+      };
+    } else if (productiveBase.score >= 1 && hazards.score >= 0) {
+      overall = {
+        label: 'WATCH THEME',
+        className: 'badge-a',
+        summary: 'The productive base is visible, but transition-readiness is still conditional on better movement, power, or missing labor-side evidence.',
+      };
+    } else if (productiveBase.score < 0 || hazards.score < 0) {
+      overall = {
+        label: 'WEAK FIT',
+        className: 'badge-r',
+        summary: 'Current Atlas evidence does not support a strong ag-transition read here yet.',
+      };
+    } else {
+      overall = {
+        label: 'INCOMPLETE',
+        className: 'badge-b',
+        summary: 'Atlas still lacks enough live support to turn this into a clean transition-thesis county.',
+      };
+    }
+
+    return {
+      overall,
+      pillars: {
+        productive_base: productiveBase,
+        movement_infrastructure: infrastructure,
+        hazard_window: hazards,
+        underwrite,
+      },
+      supportPoints: [
+        productiveBase.score >= 1 ? productiveBase.detail : null,
+        infrastructure.score >= 1 ? infrastructure.detail : null,
+        underwrite.score >= 1 ? underwrite.detail : null,
+        hazards.score >= 0 ? hazards.detail : null,
+      ].filter(Boolean).slice(0, 4),
+      cautionPoints: [
+        infrastructure.score < 1 ? infrastructure.detail : null,
+        hazards.score < 0 ? hazards.detail : null,
+        !productivityActive ? 'County yield-basis support is inactive, so the productive-base read is only partially observed.' : null,
+      ].filter(Boolean).slice(0, 4),
+      gatingChecks: [
+        infrastructure.score < 1 ? 'Confirm movement and power context before presenting this county as transition-ready.' : null,
+        'Direct labor, H-2A, wage, broadband, and robotics-adoption series are still missing; keep the thesis framed as proxy-supported rather than labor-modeled.',
+      ].filter(Boolean).slice(0, 4),
+    };
+  }
+
+  if (lensKey === 'resilient_production_base') {
+    let overall;
+    if (productiveBase.score >= 1 && waterBuffer.score >= 1 && hazards.score >= 0) {
+      overall = {
+        label: 'DURABLE BASE',
+        className: 'badge-g',
+        summary: 'The county looks like a credible long-duration production base under the current soil, water, and hazard stack.',
+      };
+    } else if (productiveBase.score >= 1 && hazards.score >= 0) {
+      overall = {
+        label: 'USABLE BASE',
+        className: 'badge-a',
+        summary: 'The production base is visible, but the resilience case still needs tighter water-buffer or hazard confirmation.',
+      };
+    } else if (productiveBase.score < 0 || waterBuffer.score < 0 || hazards.score < 0) {
+      overall = {
+        label: 'FRAGILE BASE',
+        className: 'badge-r',
+        summary: 'Current soil, water, or hazard context does not yet support a strong resilient-base read.',
+      };
+    } else {
+      overall = {
+        label: 'INCOMPLETE',
+        className: 'badge-b',
+        summary: 'Atlas still lacks enough live support to treat this as a resilient production base.',
+      };
+    }
+
+    return {
+      overall,
+      pillars: {
+        productive_base: productiveBase,
+        water_buffer: waterBuffer,
+        hazard_window: hazards,
+        underwrite,
+      },
+      supportPoints: [
+        productiveBase.score >= 1 ? productiveBase.detail : null,
+        waterBuffer.score >= 1 ? waterBuffer.detail : null,
+        hazards.score >= 0 ? hazards.detail : null,
+        underwrite.score >= 1 ? underwrite.detail : null,
+      ].filter(Boolean).slice(0, 4),
+      cautionPoints: [
+        waterBuffer.score < 1 ? waterBuffer.detail : null,
+        hazards.score < 0 ? hazards.detail : null,
+        !productivityActive ? 'Yield-productivity support is inactive, so resilience is relying more heavily on soil and irrigation evidence.' : null,
+      ].filter(Boolean).slice(0, 4),
+      gatingChecks: [
+        waterBuffer.score < 1 ? 'Validate water-buffer support before using this county as a durable production anchor.' : null,
+        hazards.score < 1 ? 'Pressure-test drought and flood tolerance against the intended hold period.' : null,
+      ].filter(Boolean).slice(0, 4),
+    };
+  }
+
+  return null;
+}
+
+export function buildScreenReasons(row, activeFilters = {}, thesisKey = '') {
   const read = evaluateAtlasCountyRead({
     metrics: row.metrics,
     sourceQuality: row.source_quality,
@@ -315,6 +627,17 @@ export function buildScreenReasons(row, activeFilters = {}) {
     credit: row.credit,
     benchmarkMethodDetail: row.benchmark_method_detail,
   });
+  const thesis = evaluateAtlasThesisSupport({
+    lensKey: thesisKey,
+    metrics: row.metrics,
+    productivityActive: row.productivity_active,
+    yieldProductivityFactor: row.metrics?.yield_productivity_factor,
+    soil: row.soil,
+    irrigation: row.irrigation,
+    drought: row.drought,
+    flood: row.flood,
+    industrial: row.industrial,
+  });
 
   const reasons = [];
   const capRate = row.metrics?.implied_cap_rate;
@@ -322,6 +645,7 @@ export function buildScreenReasons(row, activeFilters = {}) {
   const soilShare = row.soil?.significant_share_pct;
   const droughtRisk = row.drought?.risk_score;
   const floodRisk = row.flood?.hazard_score;
+  const yieldFactor = row.metrics?.yield_productivity_factor;
 
   if (activeFilters.minCap && capRate != null && capRate >= Number(activeFilters.minCap)) {
     reasons.push(`Cap ${pct(capRate, 2)} clears the ${pct(Number(activeFilters.minCap), 1)} floor.`);
@@ -338,11 +662,19 @@ export function buildScreenReasons(row, activeFilters = {}) {
   if (activeFilters.minSoilFarmlandPct && soilShare != null && soilShare >= Number(activeFilters.minSoilFarmlandPct)) {
     reasons.push(`NRCS farmland ${pct(soilShare, 0)} clears the quality floor.`);
   }
+  if (activeFilters.minYieldFactor && yieldFactor != null && yieldFactor >= Number(activeFilters.minYieldFactor)) {
+    reasons.push(`Yield factor ${num(yieldFactor, 2)} clears the productivity floor.`);
+  }
   if (activeFilters.minPowerIndex && row.industrial?.power_cost_index != null && row.industrial.power_cost_index >= Number(activeFilters.minPowerIndex)) {
     reasons.push(`Power index ${num(row.industrial.power_cost_index, 1)} meets the power screen.`);
   }
   if (activeFilters.maxPowerPrice && row.industrial?.industrial_power_price != null && row.industrial.industrial_power_price <= Number(activeFilters.maxPowerPrice)) {
     reasons.push(`Power price ${$(row.industrial.industrial_power_price, 2)} is inside the target band.`);
+  }
+
+  for (const support of thesis?.supportPoints || []) {
+    if (!reasons.includes(support)) reasons.push(support);
+    if (reasons.length >= 3) break;
   }
 
   for (const support of read.supportPoints) {
@@ -351,11 +683,12 @@ export function buildScreenReasons(row, activeFilters = {}) {
   }
 
   if (!reasons.length) {
-    reasons.push(read.overall.summary);
+    reasons.push(thesis?.overall.summary || read.overall.summary);
   }
 
   return {
     overall: read.overall,
+    thesis,
     reasons: reasons.slice(0, 3),
   };
 }

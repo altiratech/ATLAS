@@ -66,9 +66,9 @@ Question:
 
 Atlas uses now:
 - valuation pressure via benchmark/fair-value spread and cap rate
-- productive base via NRCS farmland share, AWS 100cm, and irrigation footprint
+- productive base via county yield productivity factor, NRCS farmland share, AWS 100cm, and irrigation footprint
 - physical fragility via drought and flood burden
-- access and limited infrastructure proxies where available
+- movement and limited infrastructure proxies via access score and current power metrics where available
 
 Important honesty rule:
 - Atlas does **not** yet have direct labor scarcity, H-2A, wage, broadband, or robotics-adoption data live.
@@ -80,6 +80,7 @@ Question:
 - Which counties look like durable agricultural production bases once soil, water, and physical risk are weighed together?
 
 Atlas uses now:
+- county yield productivity factor
 - NRCS farmland share
 - AWS 100cm
 - irrigated acreage
@@ -118,6 +119,7 @@ AI should **not**:
 Atlas should now prioritize:
 - perspective + thesis-lens aware entry flow
 - thesis-aware screening and saved views
+- thesis-aware support reads inside County Detail and Research Workspace
 - research records that preserve thesis context
 - opportunity-centric memo and scenario workflow
 
