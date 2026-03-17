@@ -4,7 +4,7 @@ Status: Implementation brief
 Date: 2026-03-17
 Scope: `Code/active/farmland-terminal`
 Related: `D-209`, `D-210`, `ATLAS_THESIS_LAYER_SPEC.md`, `ATLAS_PRODUCT_BLUEPRINT.md`
-Supersedes as implementation brief: `ATLAS_DATAGRID_SPEC.docx` (keep as working draft/reference)
+Canonical implementation brief for Atlas DataGrid work
 
 ## 1. Purpose
 
