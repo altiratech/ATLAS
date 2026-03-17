@@ -1,49 +1,23 @@
 import { API, PG } from '../config.js';
 import {
-  $,
-  $$,
-  $chg,
-  $int,
-  $pct,
-  benchmarkMethodBand,
-  droughtRiskBand,
-  floodRiskBand,
-  industrialLineageBand,
   industrialPowerSummaryBand,
-  productivityBand,
   productivitySummaryBand,
-  sourceBand,
   toast,
-  zBand,
 } from '../formatting.js';
 import { api } from '../auth.js';
 import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
-import { buildScreenReasons } from '../shared/atlas-read.js';
+import {
+  DEFAULT_SCREENER_ROW_COLORING,
+  DEFAULT_SCREENER_VISIBLE_COLUMNS,
+  getDefaultScreenerViewState,
+  getScreenerColumns,
+  getScreenerRowAccent,
+  hydrateScreenerRows,
+  ScreenerRecordPanel,
+} from '../shared/screener-grid.jsx';
 import { getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
 import { ErrBox } from '../shared/system.jsx';
-import { STable } from '../shared/data-ui.jsx';
-
-const DEFAULT_VIEW_COLUMNS = [
-  'county',
-  'state',
-  '_read',
-  'source_quality',
-  'benchmark_method',
-  'productivity_active',
-  '_yield_factor',
-  '_cash_rent',
-  '_bv',
-  '_noi',
-  '_cap',
-  '_fv',
-  '_spread',
-  '_access',
-  '_drought',
-  '_flood',
-  '_irrigated',
-  '_soil_share',
-  '_workflow',
-];
+import { DataGrid } from '../shared/data-ui.jsx';
 
 function asInputValue(value) {
   return value == null ? '' : String(value);
@@ -95,6 +69,7 @@ export function Screener({
   const [screenName, setScreenName] = React.useState('');
   const [screenNotes, setScreenNotes] = React.useState('');
   const [savingScreen, setSavingScreen] = React.useState(false);
+  const [gridViewState, setGridViewState] = React.useState(() => getDefaultScreenerViewState());
   const thesisLenses = React.useMemo(
     () => getThesisLensesForPlaybook(activePlaybookKey),
     [activePlaybookKey],
@@ -273,6 +248,14 @@ export function Screener({
     setZFairMax(asInputValue(viewState.zFairMax));
     setZRentMin(asInputValue(viewState.zRentMin));
     setZRentMax(asInputValue(viewState.zRentMax));
+    setGridViewState({
+      visibleColumns: Array.isArray(viewState.visibleColumns) && viewState.visibleColumns.length
+        ? viewState.visibleColumns
+        : (Array.isArray(view?.columns) && view.columns.length ? view.columns : DEFAULT_SCREENER_VISIBLE_COLUMNS),
+      columnOrder: Array.isArray(viewState.columnOrder) && viewState.columnOrder.length ? viewState.columnOrder : null,
+      groupBy: viewState.groupBy || '',
+      rowColoring: viewState.rowColoring || DEFAULT_SCREENER_ROW_COLORING,
+    });
     if (view?.assumption_set_id != null) {
       setActiveAssumptionSetId?.(String(view.assumption_set_id));
     }
@@ -417,8 +400,16 @@ export function Screener({
     zRentMax,
     sortBy,
     sortDir,
+    visibleColumns: gridViewState.visibleColumns,
+    columnOrder: gridViewState.columnOrder,
+    groupBy: gridViewState.groupBy,
+    rowColoring: gridViewState.rowColoring,
   }), [
     basisFilter,
+    gridViewState.columnOrder,
+    gridViewState.groupBy,
+    gridViewState.rowColoring,
+    gridViewState.visibleColumns,
     maxDroughtRisk,
     maxFloodRisk,
     maxPowerPrice,
@@ -458,7 +449,7 @@ export function Screener({
             sort_dir: sortDir,
             source: 'screener',
           },
-          columns: DEFAULT_VIEW_COLUMNS,
+          columns: gridViewState.visibleColumns,
           playbook_key: activePlaybookKey,
           notes: screenNotes.trim(),
           assumption_set_id: activeAssumptionSetId ? Number(activeAssumptionSetId) : null,
@@ -490,6 +481,23 @@ export function Screener({
     if (!basisFilter) return rows;
     return rows.filter((row) => row.benchmark_method === basisFilter);
   }, [basisFilter, results]);
+  const screenRows = React.useMemo(
+    () => hydrateScreenerRows(visibleRows, activeScreenFilters, activeThesisKey),
+    [activeScreenFilters, activeThesisKey, visibleRows],
+  );
+  const screenerColumns = React.useMemo(
+    () => getScreenerColumns({ nav, workflowParams }),
+    [nav, workflowParams],
+  );
+  const handleGridSortChange = React.useCallback((nextSort) => {
+    if (!nextSort?.key) return;
+    setSortBy(nextSort.key);
+    setSortDir(nextSort.dir || 'desc');
+  }, []);
+  const renderRecordPanel = React.useCallback(
+    (row) => <ScreenerRecordPanel row={row} nav={nav} workflowParams={workflowParams} />,
+    [nav, workflowParams],
+  );
 
   return <div>
     <AssumptionContextBar
@@ -665,115 +673,22 @@ export function Screener({
         <span className="badge badge-a">COUNTY-BACKED ROWS PREFERRED</span>
         {(results.as_of_meta.warnings || []).map(w => <span key={w} className="badge badge-r">{w}</span>)}
       </div>}
-      <STable
-        cols={[
-          {key:'county',label:'County',fmt:(_,r) => <div>
-            <div>{r.county}</div>
-            <div style={{fontSize:'.7rem',color:'var(--text2)',marginTop:'.18rem'}}>{r._why?.reasons?.[0] || 'County-level underwriting row'}</div>
-          </div>},
-          {key:'state',label:'ST'},
-          {key:'_read',label:'Read',sortable:false,fmt:(_,r) => <span className={`badge ${r._why?.overall?.className || 'badge-a'}`}>{r._why?.overall?.label || 'N/A'}</span>},
-          {key:'source_quality',label:'Data',fmt:(v,r) => {
-            const badge = sourceBand(v);
-            return <span className={`badge ${badge.className}`} title={r.benchmark_method_detail || r.source_quality_detail || 'Source quality detail unavailable.'}>{badge.label}</span>;
-          }},
-          {key:'benchmark_method',label:'Basis',fmt:(v,r) => {
-            const badge = benchmarkMethodBand(v);
-            return <span className={`badge ${badge.className}`} title={r.benchmark_method_detail || 'Benchmark method detail unavailable.'}>{badge.label}</span>;
-          }},
-          {key:'_industrial_lineage',label:'Ind',fmt:(_,r) => {
-            const badge = industrialLineageBand(r.industrial?.lineage);
-            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
-          }},
-          {key:'productivity_active',label:'Prod',fmt:v => {
-            const badge = productivityBand(v);
-            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
-          }},
-          {key:'_yield_factor',label:'Yld Fx',num:true,fmt:(_,r) => $(r.metrics?.yield_productivity_factor,2)},
-          {key:'_cash_rent',label:'Cash Rent',num:true,fmt:(_,r) => $$(r.metrics?.cash_rent)},
-          {key:'_bv',label:'Benchmark Value',num:true,fmt:(_,r) => <span title={r.benchmark_method_detail || 'Benchmark method detail unavailable.'}>{$$(r.metrics?.benchmark_value)}</span>},
-          {key:'_noi',label:'NOI/ac',num:true,fmt:(_,r) => $$(r.metrics?.noi_per_acre)},
-          {key:'_cap',label:'Cap Rate',num:true,fmt:(_,r) => $pct(r.metrics?.implied_cap_rate)},
-          {key:'_fv',label:'Fair Value',num:true,fmt:(_,r) => $$(r.metrics?.fair_value)},
-          {key:'_spread',label:'Spread',num:true,fmt:(_,r) => {
-            const v = r._spread;
-            return v == null ? '--' : <span className={v > 0 ? 'pos' : 'neg'}>{$chg(v)}</span>;
-          }},
-          {key:'_rm',label:'Rent Mult',num:true,fmt:(_,r) => $(r.metrics?.rent_multiple,1)},
-          {key:'_access',label:'Access',num:true,fmt:(_,r) => $(r.metrics?.access_score,1)},
-          {key:'_drought',label:'Drought',num:true,fmt:(_,r) => {
-            const badge = droughtRiskBand(r.drought);
-            return <span className={`badge ${badge.className}`} title={r.drought?.summary || 'FEMA drought evidence not loaded yet.'}>{badge.label}</span>;
-          }},
-          {key:'_agloss',label:'Drought Ag Loss %',num:true,fmt:(_,r) => $pct(r.drought?.ag_loss_rate_pct)},
-          {key:'_flood',label:'Flood',num:true,fmt:(_,r) => {
-            const badge = floodRiskBand(r.flood);
-            return <span className={`badge ${badge.className}`} title={r.flood?.summary || 'FEMA flood evidence not loaded yet.'}>{badge.label}</span>;
-          }},
-          {key:'_flood_agloss',label:'Flood Ag Loss %',num:true,fmt:(_,r) => $pct(r.flood?.ag_loss_rate_pct)},
-          {key:'_irrigated',label:'Irrigated Acres',num:true,fmt:(_,r) => <span title={r.irrigation?.summary || 'USDA irrigation footprint not loaded yet.'}>{$int(r.irrigation?.irrigated_acres)}</span>},
-          {key:'_soil_share',label:'NRCS Farmland %',num:true,fmt:(_,r) => <span title={r.soil?.summary || 'NRCS soil evidence not loaded yet.'}>{$pct(r.soil?.significant_share_pct)}</span>},
-          {key:'_soil_aws100',label:'AWS 100cm',num:true,fmt:(_,r) => <span title={r.soil?.summary || 'NRCS soil evidence not loaded yet.'}>{$(r.soil?.rootzone_aws_100cm,1)}</span>},
-          {key:'_pidx',label:'Pwr Idx',num:true,fmt:(_,r) => $(r.industrial?.power_cost_index,1)},
-          {key:'_ppx',label:'Pwr $',num:true,fmt:(_,r) => $(r.industrial?.industrial_power_price,2)},
-          {key:'_zcap',label:'Cap Z',num:true,fmt:(_,r) => {
-            const badge = zBand(r.zscores?.implied_cap_rate || {});
-            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
-          }},
-          {key:'_zfv',label:'Fair Z',num:true,fmt:(_,r) => {
-            const badge = zBand(r.zscores?.fair_value || {});
-            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
-          }},
-          {key:'_zrent',label:'Rent Z',num:true,fmt:(_,r) => {
-            const badge = zBand(r.zscores?.cash_rent || {});
-            return <span className={`badge ${badge.className}`}>{badge.label}</span>;
-          }},
-          {key:'_why_detail',label:'Why',sortable:false,fmt:(_,r) => <div style={{fontSize:'.74rem',lineHeight:1.45,color:'var(--text2)',minWidth:'260px'}}>
-            {(r._why?.reasons || []).slice(0, 3).map((reason, idx) => <div key={idx}>• {reason}</div>)}
-          </div>},
-          {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r) => <div style={{display:'flex',gap:'.3rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
-            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.COUNTY, {fips:r.fips}); }}>View</button>
-            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research</button>
-            <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav(PG.SCENARIO, workflowParams(r)); }}>Scenario</button>
-          </div>},
-        ]}
-      rows={visibleRows.map(r => {
-        const fair = r.metrics?.fair_value;
-        const benchmark = r.metrics?.benchmark_value;
-        const spread = fair != null && benchmark != null && benchmark > 0
-          ? ((fair - benchmark) / benchmark) * 100
-          : null;
-        const why = buildScreenReasons(r, activeScreenFilters, activeThesisKey);
-        return {
-          ...r,
-            _cash_rent:r.metrics?.cash_rent,
-            _bv:benchmark,
-            _cap:r.metrics?.implied_cap_rate,
-            _fv:fair,
-            _spread:spread,
-            _rm:r.metrics?.rent_multiple,
-            _noi:r.metrics?.noi_per_acre,
-            _access:r.metrics?.access_score,
-            _yield_factor:r.metrics?.yield_productivity_factor,
-            _flood:r.flood?.hazard_score,
-            _flood_agloss:r.flood?.ag_loss_rate_pct,
-            _irrigated:r.irrigation?.irrigated_acres,
-            _soil_share:r.soil?.significant_share_pct,
-            _soil_aws100:r.soil?.rootzone_aws_100cm,
-            _industrial_lineage:r.industrial?.lineage,
-            _pidx:r.industrial?.power_cost_index,
-            _ppx:r.industrial?.industrial_power_price,
-            _zcap:r.zscores?.implied_cap_rate?.zscore,
-            _zfv:r.zscores?.fair_value?.zscore,
-            _zrent:r.zscores?.cash_rent?.zscore,
-            _read:why.overall?.label,
-            _why:why,
-            _why_detail:why.reasons?.join(' • '),
-            _workflow:r.fips,
-          };
-        })}
+      <DataGrid
+        columns={screenerColumns}
+        rows={screenRows}
+        rowKey="fips"
         stickyHeader={true}
-        onRow={r => nav(PG.COUNTY, {fips:r.fips})}
+        viewConfig={gridViewState}
+        onViewChange={setGridViewState}
+        sort={{ key: sortBy, dir: sortDir }}
+        onSortChange={handleGridSortChange}
+        rowColorFn={(row) => getScreenerRowAccent(row, gridViewState.rowColoring)}
+        rowColorOptions={[
+          { value: 'atlas_read', label: 'Atlas Read' },
+          { value: 'none', label: 'None' },
+        ]}
+        renderRecordPanel={renderRecordPanel}
+        emptyMessage="No counties matched the current filters."
       />
     </div>}
   </div>;
