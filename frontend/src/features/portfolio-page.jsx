@@ -4,18 +4,20 @@ import {
   $chg,
   $int,
   $pct,
-  benchmarkMethodBand,
-  droughtRiskBand,
-  floodRiskBand,
-  sourceBand,
   toast,
 } from '../formatting.js';
-import { PG } from '../config.js';
 import { api } from '../auth.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
-import { CountyPicker, STable } from '../shared/data-ui.jsx';
+import { CountyPicker, DataGrid } from '../shared/data-ui.jsx';
 import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
 import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
+import {
+  getDefaultPortfolioViewState,
+  getPortfolioColumns,
+  getPortfolioRowAccent,
+  hydratePortfolioRows,
+  PortfolioRecordPanel,
+} from '../shared/portfolio-grid.jsx';
 
 function metricLabel(key) {
   switch (key) {
@@ -91,6 +93,9 @@ export function PortfolioPage({
   const [holdingPurchasePrice, setHoldingPurchasePrice] = React.useState('');
   const [holdingPurchaseYear, setHoldingPurchaseYear] = React.useState('');
   const [savingHolding, setSavingHolding] = React.useState(false);
+  const [holdingSearch, setHoldingSearch] = React.useState('');
+  const [holdingReadFilter, setHoldingReadFilter] = React.useState('');
+  const [portfolioViewConfig, setPortfolioViewConfig] = React.useState(() => getDefaultPortfolioViewState());
 
   const loadPortfolios = React.useCallback(async () => {
     setLoading(true);
@@ -216,6 +221,26 @@ export function PortfolioPage({
     });
     return {...holding, _read: read};
   });
+  const portfolioRows = React.useMemo(
+    () => hydratePortfolioRows(holdingsWithRead),
+    [holdingsWithRead],
+  );
+  const filteredPortfolioRows = React.useMemo(() => {
+    const query = holdingSearch.trim().toLowerCase();
+    return portfolioRows.filter((row) => {
+      if (holdingReadFilter && row._read_label !== holdingReadFilter) return false;
+      if (query && !row._search_blob.includes(query)) return false;
+      return true;
+    });
+  }, [portfolioRows, holdingReadFilter, holdingSearch]);
+  const portfolioColumns = React.useMemo(() => getPortfolioColumns(), []);
+  const portfolioRowColorOptions = React.useMemo(() => [
+    { value: 'atlas_read', label: 'Atlas Read' },
+    { value: 'hazard', label: 'Hazard' },
+    { value: 'basis', label: 'Basis Quality' },
+    { value: 'none', label: 'None' },
+  ], []);
+  const hasHoldingFilters = !!(holdingSearch.trim() || holdingReadFilter);
 
   const totalAcres = Number(detail?.total_acres || 0);
   const readExposure = holdingsWithRead.reduce((acc, holding) => {
@@ -405,54 +430,50 @@ export function PortfolioPage({
       <div className="card">
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'.5rem'}}>
           <h3 style={{fontSize:'1rem'}}>Holdings</h3>
-          <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Open county detail for the full underwrite, or remove a holding inline. Read and risk columns use the same evidence stack as the county workflow.</div>
+          <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Browse holdings in the same grid language Atlas now uses elsewhere, then open the side panel for county, research, scenario, or removal actions.</div>
         </div>
-        <STable
-          cols={[
-            {key:'county_name',label:'County'},
-            {key:'state',label:'ST'},
-            {key:'_read',label:'Read',sortable:false,fmt:(_,r) => <span className={`badge ${r._read?.overall?.className || 'badge-a'}`}>{r._read?.overall?.label || 'N/A'}</span>},
-            {key:'_basis',label:'Basis',sortable:false,fmt:(_,r) => {
-              const source = sourceBand(r.source_quality);
-              const method = benchmarkMethodBand(r.benchmark_method);
-              return <div style={{display:'flex',gap:'.3rem',flexWrap:'wrap'}}>
-                <span className={`badge ${source.className}`}>{source.label}</span>
-                <span className={`badge ${method.className}`}>{method.label}</span>
-              </div>;
-            }},
-            {key:'acres',label:'Acres',num:true,fmt:v=>$int(v)},
-            {key:'purchase_price_per_acre',label:'Cost $/ac',num:true,fmt:v=>$$(v)},
-            {key:'weight_pct',label:'Weight',num:true,fmt:v=>$pct(v)},
-            {key:'current_value_acre',label:'Curr $/ac',num:true,fmt:v=>$$(v)},
-            {key:'fair_value_acre',label:'FV $/ac',num:true,fmt:v=>$$(v)},
-            {key:'_drought',label:'Drought',sortable:false,fmt:(_,r) => {
-              const badge = droughtRiskBand(r.drought);
-              return <span className={`badge ${badge.className}`}>{badge.label}</span>;
-            }},
-            {key:'_flood',label:'Flood',sortable:false,fmt:(_,r) => {
-              const badge = floodRiskBand(r.flood);
-              return <span className={`badge ${badge.className}`}>{badge.label}</span>;
-            }},
-            {key:'_soil',label:'Soil',num:true,fmt:(_,r) => r.soil?.significant_share_pct != null ? `${$(r.soil.significant_share_pct, 1)}%` : 'N/A'},
-            {key:'_stress',label:'Stress DSCR',num:true,fmt:(_,r) => r.credit?.combined_stress_dscr != null ? `${$(r.credit.combined_stress_dscr, 2)}x` : 'N/A'},
-            {key:'unrealized_gain_pct',label:'Gain',num:true,fmt:v=>v == null ? 'N/A' : <span className={v >= 0 ? 'pos' : 'neg'}>{$chg(v)}</span>},
-            {key:'_workflow',label:'Workflow',sortable:false,fmt:(_,r)=><div style={{display:'flex',gap:'.35rem',justifyContent:'flex-end',flexWrap:'wrap'}}>
-              <button className="btn btn-sm" onClick={e => { e.stopPropagation(); nav?.(PG.COUNTY, {fips:r.geo_key}); }}>County</button>
-              <button className="btn btn-sm btn-d" onClick={e => { e.stopPropagation(); removeHolding(r.geo_key); }}>Remove</button>
-            </div>},
-          ]}
-          rows={holdingsWithRead.map((holding) => ({
-            ...holding,
-            current_value_acre: holding.acres > 0 ? holding.current_value / holding.acres : null,
-            fair_value_acre: holding.acres > 0 ? holding.fair_value / holding.acres : null,
-            _basis: holding.geo_key,
-            _drought: holding.geo_key,
-            _flood: holding.geo_key,
-            _soil: holding.geo_key,
-            _stress: holding.geo_key,
-            _workflow: holding.geo_key,
-          }))}
-          onRow={(r) => nav?.(PG.COUNTY, {fips:r.geo_key})}
+        <div style={{display:'grid',gridTemplateColumns:'minmax(240px,1.5fr) minmax(190px,1fr) auto',gap:'.55rem',alignItems:'end',marginBottom:'.65rem'}}>
+          <div className="fg" style={{margin:0}}>
+            <label>Search Holdings</label>
+            <input
+              type="text"
+              value={holdingSearch}
+              onChange={(e) => setHoldingSearch(e.target.value)}
+              placeholder="County, state, read, basis, hazard..."
+            />
+          </div>
+          <div className="fg" style={{margin:0}}>
+            <label>Read Filter</label>
+            <select value={holdingReadFilter} onChange={(e) => setHoldingReadFilter(e.target.value)}>
+              <option value="">All reads</option>
+              {Array.from(new Set(portfolioRows.map((row) => row._read_label))).sort().map((label) => <option key={label} value={label}>{label}</option>)}
+            </select>
+          </div>
+          <div style={{display:'flex',justifyContent:'flex-end'}}>
+            {hasHoldingFilters && <button className="btn btn-sm" onClick={() => {
+              setHoldingSearch('');
+              setHoldingReadFilter('');
+            }}>Clear Filters</button>}
+          </div>
+        </div>
+        <DataGrid
+          columns={portfolioColumns}
+          rows={filteredPortfolioRows}
+          rowKey="geo_key"
+          stickyHeader
+          viewConfig={portfolioViewConfig}
+          onViewChange={setPortfolioViewConfig}
+          rowColorFn={(row) => getPortfolioRowAccent(row, portfolioViewConfig?.rowColoring)}
+          rowColorOptions={portfolioRowColorOptions}
+          emptyMessage={hasHoldingFilters ? 'No holdings match the current filters.' : 'No holdings yet.'}
+          renderRecordPanel={(row, closePanel) => <PortfolioRecordPanel
+            row={row}
+            closePanel={closePanel}
+            nav={nav}
+            removeHolding={removeHolding}
+            portfolioName={detail?.name}
+            riskSummary={riskSummary}
+          />}
         />
       </div>
     </div>}
