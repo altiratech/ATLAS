@@ -1,12 +1,12 @@
 # Altira Atlas Product Blueprint
 
-Last updated: 2026-03-16 (ET)
+Last updated: 2026-03-17 (ET)
 Owner: Ryan + Codex + Claude
 Status: Operating product blueprint for Atlas execution
 
 ## 1) Purpose
 
-Atlas should be built as a decision system for location-sensitive real assets.
+Atlas should be built as a geo/opportunity underwriting system for location-sensitive real assets.
 
 It should help a serious user answer five questions:
 
@@ -18,7 +18,12 @@ It should help a serious user answer five questions:
 
 Everything in Atlas should support one or more of those questions.
 
-Atlas is not a dashboard-first product, not a listing portal, and not a generic note-taking tool. It is a real-assets intelligence, underwriting, modeling, and research platform.
+Atlas is not a dashboard-first product, not a listing portal, not a parcel-native site engine, and not a generic note-taking tool. It is a real-assets intelligence, underwriting, modeling, and research platform centered on geography/opportunity decisions.
+
+Boundary rule:
+- Atlas owns geography-level opportunity discovery, geo-level evidence, underwriting, research, and portfolio exposure.
+- Atlas does not own parcel-native infrastructure truth, assemblage workflow, entitlement execution, or marketplace behavior as its primary product center.
+- A future site-native module may later exist in the Altira suite, but Atlas docs should not be used to define that module.
 
 ## 2) Wedge and Sequencing
 
@@ -39,10 +44,10 @@ Why this wedge comes first:
 ### Strategic expansion
 
 Atlas expands later into:
-- industrial land and logistics site research
-- data-center site research
-- energy and infrastructure land scoring
-- development-oriented land workflows
+- geography-level industrial land and logistics market intelligence
+- geography-level data-center and powered-land market intelligence
+- geography-level energy and infrastructure land scoring
+- development-oriented market workflows at the geography/opportunity layer
 - portfolio and aggregation workflows
 - risk and insurance analytics
 - selected commercial real estate workflows where site, infrastructure, and location drive value
@@ -70,7 +75,7 @@ Questions answered:
 - where is there enough signal to justify deeper work?
 
 Primary product surfaces:
-- Dashboard
+- Atlas Home / Perspective Home
 - Screener
 - Saved Views
 - Alerts later
@@ -156,12 +161,13 @@ Primary product surfaces:
 Atlas should settle into this navigation model:
 
 ### Start Here
+- Atlas Home
 - Mission
 - About
 - How to Use Atlas
 
 ### Discover
-- Dashboard
+- Perspective Home
 - Screener
 - Saved Views
 
@@ -197,16 +203,16 @@ The farmland product should prove the core Atlas workflow.
 
 Target workflow:
 
-1. Open Dashboard
-2. Identify states or counties worth attention
+1. Open Atlas Home
+2. Choose the relevant perspective
 3. Run Screener
 4. Open County Detail
 5. Review valuation, history, lineage, and risk context
-6. Add county to Research Workspace
+6. Add the opportunity to Research Workspace
 7. Run scenarios
 8. Save scenario pack and conviction
 9. Compare alternatives
-10. Move county to Watchlist, Portfolio, or Pass
+10. Move the opportunity to Watchlist, Portfolio, or Pass
 
 This is the operating loop Atlas should optimize first.
 
@@ -651,6 +657,9 @@ Build:
 
 Atlas should not become:
 - a generic listing marketplace
+- a parcel-native site diligence engine
+- an assemblage workflow product
+- a path-to-power / path-to-water / entitlement execution system
 - a broker CRM
 - a farm-operations dashboard
 - a generic PE research platform
@@ -673,6 +682,6 @@ The structure is:
 - Data
 
 The first proof point is farmland.
-The next proof points are industrial, logistics, data-center, energy, and development-oriented land.
-Selected commercial real estate workflows come later, where Atlas can stay true to its site- and infrastructure-driven strengths.
+The next proof points are industrial, logistics, data-center, energy, and development-oriented land at the geography/opportunity layer.
+Selected commercial real estate workflows come later, where Atlas can stay true to its location- and infrastructure-driven strengths without becoming a parcel-native product.
 The core value is not the number of features. It is the ability to move from signal to conviction without leaving the system.

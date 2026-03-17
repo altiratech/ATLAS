@@ -1,6 +1,6 @@
 # Altira Atlas Canonical Scope and 3-Week Plan
 
-Last updated: 2026-03-16 (ET)
+Last updated: 2026-03-17 (ET)
 Owner: Ryan + Codex + Claude
 
 This file is the canonical scope statement for Atlas execution.
@@ -9,7 +9,7 @@ It supersedes stale wording that still frames this product as "Farmland Terminal
 
 ## 1) Canonical Product Scope
 
-Altira Atlas is a real-assets intelligence and underwriting platform for decision-makers who need to:
+Altira Atlas is the geo/opportunity underwriting layer for location-sensitive real assets. It is a real-assets intelligence and underwriting platform for decision-makers who need to:
 - identify where opportunity/risk is changing,
 - model what could happen under different assumptions,
 - document conviction with traceable evidence.
@@ -24,12 +24,17 @@ Current positioning:
 - research and underwriting first,
 - transaction/network/community layers later.
 
+Boundary clarification:
+- Atlas centers on geography/opportunity workflows, not parcel-native site operations.
+- Atlas can support industrial, logistics, data-center, energy, and development perspectives at the geography/opportunity layer.
+- Atlas should not be treated as the canonical parcel/site-native infrastructure optionality engine.
+
 Near-term expansion after the farmland wedge:
-- industrial land
-- logistics sites
-- data-center sites
-- energy and infrastructure land
-- development-oriented land
+- geography-level industrial land intelligence
+- geography-level logistics market intelligence
+- geography-level data-center and powered-land market intelligence
+- geography-level energy and infrastructure land context
+- geography-level development-oriented land intelligence
 
 Later expansion:
 - selected commercial real estate workflows where site, infrastructure, and location drive value
@@ -39,6 +44,7 @@ Explicitly out of scope for now:
 - lease abstraction
 - tenant-credit workflows
 - broad property-operations / asset-management systems
+- parcel-native infrastructure / assemblage / entitlement operations as Atlas's primary product center
 
 ## 2) V1 Boundaries (Target: 2026-03-22)
 
@@ -142,15 +148,15 @@ Codex:
 After research/modeling V1 is stable, Atlas expands as a **real-assets intelligence and underwriting platform**. Farmland is the current live lane. The engine is reusable across adjacent location-sensitive real-assets workflows.
 
 Expansion order:
-1. Land intelligence deepening (state + county + parcel depth for farmland),
-2. Industrial, logistics, and data-center site intelligence (power, fiber, water, zoning, access),
-3. Energy and infrastructure land scoring (solar irradiance, wind capacity, interconnection queue, PPA benchmarks),
+1. Land intelligence deepening at county / market / regional depth for farmland,
+2. Industrial, logistics, and data-center market intelligence at the geography/opportunity layer,
+3. Energy and infrastructure land scoring at the geography/opportunity layer,
 4. Soil/climate and environmental risk layers (cross-asset: ag, industrial, energy, development),
-5. Deal flow platform focused on real-assets investing (land listings, fund benchmarks, due diligence, portfolio analytics),
-6. Selected commercial real estate workflows later where Atlas can stay site- and infrastructure-centric,
-7. Parcel-level data (Regrid), water/carbon intelligence, and natural-language query layers.
+5. Decision workflow, portfolio analytics, and monitoring depth for real-assets underwriting,
+6. Selected commercial real estate workflows later where Atlas can stay location- and infrastructure-sensitive,
+7. Supporting integrations, exports, and natural-language query layers that reinforce Atlas's geo/opportunity workflow.
 
 Dropped from prior vision: AgTech Research & Intelligence, Farm Operations Dashboard.
-Reframed: Deal flow stays centered on real-assets investing rather than broad PE research.
+Reframed: Atlas deepens the underwriting and portfolio workflow rather than trying to become a parcel/site-native or listings-centric product.
 
 The ambition expanded. The sequencing remains disciplined.
