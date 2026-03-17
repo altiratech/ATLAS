@@ -1357,6 +1357,10 @@ async function ensureResearchWorkspace(db: D1Database, userKey: string, geoKey: 
 }
 
 async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWorkspaceRow) {
+  const county = await db
+    .prepare('SELECT name, state FROM geo_county WHERE fips = ?')
+    .bind(workspace.geo_key)
+    .first<{ name: string | null; state: string | null }>();
   const notes = await db
     .prepare(
       'SELECT id, content, created_at FROM research_notes WHERE workspace_id = ? ORDER BY created_at DESC, id DESC',
@@ -1384,6 +1388,8 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
 
   return {
     geo_key: workspace.geo_key,
+    county_name: county?.name ?? null,
+    state: county?.state ?? null,
     thesis: workspace.thesis ?? '',
     analysis: parseAnalysis(workspace.analysis_json),
     tags: parseTags(workspace.tags_json),
@@ -1412,10 +1418,59 @@ let researchSchemaReady = false;
 let researchSchemaPromise: Promise<void> | null = null;
 let personalDataSchemaReady = false;
 let personalDataSchemaPromise: Promise<void> | null = null;
+let savedViewSchemaReady = false;
+let savedViewSchemaPromise: Promise<void> | null = null;
 
 async function getTableColumns(db: D1Database, tableName: string): Promise<Set<string>> {
   const cols = await db.prepare(`PRAGMA table_info(${tableName})`).all<{ name: string }>();
   return new Set((cols.results ?? []).map((col) => col.name));
+}
+
+async function ensureSavedViewSchema(db: D1Database) {
+  if (savedViewSchemaReady) return;
+  if (!savedViewSchemaPromise) {
+    savedViewSchemaPromise = (async () => {
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS screen_definitions (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             name TEXT NOT NULL,
+             version INTEGER NOT NULL DEFAULT 1,
+             filters_json TEXT,
+             ranking_json TEXT,
+             columns_json TEXT,
+             playbook_key TEXT,
+             notes_text TEXT,
+             assumption_set_id INTEGER,
+             view_state_json TEXT,
+             created_at TEXT DEFAULT (datetime('now')),
+             UNIQUE(name, version)
+           )`,
+        )
+        .run();
+
+      let cols = await getTableColumns(db, 'screen_definitions');
+      const ensureColumn = async (name: string, ddl: string) => {
+        if (cols.has(name)) return;
+        try {
+          await db.prepare(`ALTER TABLE screen_definitions ADD COLUMN ${ddl}`).run();
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (!msg.toLowerCase().includes('duplicate column')) throw error;
+        }
+        cols = await getTableColumns(db, 'screen_definitions');
+      };
+      await ensureColumn('playbook_key', 'playbook_key TEXT');
+      await ensureColumn('notes_text', 'notes_text TEXT');
+      await ensureColumn('assumption_set_id', 'assumption_set_id INTEGER');
+      await ensureColumn('view_state_json', 'view_state_json TEXT');
+      savedViewSchemaReady = true;
+    })().catch((error) => {
+      savedViewSchemaPromise = null;
+      throw error;
+    });
+  }
+  await savedViewSchemaPromise;
 }
 
 async function ensureResearchSchema(db: D1Database) {
@@ -1910,9 +1965,21 @@ app.post('/api/v1/assumptions', async (c) => {
 
 app.get('/api/v1/screens', async (c) => {
   const db = c.env.DB;
+  await ensureSavedViewSchema(db);
   const rows = await db
-    .prepare('SELECT id, name, version, filters_json, ranking_json, columns_json FROM screen_definitions')
-    .all<{ id: number; name: string; version: number; filters_json: string; ranking_json: string; columns_json: string }>();
+    .prepare('SELECT id, name, version, filters_json, ranking_json, columns_json, playbook_key, notes_text, assumption_set_id, view_state_json FROM screen_definitions ORDER BY created_at DESC, id DESC')
+    .all<{
+      id: number;
+      name: string;
+      version: number;
+      filters_json: string;
+      ranking_json: string;
+      columns_json: string;
+      playbook_key: string | null;
+      notes_text: string | null;
+      assumption_set_id: number | null;
+      view_state_json: string | null;
+    }>();
   return c.json(
     rows.results.map((r) => ({
       id: r.id,
@@ -1921,15 +1988,29 @@ app.get('/api/v1/screens', async (c) => {
       filters: JSON.parse(r.filters_json || '[]'),
       ranking: JSON.parse(r.ranking_json || 'null'),
       columns: JSON.parse(r.columns_json || 'null'),
+      playbook_key: r.playbook_key || null,
+      notes: r.notes_text || '',
+      assumption_set_id: r.assumption_set_id ?? null,
+      view_state: JSON.parse(r.view_state_json || 'null'),
     })),
   );
 });
 
 app.post('/api/v1/screens', async (c) => {
   const db = c.env.DB;
+  await ensureSavedViewSchema(db);
   const auth = await requireAuthOrError(c, db);
   if (auth instanceof Response) return auth;
-  const body = await c.req.json<{ name: string; filters: any[]; ranking?: any[]; columns?: string[] }>();
+  const body = await c.req.json<{
+    name: string;
+    filters: any[];
+    ranking?: any;
+    columns?: string[];
+    playbook_key?: string;
+    notes?: string;
+    assumption_set_id?: number | null;
+    view_state?: Record<string, any> | null;
+  }>();
   const existing = await db
     .prepare('SELECT MAX(version) as max_v FROM screen_definitions WHERE name = ?')
     .bind(body.name)
@@ -1937,11 +2018,29 @@ app.post('/api/v1/screens', async (c) => {
   const newVer = (existing?.max_v ?? 0) + 1;
   const result = await db
     .prepare(
-      'INSERT INTO screen_definitions (name, version, filters_json, ranking_json, columns_json) VALUES (?, ?, ?, ?, ?) RETURNING id',
+      'INSERT INTO screen_definitions (name, version, filters_json, ranking_json, columns_json, playbook_key, notes_text, assumption_set_id, view_state_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id',
     )
-    .bind(body.name, newVer, JSON.stringify(body.filters), JSON.stringify(body.ranking ?? null), JSON.stringify(body.columns ?? null))
+    .bind(
+      body.name,
+      newVer,
+      JSON.stringify(body.filters),
+      JSON.stringify(body.ranking ?? null),
+      JSON.stringify(body.columns ?? null),
+      body.playbook_key ?? null,
+      (body.notes ?? '').trim() || null,
+      body.assumption_set_id ?? null,
+      JSON.stringify(body.view_state ?? null),
+    )
     .first<{ id: number }>();
-  return c.json({ id: result!.id, name: body.name, version: newVer });
+  return c.json({
+    id: result!.id,
+    name: body.name,
+    version: newVer,
+    playbook_key: body.playbook_key ?? null,
+    notes: (body.notes ?? '').trim(),
+    assumption_set_id: body.assumption_set_id ?? null,
+    view_state: body.view_state ?? null,
+  });
 });
 
 app.get('/api/v1/sources', async (c) => {
@@ -2907,6 +3006,17 @@ app.get('/api/v1/dashboard', async (c) => {
   const rents = allData.map((d) => d.metrics.cash_rent).filter((v): v is number => v != null);
   const vals = allData.map((d) => d.metrics.benchmark_value).filter((v): v is number => v != null);
   const accessScores = allData.map((d) => d.metrics.access_score).filter((v): v is number => v != null);
+  const sourceQualitySummary = allData.reduce<Record<string, number>>((acc, d) => {
+    const key = d.source_quality || 'unknown';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const benchmarkMethodSummary = allData.reduce<Record<string, number>>((acc, d) => {
+    const key = d.benchmark_method || 'unknown';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const fullValuationStackCount = allData.filter((d) => hasModeledCoreMetrics(d.metrics)).length;
 
   // Top movers
   const movers: any[] = [];
@@ -3093,6 +3203,9 @@ app.get('/api/v1/dashboard', async (c) => {
     distribution_stats: stats(caps),
     treasury_10y: treasury10y,
     productivity_summary: summarizeProductivity(allData),
+    source_quality_summary: sourceQualitySummary,
+    benchmark_method_summary: benchmarkMethodSummary,
+    full_valuation_stack_count: fullValuationStackCount,
     top_movers: rankedMovers,
     top_overvalued: overvalued.slice(0, 15),
     state_summary: stateSummary,
@@ -3472,6 +3585,61 @@ app.get('/api/v1/research/workspaces', async (c) => {
     payload.push(await serializeResearchWorkspace(db, row));
   }
   return c.json(payload);
+});
+
+app.get('/api/v1/research/scenario-runs/recent', async (c) => {
+  const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
+  const limitRaw = c.req.query('limit');
+  const limit = limitRaw ? Math.min(20, Math.max(1, Number(limitRaw))) : 6;
+
+  const rows = await db
+    .prepare(
+      `SELECT
+         runs.id,
+         runs.scenario_name,
+         runs.as_of_date,
+         runs.assumptions_json,
+         runs.comparison_json,
+         runs.created_at,
+         workspace.geo_key,
+         workspace.owner_key,
+         county.name AS county_name,
+         county.state AS state
+       FROM research_scenario_runs runs
+       JOIN research_workspaces workspace ON workspace.id = runs.workspace_id
+       LEFT JOIN geo_county county ON county.fips = workspace.geo_key
+       ORDER BY runs.created_at DESC, runs.id DESC`,
+    )
+    .all<{
+      id: number;
+      scenario_name: string | null;
+      as_of_date: string;
+      assumptions_json: string;
+      comparison_json: string;
+      created_at: string | null;
+      geo_key: string;
+      owner_key: string | null;
+      county_name: string | null;
+      state: string | null;
+    }>();
+
+  const visible = rows.results
+    .filter((row) => recordVisibleToUser(row.owner_key, auth.userKey))
+    .slice(0, limit)
+    .map((row) => ({
+      id: row.id,
+      geo_key: row.geo_key,
+      county_name: row.county_name ?? null,
+      state: row.state ?? null,
+      scenario_name: row.scenario_name ?? '',
+      as_of_date: row.as_of_date,
+      assumptions: JSON.parse(row.assumptions_json || '{}'),
+      comparison: JSON.parse(row.comparison_json || '{}'),
+      created_at: row.created_at,
+    }));
+  return c.json(visible);
 });
 
 app.get('/api/v1/research/workspaces/:geoKey', async (c) => {

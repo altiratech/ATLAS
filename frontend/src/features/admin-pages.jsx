@@ -1,5 +1,6 @@
 import { PG } from '../config.js';
 import { api } from '../auth.js';
+import { getPlaybook, playbookBadgeClass } from '../shared/playbooks.js';
 import {
   AssumptionContextBar,
   buildVersionedAssumptionParams,
@@ -10,7 +11,7 @@ import {
 import { Loading } from '../shared/system.jsx';
 import { STable } from '../shared/data-ui.jsx';
 
-export function ScreensMgr({ nav, params }) {
+export function ScreensMgr({ nav, params, activePlaybookKey }) {
   const [screens, setScreens] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
 
@@ -26,30 +27,37 @@ export function ScreensMgr({ nav, params }) {
   return <div className="card">
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap',marginBottom:'1rem'}}>
       <div>
-        <h3 style={{fontSize:'1rem',marginBottom:'.2rem'}}>Saved Screens</h3>
-        <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Reusable screen definitions for Screener and Backtest.</div>
+        <h3 style={{fontSize:'1rem',marginBottom:'.2rem'}}>Saved Views</h3>
+        <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Playbook-aware saved views for Screener reopening, with core metric filters that Atlas can also replay in Backtest.</div>
       </div>
       <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
         <button className="btn btn-sm" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
         <button className="btn btn-sm" onClick={() => nav(PG.BACKTEST, params?.screen_id ? { screen_id: params.screen_id, sourcePage: 'screens_mgr' } : {})}>Open Backtest</button>
       </div>
     </div>
-    {screens.length === 0 ? <div className="empty"><p>No screens saved. Create one from the Screener page.</p></div>
+    {screens.length === 0 ? <div className="empty"><p>No saved views yet. Create one from the Screener page.</p></div>
      : <div style={{display:'grid',gap:'.75rem'}}>
         {screens.map(s => <div key={s.id} className="sc">
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div>
               <div style={{fontWeight:600,marginBottom:'.125rem'}}>{s.name}</div>
-              <div style={{fontSize:'.75rem',color:'var(--text2)'}}>v{s.version} | {(s.filters || []).length} reusable filters</div>
+              <div style={{fontSize:'.75rem',color:'var(--text2)'}}>v{s.version} | {(s.filters || []).length} reusable core filters</div>
             </div>
             <div style={{display:'flex',gap:'.35rem',alignItems:'center',flexWrap:'wrap',justifyContent:'flex-end'}}>
               <span className="badge badge-b">ID: {s.id}</span>
+              {(() => {
+                const playbook = getPlaybook(s.playbook_key || activePlaybookKey);
+                return <span className={`badge ${playbookBadgeClass(playbook.status)}`}>{playbook.shortLabel}</span>;
+              })()}
               <button className="btn btn-sm" onClick={() => nav(PG.BACKTEST, { screen_id: String(s.id), screen_name: s.name, sourcePage: 'screens_mgr' })}>Backtest</button>
+              <button className="btn btn-sm" onClick={() => nav(PG.SCREEN, { screen_id: String(s.id), screen_name: s.name, playbookKey: s.playbook_key || activePlaybookKey, sourcePage: 'screens_mgr' })}>Open</button>
             </div>
           </div>
+          {s.notes && <div style={{marginTop:'.4rem',fontSize:'.78rem',color:'var(--text2)'}}>{s.notes}</div>}
           {s.filters && s.filters.length > 0 && <div style={{marginTop:'.5rem',fontSize:'.8rem',color:'var(--text2)'}}>
             {s.filters.map((f, i) => <span key={i} className="badge badge-a" style={{marginRight:'.375rem'}}>{f.metric} {f.op} {f.value}</span>)}
           </div>}
+          {s.assumption_set_id != null && <div style={{marginTop:'.45rem',fontSize:'.74rem',color:'var(--text2)'}}>Saved model basis ID: {s.assumption_set_id}</div>}
         </div>)}
       </div>}
   </div>;
@@ -123,7 +131,7 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
       activeAssumptionSet={activeAssumptionSet}
       onChange={setActiveAssumptionSetId}
       title="Active Global Assumption Set"
-      description="Dashboard, Screener, County Detail, Compare, Backtest, and Scenario Lab all use this active saved set unless Scenario Lab applies temporary overrides."
+      description="Playbook Home, Screener, County Detail, Compare, Backtest, and Scenario Lab all use this active saved set unless Scenario Lab applies temporary overrides."
     />
 
     <div className="card" style={{marginBottom:'1rem'}}>
@@ -200,7 +208,7 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
                 </div>
                 <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
                   <button className="btn btn-sm" onClick={() => setActiveAssumptionSetId(String(s.id))}>Use</button>
-                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.DASH)}>Dashboard</button>
+                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.DASH)}>Playbook Home</button>
                   <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.SCREEN)}>Screener</button>
                   <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.BACKTEST)}>Backtest</button>
                   <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.SCENARIO)}>Scenario</button>

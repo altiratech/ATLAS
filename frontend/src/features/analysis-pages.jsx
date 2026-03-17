@@ -248,7 +248,7 @@ export function Backtest({addToast, nav, params, assumptionSets, activeAssumptio
   const workflowSourceLabel = params?.sourcePage === 'screener'
     ? 'Screener'
     : params?.sourcePage === 'screens_mgr'
-      ? 'Saved Screens'
+      ? 'Saved Views'
       : '';
 
   return <div>
@@ -266,19 +266,19 @@ export function Backtest({addToast, nav, params, assumptionSets, activeAssumptio
           <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Backtest Context</div>
           <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{params?.screen_name || activeScreen?.name || `Screen ${selScreen}`}</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
-            {workflowSourceLabel ? `Opened from ${workflowSourceLabel}. ` : ''}Backtest replays the saved reusable screen filters against historical county data.
+            {workflowSourceLabel ? `Opened from ${workflowSourceLabel}. ` : ''}Backtest replays the saved view’s reusable core metric filters against historical county data.
           </div>
         </div>
         <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
           <button className="btn btn-sm" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
-          <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR, {screen_id: selScreen})}>Saved Screens</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR, {screen_id: selScreen})}>Saved Views</button>
         </div>
       </div>
     </div>}
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Backtest Configuration</h3>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.75rem'}}>
-        <div className="fg"><label>Screen</label>
+        <div className="fg"><label>Saved View</label>
           <select value={selScreen} onChange={e => setSelScreen(e.target.value)}>
             <option value="">Select...</option>
             {screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -292,7 +292,7 @@ export function Backtest({addToast, nav, params, assumptionSets, activeAssumptio
 
     {result && <div>
       <div className="sg">
-        <div className="sc"><div className="sc-l">Screen</div><div className="sc-v" style={{fontSize:'1rem'}}>{result.screen?.name}</div></div>
+        <div className="sc"><div className="sc-l">Saved View</div><div className="sc-v" style={{fontSize:'1rem'}}>{result.screen?.name}</div></div>
         <div className="sc"><div className="sc-l">Counties Screened</div><div className="sc-v">{result.counties_screened}</div></div>
         <div className="sc"><div className="sc-l">Counties Flagged</div><div className="sc-v">{result.counties_flagged}</div></div>
         <div className="sc"><div className="sc-l">Period</div><div className="sc-v" style={{fontSize:'1rem'}}>{result.start_year} + {result.eval_years}yr</div></div>

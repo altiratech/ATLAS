@@ -86,7 +86,11 @@ export function STable({cols, rows, onRow, initSort, stickyHeader=false, rowKey}
     setSort(sort && sort[0]===k ? [k, sort[1]==='asc'?'desc':'asc'] : [k,'desc']);
   };
   return <div className={`tc${stickyHeader ? ' tc-sticky' : ''}`}><table>
-    <thead><tr>{cols.map(c => <th key={c.key} onClick={()=>toggle(c)} className={c.sortable === false ? '' : (sort && sort[0]===c.key ? (sort[1]==='asc' ? 's-a' : 's-d') : '')}>{c.label}</th>)}</tr></thead>
+    <thead><tr>{cols.map(c => {
+      const sortClass = c.sortable === false ? '' : (sort && sort[0]===c.key ? (sort[1]==='asc' ? 's-a' : 's-d') : '');
+      const classes = [sortClass, c.num ? 'n' : ''].filter(Boolean).join(' ');
+      return <th key={c.key} onClick={()=>toggle(c)} className={classes}>{c.label}</th>;
+    })}</tr></thead>
     <tbody>{sorted.map((r,i) => <tr key={resolveRowKey(r, i, rowKey)} onClick={()=>onRow&&onRow(r)}>{cols.map(c => <td key={c.key} className={c.num?'n':''}>{c.fmt ? c.fmt(r[c.key],r) : r[c.key]}</td>)}</tr>)}</tbody>
   </table></div>;
 }

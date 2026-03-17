@@ -1,4 +1,4 @@
-import { ACTIVE_ASSUMPTION_SET_KEY, PG } from './config.js';
+import { ACTIVE_ASSUMPTION_SET_KEY, ACTIVE_PLAYBOOK_KEY, PG, PLAYBOOK_KEYS } from './config.js';
 import {
   toast,
 } from './formatting.js';
@@ -18,10 +18,11 @@ import { PortfolioPage } from './features/portfolio-page.jsx';
 import { ResearchWorkspace } from './features/research-workspace.jsx';
 import { ScenarioLab } from './features/scenario-lab.jsx';
 import { Screener } from './features/screener.jsx';
-import { AboutPage, MissionPage } from './features/start-pages.jsx';
+import { AboutPage, AtlasHomePage, MissionPage } from './features/start-pages.jsx';
+import { getPlaybook } from './shared/playbooks.js';
 
 function App() {
-  const [pg, setPg] = React.useState(PG.MISSION);
+  const [pg, setPg] = React.useState(PG.HOME);
   const [pp, setPp] = React.useState({});
   const [toasts, setToasts] = React.useState([]);
   const [cmdOpen, setCmdOpen] = React.useState(false);
@@ -36,6 +37,13 @@ function App() {
       return window.localStorage.getItem(ACTIVE_ASSUMPTION_SET_KEY) || '';
     } catch {
       return '';
+    }
+  });
+  const [activePlaybookKey, setActivePlaybookKey] = React.useState(() => {
+    try {
+      return window.localStorage.getItem(ACTIVE_PLAYBOOK_KEY) || PLAYBOOK_KEYS.FARMLAND_INCOME;
+    } catch {
+      return PLAYBOOK_KEYS.FARMLAND_INCOME;
     }
   });
 
@@ -108,18 +116,34 @@ function App() {
       if (activeAssumptionSetId) window.localStorage.setItem(ACTIVE_ASSUMPTION_SET_KEY, String(activeAssumptionSetId));
     } catch {}
   }, [activeAssumptionSetId]);
+  React.useEffect(() => {
+    try {
+      if (activePlaybookKey) window.localStorage.setItem(ACTIVE_PLAYBOOK_KEY, String(activePlaybookKey));
+    } catch {}
+  }, [activePlaybookKey]);
 
   const addToast = t => setToasts(ts=>[...ts,t]);
-  const nav = (p,params={}) => { setPg(p); setPp(params); setCmdOpen(false); };
+  const nav = (p,params={}) => {
+    if (params?.playbookKey) setActivePlaybookKey(params.playbookKey);
+    setPg(p);
+    setPp(params);
+    setCmdOpen(false);
+  };
   const researchUser = authState?.user_key || '';
   const authSource = authState?.source || '--';
   const activeAssumptionSet = assumptionSets.find((set) => String(set.id) === String(activeAssumptionSetId)) || null;
+  const activePlaybook = getPlaybook(activePlaybookKey);
   const assumptionProps = {
     assumptionSets,
     activeAssumptionSetId,
     activeAssumptionSet,
     setActiveAssumptionSetId,
     reloadAssumptionSets,
+  };
+  const playbookProps = {
+    activePlaybookKey,
+    activePlaybook,
+    setActivePlaybookKey,
   };
 
   const resetSession = async () => {
@@ -145,21 +169,22 @@ function App() {
       />
     );
     switch(pg) {
+      case PG.HOME: return <AtlasHomePage nav={nav} researchUser={researchUser} {...playbookProps}/>;
       case PG.MISSION: return <MissionPage nav={nav}/>;
       case PG.ABOUT: return <AboutPage/>;
-      case PG.RESEARCH: return <ResearchWorkspace addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps}/>;
-      case PG.DASH: return <Dashboard addToast={addToast} nav={nav} {...assumptionProps}/>;
-      case PG.SCREEN: return <Screener addToast={addToast} nav={nav} {...assumptionProps}/>;
-      case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav} {...assumptionProps}/>;
+      case PG.RESEARCH: return <ResearchWorkspace addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps} {...playbookProps}/>;
+      case PG.DASH: return <Dashboard addToast={addToast} nav={nav} {...assumptionProps} {...playbookProps}/>;
+      case PG.SCREEN: return <Screener addToast={addToast} nav={nav} params={pp} {...assumptionProps} {...playbookProps}/>;
+      case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav} {...assumptionProps} {...playbookProps}/>;
       case PG.WATCH: return <Watchlist addToast={addToast} nav={nav}/>;
-      case PG.COMPARE: return <Comparison addToast={addToast} params={pp} {...assumptionProps}/>;
-      case PG.SCENARIO: return <ScenarioLab addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps}/>;
+      case PG.COMPARE: return <Comparison addToast={addToast} params={pp} {...assumptionProps} {...playbookProps}/>;
+      case PG.SCENARIO: return <ScenarioLab addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps} {...playbookProps}/>;
       case PG.BACKTEST: return <Backtest addToast={addToast} nav={nav} params={pp} {...assumptionProps}/>;
-      case PG.PORTFOLIO: return <PortfolioPage addToast={addToast} nav={nav} {...assumptionProps}/>;
-      case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast} nav={nav} params={pp}/>;
+      case PG.PORTFOLIO: return <PortfolioPage addToast={addToast} nav={nav} {...assumptionProps} {...playbookProps}/>;
+      case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast} nav={nav} params={pp} {...playbookProps}/>;
       case PG.ASSUME: return <AssumptionsMgr addToast={addToast} nav={nav} {...assumptionProps}/>;
       case PG.SOURCES: return <SourcesPage addToast={addToast}/>;
-      default: return <Dashboard addToast={addToast} nav={nav} {...assumptionProps}/>;
+      default: return <AtlasHomePage nav={nav} researchUser={researchUser} {...playbookProps}/>;
     }
   };
 
@@ -169,6 +194,7 @@ function App() {
     content={render()}
     authSource={authSource}
     researchUser={researchUser}
+    activePlaybook={activePlaybook}
     authReady={authReady}
     resetSession={resetSession}
     legacyRedirectNote={legacyRedirectNote}

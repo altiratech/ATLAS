@@ -392,7 +392,7 @@ export function ResearchWorkspace({addToast, nav, params, researchUser, activeAs
         <div className="sc" style={{margin:0}}>
           <div className="sc-l">Active Modeling Context</div>
           <div className="sc-v" style={{fontSize:'.95rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div>
-          <div className="sc-c">Dashboard, Screener, County Detail, Compare, Backtest, and new Scenario Lab runs all inherit this saved assumption set.</div>
+          <div className="sc-c">Playbook Home, Screener, County Detail, Compare, Backtest, and new Scenario Lab runs all inherit this saved assumption set.</div>
         </div>
         <div className="sc" style={{margin:0}}>
           <div className="sc-l">Research Guardrail</div>

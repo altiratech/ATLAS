@@ -98,6 +98,10 @@ CREATE TABLE IF NOT EXISTS screen_definitions (
   filters_json TEXT,
   ranking_json TEXT,
   columns_json TEXT,
+  playbook_key TEXT,
+  notes_text TEXT,
+  assumption_set_id INTEGER,
+  view_state_json TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   UNIQUE(name, version)
 );

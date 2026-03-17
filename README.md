@@ -36,67 +36,46 @@ Manual install: `pip install -r requirements.txt`
 
 ## Features
 
+### Atlas Home
+- Default entry point for the product
+- Choose a playbook, resume recent work, reopen saved views, and jump back into research, scenario, or portfolio workflow
+- Avoids ambiguous cross-lens market metrics at the top level
+
+### Playbook Home
+- First live playbook is **Farmland Income**
+- Defines the current live universe in plain English
+- Separates observed / basis-quality context from modeled interpretation
+- Launches into starter screens instead of pretending there is one default “best counties” list
+
 ### Core Analytics
-- **15-metric valuation engine** with DAG-based dependency resolution (topological sort ensures correct computation order)
-- **Gordon Growth Model** fair value: `FV = NOI × (1+g) / (r − g)` with configurable risk premium, growth rate, and guardrails
-- **Implied cap rate**, rent multiples, DSCR, payback period, cap spread to 10Y Treasury
-- **Access Score** (0–100) based on Haversine-distance proximity to grain elevators, ethanol plants, rail terminals, and river ports
+- County benchmark value, fair value, implied cap rate, NOI, DSCR, break-even rent, spread, and scenario-sensitive valuation context
+- Acquisition underwriting, leverage, refinance roll-forward, and lender / credit stress
+- Assumption-set-aware modeling across playbook home, screener, county detail, compare, research, backtest, and portfolio
 
-### Dashboard
-- Aggregate statistics across all 45 tracked counties
-- Median/mean metrics summary (cap rate, fair value, cash rent, etc.)
-- Top movers — counties with largest YoY metric changes
-- State-level summary breakdown
+### Evidence Stack
+- Benchmark basis lineage (`county observed`, `proxy`, `state`, `national`)
+- FEMA drought evidence
+- FEMA flood evidence
+- USDA irrigation footprint
+- NRCS soil / farmland share / available water storage context
 
-### County Deep Dive
-- Full metric profile with all 15 computed metrics
-- 11-year time series (2015–2025) with sparkline charts
-- Access score breakdown showing nearest facilities
-- Notes system — attach research notes to any county
+### Shared Tools
+- **Screener**: playbook-aware filters, evidence presets, saved views, and export
+- **County Detail**: valuation, evidence, decision read, underwriting, and credit stress in one place
+- **Comparison**: side-by-side county trust context and modeled comparison
+- **Research Workspace**: decision record, memo snapshot, scenario history, and county read carry-through
+- **Scenario Lab**: unlevered + levered underwriting, refi, and credit stress
+- **Portfolio**: holdings management plus aggregated risk / soil / hazard / stress synthesis
+- **Backtest**: historical replay of reusable core saved-view filters
 
-### Screener
-- Filter counties by state, minimum cap rate, and sort criteria
-- Real-time results with all key metrics
-- CSV export of full screener results
-
-### Watchlist
-- Track counties of interest with one-click add/remove
-- YoY change tracking for key metrics
-- Persistent across sessions
-
-### Comparison Tool
-- Side-by-side comparison of up to 6 counties
-- Full metric comparison table
-- Identifies advantages/disadvantages for each county
-
-### Portfolio Manager
-- Create portfolios with multiple holdings (county + acres + purchase price)
-- Weighted metric aggregation across holdings
-- HHI-based diversification rating (Concentrated → Moderate → Well-Diversified → Excellent)
-- State exposure analysis
-- Unrealized gain/loss tracking
-- Portfolio yield calculation
-
-### Scenario Lab
-- Override any assumption (risk premium, growth rate, etc.) and see fair value impact
-- Sensitivity analysis — vary a parameter across multiple values
-- Pre-built sensitivity matrix: discount rate × growth rate grid for any county
-- Rent shock analysis (±10%, ±20%, ±30%)
-
-### Backtesting
-- Run screens against historical data
-- Evaluate how screen criteria performed over configurable time horizons
-- Identifies counties flagged by screen criteria
-
-### Search & Command Palette
-- `Ctrl+K` / `Cmd+K` to open command palette
-- Search counties by name, state, or FIPS code
-- Search metrics by name
-- Quick navigation to any county
+### Saved Views
+- Evolved from older “saved screens” behavior
+- Persist playbook context, reusable core filters, sort order, notes, and view state
+- Reopen into the shared Screener workflow and support Backtest where the historical replay contract is wired today
 
 ### Product Orientation
-- In-app **Mission** page explains what the platform is, who it serves, and why each tool exists
-- In-app **About** page clarifies scope and near-term roadmap priorities
+- In-app **Mission** explains the playbook-based workflow and shared-tool model
+- In-app **About** clarifies current scope, expansion principles, and why Atlas stays a specialist product
 - Canonical web app URL: `https://atlas.altiratech.com`
 - `https://atlas.altiratech.com/altiratech-home` serves a compatibility mirror of the canonical company homepage source at `Code/active/altiratech-site/public/index.html`
 
@@ -153,7 +132,7 @@ farmland-terminal/
 | Endpoint | Method | Description |
 |---|---|---|
 | `/` | GET | Frontend SPA |
-| `/api/v1/dashboard` | GET | Aggregate dashboard with stats, top movers, state summary |
+| `/api/v1/dashboard` | GET | Farmland Income playbook home summary, context, charts, and coverage-supporting aggregates |
 | `/api/v1/metrics` | GET | Metric catalog (15 metrics with descriptions) |
 | `/api/v1/counties` | GET | All counties (optional `?state=IA` filter) |
 | `/api/v1/geo/{fips}/summary` | GET | County detail with all computed metrics |
@@ -170,7 +149,7 @@ farmland-terminal/
 | `/api/v1/portfolios/{id}/holdings` | POST/DELETE | Manage portfolio holdings |
 | `/api/v1/run/scenario` | POST | Run scenario with overrides + sensitivity |
 | `/api/v1/run/backtest` | POST | Backtest a screen against historical data |
-| `/api/v1/screens` | GET | Saved screen configurations |
+| `/api/v1/screens` | GET | Saved view definitions with playbook, filters, sort, notes, and view-state context |
 | `/api/v1/assumptions` | GET | Assumption sets |
 | `/api/v1/sources` | GET | Data source catalog |
 | `/api/v1/export/screener` | GET | CSV export of screener results |

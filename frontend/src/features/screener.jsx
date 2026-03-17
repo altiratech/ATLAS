@@ -22,7 +22,46 @@ import { buildScreenReasons } from '../shared/atlas-read.js';
 import { ErrBox } from '../shared/system.jsx';
 import { STable } from '../shared/data-ui.jsx';
 
-export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
+const DEFAULT_VIEW_COLUMNS = [
+  'county',
+  'state',
+  '_read',
+  'source_quality',
+  'benchmark_method',
+  'productivity_active',
+  '_cash_rent',
+  '_bv',
+  '_noi',
+  '_cap',
+  '_fv',
+  '_spread',
+  '_access',
+  '_drought',
+  '_flood',
+  '_irrigated',
+  '_soil_share',
+  '_workflow',
+];
+
+function asInputValue(value) {
+  return value == null ? '' : String(value);
+}
+
+function findFilterValue(filters, metric, op) {
+  return filters.find((filter) => filter.metric === metric && filter.op === op)?.value;
+}
+
+export function Screener({
+  addToast,
+  nav,
+  params,
+  assumptionSets,
+  activeAssumptionSetId,
+  activeAssumptionSet,
+  setActiveAssumptionSetId,
+  activePlaybook,
+  activePlaybookKey,
+}) {
   const [results, setResults] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
   const [err, setErr] = React.useState(null);
@@ -48,6 +87,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   const [screens, setScreens] = React.useState([]);
   const [selScreen, setSelScreen] = React.useState('');
   const [screenName, setScreenName] = React.useState('');
+  const [screenNotes, setScreenNotes] = React.useState('');
   const [savingScreen, setSavingScreen] = React.useState(false);
 
   const applyPreset = React.useCallback((value) => {
@@ -137,6 +177,8 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
     setZRentMin('');
     setZRentMax('');
     setSelScreen('');
+    setScreenName('');
+    setScreenNotes('');
   }, []);
 
   const loadScreens = React.useCallback(() => {
@@ -146,6 +188,53 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
   React.useEffect(() => {
     loadScreens();
   }, [loadScreens]);
+
+  const availableScreens = React.useMemo(
+    () => screens.filter((screen) => !screen.playbook_key || screen.playbook_key === activePlaybookKey),
+    [screens, activePlaybookKey],
+  );
+
+  const applySavedView = React.useCallback((view) => {
+    const filters = view?.filters || [];
+    const ranking = view?.ranking || {};
+    const viewState = view?.view_state || {};
+    setScreenName(view?.name || '');
+    setScreenNotes(view?.notes || '');
+    setPreset(asInputValue(viewState.preset));
+    setMinCap(asInputValue(findFilterValue(filters, 'implied_cap_rate', '>')));
+    setMaxRentMult(asInputValue(findFilterValue(filters, 'rent_multiple', '<')));
+    setMinAccess(asInputValue(findFilterValue(filters, 'access_score', '>')));
+    setMinPowerIndex(asInputValue(viewState.minPowerIndex));
+    setMaxPowerPrice(asInputValue(viewState.maxPowerPrice));
+    setMaxDroughtRisk(asInputValue(viewState.maxDroughtRisk));
+    setMaxFloodRisk(asInputValue(viewState.maxFloodRisk));
+    setMinSoilFarmlandPct(asInputValue(viewState.minSoilFarmlandPct));
+    setState(asInputValue(viewState.state).toUpperCase());
+    setBasisFilter(asInputValue(viewState.basisFilter));
+    setSortBy(ranking.sort_by || viewState.sortBy || 'implied_cap_rate');
+    setSortDir(ranking.sort_dir || viewState.sortDir || 'desc');
+    setZCapMin(asInputValue(viewState.zCapMin));
+    setZCapMax(asInputValue(viewState.zCapMax));
+    setZFairMin(asInputValue(viewState.zFairMin));
+    setZFairMax(asInputValue(viewState.zFairMax));
+    setZRentMin(asInputValue(viewState.zRentMin));
+    setZRentMax(asInputValue(viewState.zRentMax));
+    if (view?.assumption_set_id != null) {
+      setActiveAssumptionSetId?.(String(view.assumption_set_id));
+    }
+  }, [setActiveAssumptionSetId]);
+
+  React.useEffect(() => {
+    if (params?.preset) applyPreset(params.preset);
+    if (params?.screen_id) setSelScreen(String(params.screen_id));
+    if (params?.screen_name) setScreenName(params.screen_name);
+  }, [applyPreset, params?.preset, params?.screen_id, params?.screen_name]);
+
+  React.useEffect(() => {
+    if (!selScreen) return;
+    const selected = screens.find((screen) => String(screen.id) === String(selScreen));
+    if (selected) applySavedView(selected);
+  }, [applySavedView, screens, selScreen]);
 
   const run = React.useCallback(() => {
     setLoading(true);
@@ -213,9 +302,10 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
     countyName: row.county,
     state: row.state,
     sourcePage,
-    assetType: 'agriculture_land',
-    targetUseCase: 'farmland_investment',
-  }), []);
+    playbookKey: activePlaybookKey,
+    assetType: activePlaybook?.assetType || 'agriculture_land',
+    targetUseCase: activePlaybook?.targetUseCase || 'farmland_income',
+  }), [activePlaybook, activePlaybookKey]);
   const reusableFilters = React.useMemo(() => {
     const filters = [];
     if (minCap) filters.push({ metric: 'implied_cap_rate', op: '>', value: Number(minCap) });
@@ -247,14 +337,50 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
     maxPowerPrice,
   }), [maxDroughtRisk, maxFloodRisk, maxPowerPrice, minAccess, minCap, minPowerIndex, minSoilFarmlandPct]);
 
+  const viewState = React.useMemo(() => ({
+    preset,
+    state: state.toUpperCase(),
+    basisFilter,
+    minPowerIndex,
+    maxPowerPrice,
+    maxDroughtRisk,
+    maxFloodRisk,
+    minSoilFarmlandPct,
+    zCapMin,
+    zCapMax,
+    zFairMin,
+    zFairMax,
+    zRentMin,
+    zRentMax,
+    sortBy,
+    sortDir,
+  }), [
+    basisFilter,
+    maxDroughtRisk,
+    maxFloodRisk,
+    maxPowerPrice,
+    minPowerIndex,
+    minSoilFarmlandPct,
+    preset,
+    sortBy,
+    sortDir,
+    state,
+    zCapMax,
+    zCapMin,
+    zFairMax,
+    zFairMin,
+    zRentMax,
+    zRentMin,
+  ]);
+
   const persistScreen = async (openBacktest = false) => {
     if (reusableFilters.length === 0) {
-      addToast(toast('Add at least one reusable core filter before saving a screen', 'err'));
+      addToast(toast('Add at least one reusable core metric filter before saving a view', 'err'));
       return;
     }
     setSavingScreen(true);
     const trimmedName = screenName.trim();
-    const derivedName = trimmedName || `${state ? state.toUpperCase() + ' ' : ''}Screen ${new Date().toLocaleDateString('en-US')}`;
+    const derivedName = trimmedName || `${state ? state.toUpperCase() + ' ' : ''}${activePlaybook?.shortLabel || 'View'} ${new Date().toLocaleDateString('en-US')}`;
     try {
       const created = await api('/screens', {
         method: 'POST',
@@ -267,12 +393,18 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             sort_dir: sortDir,
             source: 'screener',
           },
+          columns: DEFAULT_VIEW_COLUMNS,
+          playbook_key: activePlaybookKey,
+          notes: screenNotes.trim(),
+          assumption_set_id: activeAssumptionSetId ? Number(activeAssumptionSetId) : null,
+          view_state: viewState,
         }),
       });
       await loadScreens();
       setSelScreen(String(created.id));
       setScreenName(created.name);
-      addToast(toast(openBacktest ? 'Screen saved and sent to backtest' : 'Screen saved', 'ok'));
+      setScreenNotes(created.notes || screenNotes);
+      addToast(toast(openBacktest ? 'Saved view created and sent to backtest' : 'Saved view created', 'ok'));
       if (openBacktest) {
         nav(PG.BACKTEST, {
           screen_id: String(created.id),
@@ -282,7 +414,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
         });
       }
     } catch (e) {
-      addToast(toast('Failed to save screen', 'err'));
+      addToast(toast('Failed to save view', 'err'));
     } finally {
       setSavingScreen(false);
     }
@@ -301,7 +433,7 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
       activeAssumptionSet={activeAssumptionSet}
       onChange={setActiveAssumptionSetId}
       title="Screening Assumptions"
-      description="Screener results, saved exports, and any downstream backtests use this active assumption set."
+      description={`${activePlaybook?.label || 'This playbook'} uses this active assumption set for screening, saved views, and any downstream backtests.`}
     />
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
@@ -365,38 +497,46 @@ export function Screener({addToast, nav, assumptionSets, activeAssumptionSetId, 
             <option value="rent_multiple">Rent Multiple</option>
           </select>
         </div>
-        <div className="fg"><label>Saved Screen</label>
+        <div className="fg"><label>Saved View</label>
           <select value={selScreen} onChange={e => setSelScreen(e.target.value)}>
             <option value="">None</option>
-            {screens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {availableScreens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
       </div>
       <div style={{marginTop:'.85rem',paddingTop:'.85rem',borderTop:'1px solid var(--line)'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.75rem',flexWrap:'wrap',marginBottom:'.55rem'}}>
           <div>
-            <div style={{fontSize:'.78rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.18rem'}}>Reusable Screen</div>
-            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>Save the core filter logic that Atlas can reuse and backtest today.</div>
+            <div style={{fontSize:'.78rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.18rem'}}>Saved View</div>
+            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>Save the playbook context, sort, notes, and reusable core metric filters that Atlas can reopen later.</div>
           </div>
           <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
-            <button className="btn btn-sm" onClick={() => persistScreen(false)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save Screen'}</button>
-            <button className="btn btn-sm btn-p" onClick={() => persistScreen(true)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save + Backtest'}</button>
+            <button className="btn btn-sm" onClick={() => persistScreen(false)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save View'}</button>
+            <button className="btn btn-sm btn-p" onClick={() => persistScreen(true)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save View + Backtest'}</button>
           </div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'minmax(220px,1.4fr) 1fr',gap:'.75rem',alignItems:'start'}}>
           <div className="fg" style={{margin:0}}>
-            <label>Screen Name</label>
-            <input type="text" value={screenName} onChange={e => setScreenName(e.target.value)} placeholder="e.g. Defensive Midwest Cap-Rate Screen"/>
+            <label>View Name</label>
+            <input type="text" value={screenName} onChange={e => setScreenName(e.target.value)} placeholder="e.g. Defensive Midwest Income View"/>
           </div>
-          <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center'}}>
+          <div className="fg" style={{margin:0}}>
+            <label>View Notes</label>
+            <input type="text" value={screenNotes} onChange={e => setScreenNotes(e.target.value)} placeholder="Optional context for future reopening or sync"/>
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center'}}>
+          <span className="badge badge-b">PLAYBOOK {(activePlaybook?.shortLabel || 'Farmland Income').toUpperCase()}</span>
+          {activeAssumptionSet && <span className="badge badge-a">MODEL {activeAssumptionSet.name} v{activeAssumptionSet.version}</span>}
+        </div>
+        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center',marginTop:'.55rem'}}>
             {reusableFilters.length > 0
               ? reusableFilters.map((filter, idx) => <span key={`${filter.metric}-${idx}`} className="badge badge-g">{filter.metric} {filter.op} {filter.value}</span>)
               : <span className="badge badge-r">NO REUSABLE CORE FILTERS SET</span>}
             {liveOnlyFilters.length > 0 && <span className="badge badge-a">LIVE-ONLY: {liveOnlyFilters.join(' • ')}</span>}
-          </div>
         </div>
         <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.45rem'}}>
-          Saved screens currently persist reusable valuation filters for Atlas and Backtest. State, z-score, and industrial power filters remain live-only until the next closure pass.
+          Saved views now keep the playbook, notes, sort order, active model basis, and full Screener state for reopening. Backtest still reuses the core metric filters only, because historical replay is not yet wired to every live-only screen control.
         </div>
       </div>
     </div>
