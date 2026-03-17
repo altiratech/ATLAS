@@ -8,9 +8,19 @@ import {
 } from '../auth.js';
 import { appendAssumptionParam, assumptionSetLabel, summarizeScenarioAssumptions } from '../shared/assumptions-ui.jsx';
 import { evaluateAtlasCountyRead, evaluateAtlasThesisSupport } from '../shared/atlas-read.js';
+import {
+  DataGrid,
+  CountyPicker,
+} from '../shared/data-ui.jsx';
+import {
+  getDefaultResearchViewState,
+  getResearchColumns,
+  getResearchRowAccent,
+  hydrateResearchRows,
+  ResearchRecordPanel,
+} from '../shared/research-grid.jsx';
 import { getThesisLens, getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
-import { CountyPicker, STable } from '../shared/data-ui.jsx';
 
 export function ResearchWorkspace({
   addToast,
@@ -28,6 +38,10 @@ export function ResearchWorkspace({
   const [storeErr, setStoreErr] = React.useState(null);
   const [counties, setCounties] = React.useState([]);
   const [county, setCounty] = React.useState(params?.fips || '');
+  const [researchSearch, setResearchSearch] = React.useState('');
+  const [researchStatusFilter, setResearchStatusFilter] = React.useState('');
+  const [researchThesisFilter, setResearchThesisFilter] = React.useState('');
+  const [researchViewConfig, setResearchViewConfig] = React.useState(() => getDefaultResearchViewState());
   const [thesis, setThesis] = React.useState('');
   const [tagsInput, setTagsInput] = React.useState('');
   const [status, setStatus] = React.useState('exploring');
@@ -176,6 +190,26 @@ export function ResearchWorkspace({
     () => Object.fromEntries(counties.map(c => [c.fips, `${c.name}, ${c.state}`])),
     [counties]
   );
+  const getCountyContext = React.useCallback((fips) => {
+    const label = countyMap[fips] || '';
+    const parts = label ? String(label).split(',') : [];
+    if (parts.length >= 2) {
+      return {
+        countyName: parts.slice(0, -1).join(',').trim(),
+        state: parts.at(-1)?.trim() || '',
+      };
+    }
+    return {
+      countyName: fips === county ? params?.countyName || fips : (label || fips),
+      state: fips === county ? params?.state || '' : '',
+    };
+  }, [county, countyMap, params?.countyName, params?.state]);
+  const researchRowColorOptions = React.useMemo(() => [
+    { value: 'status', label: 'Status' },
+    { value: 'conviction', label: 'Conviction' },
+    { value: 'thesis_lens', label: 'Thesis Lens' },
+    { value: 'none', label: 'None' },
+  ], []);
 
   const active = county ? normalizeResearchRecord(store[county]) : defaultResearchRecord();
   const latestScenarioRun = scenarioRuns[0] || null;
@@ -228,8 +262,9 @@ export function ResearchWorkspace({
   const memoAcquisitionText = !latestScenarioAcquisition
     ? 'No saved acquisition underwrite is attached to the latest scenario snapshot yet.'
     : `Latest underwrite: ${latestScenarioAcquisitionInputs?.hold_years ?? latestScenarioAcquisition.hold_years ?? '--'}-year hold on ${Number(latestScenarioAcquisition.acres || latestScenarioAcquisitionInputs?.acres || 0).toLocaleString('en-US')} acres at ${$$(latestScenarioAcquisition.entry_price_per_acre ?? latestScenarioAcquisitionInputs?.entry_price_per_acre)} / ac -> ${$pct(latestScenarioAcquisition.irr_pct)} unlevered IRR, ${$pct(latestScenarioAcquisition.levered_irr_pct)} levered IRR, ${$pct(latestScenarioAcquisition.year1_cash_on_cash_yield_pct)} year 1 cash-on-cash, ${latestScenarioAcquisition.ltv_pct != null ? `${$(latestScenarioAcquisition.ltv_pct, 1)}% leverage` : 'no leverage detail'}, ${latestScenarioAcquisition.refinance_mode === 'modeled' ? `refi year ${latestScenarioAcquisition.refinance_year} with ${$$(latestScenarioAcquisition.refinance_cash_out_total)} cash out` : 'no refinance modeled'}.`;
-  const currentCountyName = countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName;
-  const currentState = countyMap[county] ? countyMap[county].split(', ')[1] : params?.state;
+  const currentCountyContext = county ? getCountyContext(county) : { countyName: params?.countyName || '', state: params?.state || '' };
+  const currentCountyName = currentCountyContext.countyName;
+  const currentState = currentCountyContext.state;
   const countyMetrics = countySummary?.metrics || {};
   const countyCredit = countySummary?.credit || null;
   const countySoil = countySummary?.soil || null;
@@ -264,19 +299,37 @@ export function ResearchWorkspace({
     : null;
   const countyDroughtBadge = droughtRiskBand(countyDrought);
   const countyFloodBadge = floodRiskBand(countyFlood);
-  const buildScenarioNavParams = (scenarioRun = null) => ({
-    fips: county,
-    countyName: currentCountyName,
-    state: currentState,
-    sourcePage: 'research',
-    playbookKey: params?.playbookKey || activePlaybookKey,
-    thesisKey: thesisLensKey,
-    thesisLabel: selectedThesisLens?.label || '',
-    acquisitionInputs: readAcquisitionInputs(scenarioRun) || latestScenarioAcquisitionInputs || undefined,
-    creditInputs: readCreditInputs(scenarioRun) || latestScenarioCreditInputs || undefined,
-    assetType: assetType || selectedThesisLens?.assetType || params?.assetType || 'agriculture_land',
-    targetUseCase: targetUseCase || selectedThesisLens?.targetUseCase || params?.targetUseCase || 'farmland_investment',
-  });
+  const buildScenarioNavParamsForFips = React.useCallback((fips, options = {}) => {
+    const scenarioRun = options.scenarioRun || null;
+    const countyContext = getCountyContext(fips);
+    const lensKey = options.thesisKey ?? thesisLensKey;
+    const lens = lensKey ? getThesisLens(lensKey, params?.playbookKey || activePlaybookKey) : null;
+    return {
+      fips,
+      countyName: countyContext.countyName,
+      state: countyContext.state,
+      sourcePage: 'research',
+      playbookKey: params?.playbookKey || activePlaybookKey,
+      thesisKey: lensKey || '',
+      thesisLabel: options.thesisLabel ?? lens?.label ?? '',
+      acquisitionInputs: readAcquisitionInputs(scenarioRun) || options.acquisitionInputs || latestScenarioAcquisitionInputs || undefined,
+      creditInputs: readCreditInputs(scenarioRun) || options.creditInputs || latestScenarioCreditInputs || undefined,
+      assetType: options.assetType || lens?.assetType || assetType || params?.assetType || 'agriculture_land',
+      targetUseCase: options.targetUseCase || lens?.targetUseCase || targetUseCase || params?.targetUseCase || 'farmland_investment',
+    };
+  }, [
+    activePlaybookKey,
+    assetType,
+    getCountyContext,
+    latestScenarioAcquisitionInputs,
+    latestScenarioCreditInputs,
+    params?.assetType,
+    params?.playbookKey,
+    params?.targetUseCase,
+    targetUseCase,
+    thesisLensKey,
+  ]);
+  const buildScenarioNavParams = (scenarioRun = null) => buildScenarioNavParamsForFips(county, { scenarioRun });
 
   const saveWorkspace = async () => {
     if (!county) { addToast(toast('Select a county first', 'err')); return; }
@@ -364,9 +417,104 @@ export function ResearchWorkspace({
     .map(([fips, rec]) => ({ fips, ...normalizeResearchRecord(rec) }))
     .filter(r => r.thesis || r.analysis?.bull_case || r.analysis?.bear_case || r.analysis?.target_use_case || r.analysis?.critical_dependencies?.length || r.analysis?.missing_data_notes?.length || r.tags.length || r.notes.length || r.scenario_packs.length || r.scenario_runs.length)
     .sort((a,b) => (b.updated_at || '').localeCompare(a.updated_at || '')), [store]);
+  const researchRows = React.useMemo(
+    () => hydrateResearchRows(records, countyMap, params?.playbookKey || activePlaybookKey),
+    [records, countyMap, params?.playbookKey, activePlaybookKey],
+  );
+  const filteredResearchRows = React.useMemo(() => {
+    const query = researchSearch.trim().toLowerCase();
+    return researchRows.filter((row) => {
+      if (researchStatusFilter && row.status !== researchStatusFilter) return false;
+      if (researchThesisFilter && row.analysis?.thesis_lens_key !== researchThesisFilter) return false;
+      if (query && !row._search_blob.includes(query)) return false;
+      return true;
+    });
+  }, [researchRows, researchSearch, researchStatusFilter, researchThesisFilter]);
+  const researchColumns = React.useMemo(
+    () => getResearchColumns({ activeCounty: county }),
+    [county],
+  );
+  const hasResearchFilters = !!(researchSearch.trim() || researchStatusFilter || researchThesisFilter);
 
   return <div>
     {storeErr && <ErrBox title="Research Sync Error" msg={storeErr} onRetry={loadStore}/>}
+    <div className="card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.65rem',flexWrap:'wrap'}}>
+        <div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Research Landing View</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.18rem'}}>Open a record before you drop into the memo editor</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'900px'}}>
+            Browse the full research queue, group records by workflow state or thesis lens, and open the side panel for a quick read before switching the active workspace.
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
+          <span className="badge badge-a">{records.length} RECORDS</span>
+          <span className="badge badge-b">{filteredResearchRows.length} IN VIEW</span>
+          {county && <span className="badge badge-g">ACTIVE {selectedCountyLabel.toUpperCase()}</span>}
+        </div>
+      </div>
+      <div style={{display:'grid',gridTemplateColumns:'minmax(240px,1.4fr) repeat(2,minmax(170px,1fr)) auto',gap:'.55rem',alignItems:'end',marginBottom:'.65rem'}}>
+        <div className="fg" style={{margin:0}}>
+          <label>Search Records</label>
+          <input
+            type="text"
+            value={researchSearch}
+            onChange={(e) => setResearchSearch(e.target.value)}
+            placeholder="County, thesis, bull case, risks, tags..."
+          />
+        </div>
+        <div className="fg" style={{margin:0}}>
+          <label>Status Filter</label>
+          <select value={researchStatusFilter} onChange={(e) => setResearchStatusFilter(e.target.value)}>
+            <option value="">All statuses</option>
+            {statuses.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+          </select>
+        </div>
+        <div className="fg" style={{margin:0}}>
+          <label>Thesis Lens Filter</label>
+          <select value={researchThesisFilter} onChange={(e) => setResearchThesisFilter(e.target.value)}>
+            <option value="">All thesis lenses</option>
+            {thesisLenses.map((lens) => <option key={lens.key} value={lens.key}>{lens.label}</option>)}
+          </select>
+        </div>
+        <div style={{display:'flex',justifyContent:'flex-end'}}>
+          {hasResearchFilters && <button
+            className="btn btn-sm"
+            onClick={() => {
+              setResearchSearch('');
+              setResearchStatusFilter('');
+              setResearchThesisFilter('');
+            }}
+          >
+            Clear Filters
+          </button>}
+        </div>
+      </div>
+      {storeLoading && records.length === 0 ? <Loading/>
+      : <DataGrid
+          columns={researchColumns}
+          rows={filteredResearchRows}
+          rowKey="fips"
+          stickyHeader
+          viewConfig={researchViewConfig}
+          onViewChange={setResearchViewConfig}
+          rowColorFn={(row) => getResearchRowAccent(row, researchViewConfig?.rowColoring)}
+          rowColorOptions={researchRowColorOptions}
+          emptyMessage={hasResearchFilters ? 'No research records match the current filters.' : 'No saved research workspaces yet.'}
+          renderRecordPanel={(row, closePanel) => <ResearchRecordPanel
+            row={row}
+            closePanel={closePanel}
+            setCounty={setCounty}
+            nav={nav}
+            buildScenarioNavParams={(recordRow) => buildScenarioNavParamsForFips(recordRow.fips, {
+              thesisKey: recordRow.analysis?.thesis_lens_key || '',
+              thesisLabel: recordRow.analysis?.thesis_lens_label || '',
+              assetType: recordRow.analysis?.asset_type || '',
+              targetUseCase: recordRow.analysis?.target_use_case || '',
+            })}
+          />}
+        />}
+    </div>
     {county && <div className="card" style={{marginBottom:'.7rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
         <div>
@@ -772,24 +920,6 @@ export function ResearchWorkspace({
       })}
     </div>
 
-    <div className="card">
-      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Research Queue</h3>
-      {storeLoading && records.length === 0 ? <Loading/>
-      : records.length === 0 ? <div className="empty"><p>No saved research workspaces yet.</p></div>
-      : <STable
-          cols={[
-            {key:'county',label:'County'},
-            {key:'status',label:'Status'},
-            {key:'conviction',label:'Conviction',num:true,fmt:v => `${Math.round(v)}/100`},
-            {key:'tags',label:'Tags',fmt:v => v.join(', ') || '--'},
-            {key:'scenario_packs',label:'Packs',num:true,fmt:v => v.length},
-            {key:'notes',label:'Notes',num:true,fmt:v => v.length},
-            {key:'updated_at',label:'Updated',fmt:v => v ? new Date(v).toLocaleDateString() : '--'},
-          ]}
-          rows={records.map(r => ({...r, county: countyMap[r.fips] || r.fips}))}
-          onRow={r => setCounty(r.fips)}
-        />}
-    </div>
   </div>;
 }
 
