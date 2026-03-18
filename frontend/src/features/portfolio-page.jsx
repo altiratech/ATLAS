@@ -78,6 +78,7 @@ function RiskSummaryCard({ label, value, detail, color }) {
 export function PortfolioPage({
   addToast,
   nav,
+  params,
   assumptionSets,
   activeAssumptionSetId,
   activeAssumptionSet,
@@ -133,6 +134,11 @@ export function PortfolioPage({
   React.useEffect(() => {
     loadPortfolios();
   }, [loadPortfolios]);
+
+  React.useEffect(() => {
+    if (!params?.portfolioId) return;
+    setSelId(params.portfolioId);
+  }, [params?.portfolioId]);
 
   React.useEffect(() => {
     if (!selId) return;

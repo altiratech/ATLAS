@@ -29,6 +29,7 @@ let AUTH_BOOTSTRAP_INFLIGHT = null;
 
 export function defaultResearchRecord() {
   return {
+    playbook_key:'',
     thesis:'',
     analysis:{
       thesis:'',
@@ -62,6 +63,7 @@ export function normalizeResearchRecord(record) {
   return {
     ...base,
     ...safe,
+    playbook_key: typeof safe.playbook_key === 'string' ? safe.playbook_key : base.playbook_key,
     analysis: {
       ...base.analysis,
       ...(safe.analysis && typeof safe.analysis === 'object' ? safe.analysis : {}),

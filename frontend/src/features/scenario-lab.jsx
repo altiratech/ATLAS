@@ -11,6 +11,7 @@ import {
 } from '../auth.js';
 import { AssumptionContextBar, assumptionSetLabel } from '../shared/assumptions-ui.jsx';
 import { CountyPicker, MiniBar } from '../shared/data-ui.jsx';
+import { getThesisLens } from '../shared/thesis-lenses.js';
 
 const SCENARIO_PRESETS = [
   { key: 'base', label: 'Base', description: 'Current central case', rp: 4.5, gr: 2.0, rs: 0 },
@@ -29,6 +30,7 @@ export function ScenarioLab({
   activeAssumptionSetId,
   activeAssumptionSet,
   setActiveAssumptionSetId,
+  activePlaybookKey,
   activeThesis,
   activeThesisKey,
 }) {
@@ -58,6 +60,9 @@ export function ScenarioLab({
   const [packsLoading, setPacksLoading] = React.useState(false);
   const navPackRef = React.useRef('');
   const [presetKey, setPresetKey] = React.useState('base');
+  const effectivePlaybookKey = params?.playbookKey || activePlaybookKey;
+  const effectiveThesisKey = params?.thesisKey || activeThesisKey;
+  const effectiveThesis = getThesisLens(effectiveThesisKey, effectivePlaybookKey) || activeThesis || null;
 
   const loadPacks = React.useCallback((fips) => {
     if (!fips) {
@@ -299,10 +304,11 @@ export function ScenarioLab({
             countyName: params?.countyName,
             state: params?.state,
             sourcePage: 'scenario',
-            thesisKey: activeThesisKey,
-            thesisLabel: activeThesis?.label,
-            assetType: activeThesis?.assetType || 'agriculture_land',
-            targetUseCase: activeThesis?.targetUseCase || 'farmland_investment',
+            playbookKey: effectivePlaybookKey,
+            thesisKey: effectiveThesisKey,
+            thesisLabel: effectiveThesis?.label,
+            assetType: effectiveThesis?.assetType || 'agriculture_land',
+            targetUseCase: effectiveThesis?.targetUseCase || 'farmland_investment',
           })}>Open Research Workspace</button>
         </div>
       </div>

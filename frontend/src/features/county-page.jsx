@@ -38,6 +38,7 @@ export function CountyPage({
   activeAssumptionSetId,
   activeAssumptionSet,
   setActiveAssumptionSetId,
+  activePlaybookKey,
   activeThesis,
   activeThesisKey,
 }) {
@@ -165,6 +166,8 @@ export function CountyPage({
   const zscores = data.zscores || {};
   const countyProductivity = productivityBand(data.productivity_active);
   const industrialConfidence = industrialConfidenceBand(industrial?.confidence);
+  const effectivePlaybookKey = params?.playbookKey || activePlaybookKey;
+  const effectiveThesisKey = params?.thesisKey || activeThesisKey;
   const drought = data.drought || null;
   const droughtBadge = droughtRiskBand(drought);
   const flood = data.flood || null;
@@ -176,7 +179,8 @@ export function CountyPage({
     countyName: data.county_name,
     state: data.state,
     sourcePage: 'county',
-    thesisKey: activeThesisKey,
+    playbookKey: effectivePlaybookKey,
+    thesisKey: effectiveThesisKey,
     thesisLabel: activeThesis?.label,
     assetType: activeThesis?.assetType || 'agriculture_land',
     targetUseCase: activeThesis?.targetUseCase || 'farmland_investment',
@@ -252,7 +256,7 @@ export function CountyPage({
     benchmarkMethodDetail: data.benchmark_method_detail,
   });
   const thesisRead = evaluateAtlasThesisSupport({
-    lensKey: activeThesisKey,
+    lensKey: effectiveThesisKey,
     metrics: m,
     productivityActive: data.productivity_active,
     yieldProductivityFactor: m.yield_productivity_factor,

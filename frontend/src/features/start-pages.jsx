@@ -150,7 +150,7 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
             <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH)}>Open Workspace</button>
           </div>
           {research.length === 0 ? <div className="empty"><p>No research records yet. Start from a perspective or the Screener and save a county into Research Workspace.</p></div> : <div style={{ display: 'grid', gap: '.55rem' }}>
-            {research.map((record) => <div key={record.geo_key} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.RESEARCH, { fips: record.geo_key, playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>
+            {research.map((record) => <div key={record.geo_key} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.RESEARCH, { fips: record.geo_key, playbookKey: record.playbook_key || activePlaybookKey, thesisKey: record.analysis?.thesis_lens_key || activeThesisKey })}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.2rem' }}>
                 <div style={{ fontWeight: 600 }}>{record.county_name ? `${record.county_name}, ${record.state}` : record.geo_key}</div>
                 <span className="badge badge-b">{record.status || 'exploring'}</span>
@@ -208,7 +208,7 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
             <button className="btn btn-sm" onClick={() => nav(PG.PORTFOLIO, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Portfolio</button>
           </div>
           {portfolios.length === 0 ? <div className="empty"><p>No portfolios yet. Create one once you want Atlas to aggregate risk and value across holdings.</p></div> : <div style={{ display: 'grid', gap: '.5rem' }}>
-            {portfolios.map((portfolio) => <div key={portfolio.id} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.PORTFOLIO, { portfolioId: portfolio.id, playbookKey: activePlaybookKey })}>
+            {portfolios.map((portfolio) => <div key={portfolio.id} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.PORTFOLIO, { portfolioId: portfolio.id, playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.2rem' }}>
                 <div style={{ fontWeight: 600 }}>{portfolio.name}</div>
                 <span className="badge badge-b">{portfolio.holdings_count} holdings</span>

@@ -87,11 +87,13 @@ export function hydrateResearchRows(records, countyMap, playbookKey) {
   return (records || []).map((record) => {
     const countyLabel = countyMap?.[record.fips] || record.fips;
     const countyParts = splitCountyLabel(countyLabel, record.fips);
+    const effectivePlaybookKey = record.playbook_key || playbookKey || '';
     const thesisLens = record.analysis?.thesis_lens_key
-      ? getThesisLens(record.analysis.thesis_lens_key, playbookKey)
+      ? getThesisLens(record.analysis.thesis_lens_key, effectivePlaybookKey)
       : null;
     return {
       ...record,
+      _playbook_key: effectivePlaybookKey,
       county: countyLabel,
       county_name: countyParts.countyName,
       state: countyParts.state,
@@ -210,7 +212,7 @@ export function ResearchRecordPanel({ row, closePanel, setCounty, nav, buildScen
 
     <div style={{ display: 'flex', gap: '.45rem', flexWrap: 'wrap' }}>
       <button className="btn btn-p btn-sm" onClick={() => { setCounty(row.fips); closePanel?.(); }}>Open Workspace</button>
-      <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, { fips: row.fips, thesisKey: row.analysis?.thesis_lens_key || '' })}>Open County</button>
+      <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, { fips: row.fips, playbookKey: row._playbook_key || '', thesisKey: row.analysis?.thesis_lens_key || '' })}>Open County</button>
       <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(row))}>Open Scenario</button>
     </div>
   </div>;

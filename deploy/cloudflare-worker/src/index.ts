@@ -910,6 +910,7 @@ interface ResearchWorkspaceRow {
   id: number;
   owner_key: string;
   geo_key: string;
+  playbook_key: string | null;
   thesis: string | null;
   analysis_json: string | null;
   tags_json: string | null;
@@ -1242,6 +1243,8 @@ function defaultAnalysisRecord() {
     decision_state: 'exploring',
     asset_type: '',
     target_use_case: '',
+    thesis_lens_key: '',
+    thesis_lens_label: '',
     critical_dependencies: [] as string[],
     missing_data_notes: [] as string[],
     approval_state: '',
@@ -1265,6 +1268,8 @@ function parseAnalysis(analysisJson: string | null) {
       decision_state: typeof parsed?.decision_state === 'string' ? parsed.decision_state : 'exploring',
       asset_type: typeof parsed?.asset_type === 'string' ? parsed.asset_type : '',
       target_use_case: typeof parsed?.target_use_case === 'string' ? parsed.target_use_case : '',
+      thesis_lens_key: typeof parsed?.thesis_lens_key === 'string' ? parsed.thesis_lens_key : '',
+      thesis_lens_label: typeof parsed?.thesis_lens_label === 'string' ? parsed.thesis_lens_label : '',
       critical_dependencies: Array.isArray(parsed?.critical_dependencies)
         ? parsed.critical_dependencies.filter((item: unknown): item is string => typeof item === 'string')
         : [],
@@ -1298,6 +1303,12 @@ function normalizeAnalysisInput(value: unknown, fallback = defaultAnalysisRecord
     target_use_case: typeof incoming.target_use_case === 'string'
       ? incoming.target_use_case
       : fallback.target_use_case,
+    thesis_lens_key: typeof incoming.thesis_lens_key === 'string'
+      ? incoming.thesis_lens_key
+      : fallback.thesis_lens_key,
+    thesis_lens_label: typeof incoming.thesis_lens_label === 'string'
+      ? incoming.thesis_lens_label
+      : fallback.thesis_lens_label,
     critical_dependencies: Array.isArray(incoming.critical_dependencies)
       ? incoming.critical_dependencies.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
       : fallback.critical_dependencies,
@@ -1313,6 +1324,7 @@ function normalizeAnalysisInput(value: unknown, fallback = defaultAnalysisRecord
 function emptyResearchWorkspace(geoKey: string) {
   return {
     geo_key: geoKey,
+    playbook_key: '',
     thesis: '',
     analysis: defaultAnalysisRecord(),
     tags: [],
@@ -1328,7 +1340,7 @@ function emptyResearchWorkspace(geoKey: string) {
 async function getResearchWorkspaceRow(db: D1Database, userKey: string, geoKey: string) {
   return db
     .prepare(
-      'SELECT id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at FROM research_workspaces WHERE owner_key = ? AND geo_key = ?',
+      'SELECT id, owner_key, geo_key, playbook_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at FROM research_workspaces WHERE owner_key = ? AND geo_key = ?',
     )
     .bind(userKey, geoKey)
     .first<ResearchWorkspaceRow>();
@@ -1344,7 +1356,7 @@ async function ensureResearchWorkspace(db: D1Database, userKey: string, geoKey: 
 
   await db
     .prepare(
-      "INSERT INTO research_workspaces (owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at) VALUES (?, ?, '', '{}', '[]', 'exploring', 50, datetime('now'), datetime('now'))",
+      "INSERT INTO research_workspaces (owner_key, geo_key, playbook_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at) VALUES (?, ?, NULL, '', '{}', '[]', 'exploring', 50, datetime('now'), datetime('now'))",
     )
     .bind(userKey, geoKey)
     .run();
@@ -1388,6 +1400,7 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
 
   return {
     geo_key: workspace.geo_key,
+    playbook_key: workspace.playbook_key ?? '',
     county_name: county?.name ?? null,
     state: county?.state ?? null,
     thesis: workspace.thesis ?? '',
@@ -1483,6 +1496,7 @@ async function ensureResearchSchema(db: D1Database) {
              id INTEGER PRIMARY KEY AUTOINCREMENT,
              owner_key TEXT NOT NULL DEFAULT 'owner_default',
              geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+             playbook_key TEXT,
              thesis TEXT,
              analysis_json TEXT,
              tags_json TEXT,
@@ -1505,6 +1519,7 @@ async function ensureResearchSchema(db: D1Database) {
                  id INTEGER PRIMARY KEY AUTOINCREMENT,
                  owner_key TEXT NOT NULL DEFAULT 'owner_default',
                  geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+                 playbook_key TEXT,
                  thesis TEXT,
                  analysis_json TEXT,
                  tags_json TEXT,
@@ -1519,12 +1534,13 @@ async function ensureResearchSchema(db: D1Database) {
           await db
             .prepare(
               `INSERT INTO research_workspaces_new (
-                 id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
+                 id, owner_key, geo_key, playbook_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
                )
                SELECT
                  id,
                  'owner_default',
                  geo_key,
+                 NULL,
                  thesis,
                  NULL,
                  tags_json,
@@ -1546,6 +1562,16 @@ async function ensureResearchSchema(db: D1Database) {
       if (!workspaceCols.has('analysis_json')) {
         try {
           await db.prepare('ALTER TABLE research_workspaces ADD COLUMN analysis_json TEXT').run();
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error);
+          if (!msg.toLowerCase().includes('duplicate column')) {
+            throw error;
+          }
+        }
+      }
+      if (!workspaceCols.has('playbook_key')) {
+        try {
+          await db.prepare('ALTER TABLE research_workspaces ADD COLUMN playbook_key TEXT').run();
         } catch (error) {
           const msg = error instanceof Error ? error.message : String(error);
           if (!msg.toLowerCase().includes('duplicate column')) {
@@ -3660,6 +3686,7 @@ app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
   if (auth instanceof Response) return auth;
   const geoKey = c.req.param('geoKey');
   const body = await c.req.json<{
+    playbook_key?: string;
     thesis?: string;
     analysis?: unknown;
     tags?: unknown;
@@ -3668,6 +3695,7 @@ app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
   }>();
 
   const workspace = await ensureResearchWorkspace(db, auth.userKey, geoKey);
+  const playbookKey = typeof body.playbook_key === 'string' ? body.playbook_key.trim() : '';
   const thesis = (body.thesis ?? '').trim();
   const analysis = normalizeAnalysisInput(body.analysis, parseAnalysis(workspace.analysis_json));
   const tags = normalizeTags(body.tags);
@@ -3677,10 +3705,10 @@ app.put('/api/v1/research/workspaces/:geoKey', async (c) => {
   await db
     .prepare(
       `UPDATE research_workspaces
-       SET thesis = ?, analysis_json = ?, tags_json = ?, status = ?, conviction = ?, updated_at = datetime('now')
+       SET playbook_key = ?, thesis = ?, analysis_json = ?, tags_json = ?, status = ?, conviction = ?, updated_at = datetime('now')
        WHERE id = ?`,
     )
-    .bind(thesis, JSON.stringify(analysis), JSON.stringify(tags), status, conviction, workspace.id)
+    .bind(playbookKey || null, thesis, JSON.stringify(analysis), JSON.stringify(tags), status, conviction, workspace.id)
     .run();
 
   const updated = await findResearchWorkspaceForUser(db, auth.userKey, geoKey);

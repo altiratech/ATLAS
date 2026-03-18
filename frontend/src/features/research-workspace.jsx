@@ -31,8 +31,10 @@ export function ResearchWorkspace({
   activeAssumptionSet,
   activeAssumptionSetId,
   activePlaybookKey,
+  setActivePlaybookKey,
   activeThesis,
   activeThesisKey,
+  setActiveThesisKey,
 }) {
   const [store, setStore] = React.useState({});
   const [storeLoading, setStoreLoading] = React.useState(true);
@@ -62,9 +64,11 @@ export function ResearchWorkspace({
   const [scenarioRuns, setScenarioRuns] = React.useState([]);
   const [countySummary, setCountySummary] = React.useState(null);
   const [countySummaryLoading, setCountySummaryLoading] = React.useState(false);
+  const workspaceRecord = county ? normalizeResearchRecord(store[county]) : null;
+  const currentPlaybookKey = workspaceRecord?.playbook_key || params?.playbookKey || activePlaybookKey;
   const thesisLenses = React.useMemo(
-    () => getThesisLensesForPlaybook(params?.playbookKey || activePlaybookKey),
-    [activePlaybookKey, params?.playbookKey],
+    () => getThesisLensesForPlaybook(currentPlaybookKey),
+    [currentPlaybookKey],
   );
 
   const statuses = [
@@ -159,6 +163,18 @@ export function ResearchWorkspace({
   }, [county, store, params?.assetType, params?.targetUseCase, params?.thesisKey, activeThesisKey]);
 
   React.useEffect(() => {
+    if (currentPlaybookKey && currentPlaybookKey !== activePlaybookKey) {
+      setActivePlaybookKey?.(currentPlaybookKey);
+    }
+  }, [activePlaybookKey, currentPlaybookKey, setActivePlaybookKey]);
+
+  React.useEffect(() => {
+    if (thesisLensKey && thesisLensKey !== activeThesisKey) {
+      setActiveThesisKey?.(thesisLensKey);
+    }
+  }, [activeThesisKey, setActiveThesisKey, thesisLensKey]);
+
+  React.useEffect(() => {
     persistGridViewState(RESEARCH_GRID_VIEW_KEY, researchViewConfig);
   }, [researchViewConfig]);
 
@@ -216,7 +232,7 @@ export function ResearchWorkspace({
     { value: 'none', label: 'None' },
   ], []);
 
-  const active = county ? normalizeResearchRecord(store[county]) : defaultResearchRecord();
+  const active = workspaceRecord || defaultResearchRecord();
   const latestScenarioRun = scenarioRuns[0] || null;
   const latestComparisonTable = Array.isArray(latestScenarioRun?.comparison?.comparison_table) ? latestScenarioRun.comparison.comparison_table : [];
   const latestBaseScenario = latestComparisonTable.find((row) => /base/i.test(row.scenario || '')) || latestComparisonTable[0] || null;
@@ -234,7 +250,7 @@ export function ResearchWorkspace({
     .map((entry) => ({ scenario: entry.scenario, driver: Array.isArray(entry.drivers) ? entry.drivers[0] : null }))
     .find((entry) => entry.driver?.driver && entry.driver?.delta != null) || null;
   const latestScenarioAssumptionSummary = summarizeScenarioAssumptions(latestScenarioRun?.assumptions);
-  const selectedThesisLens = getThesisLens(thesisLensKey, params?.playbookKey || activePlaybookKey) || activeThesis || null;
+  const selectedThesisLens = getThesisLens(thesisLensKey, currentPlaybookKey) || activeThesis || null;
   const selectedCountyLabel = county
     ? (countyMap[county] || (params?.countyName ? `${params.countyName}${params?.state ? `, ${params.state}` : ''}` : county))
     : 'None';
@@ -308,13 +324,14 @@ export function ResearchWorkspace({
     const scenarioRun = options.scenarioRun || null;
     const countyContext = getCountyContext(fips);
     const lensKey = options.thesisKey ?? thesisLensKey;
-    const lens = lensKey ? getThesisLens(lensKey, params?.playbookKey || activePlaybookKey) : null;
+    const resolvedPlaybookKey = options.playbookKey || currentPlaybookKey;
+    const lens = lensKey ? getThesisLens(lensKey, resolvedPlaybookKey) : null;
     return {
       fips,
       countyName: countyContext.countyName,
       state: countyContext.state,
       sourcePage: 'research',
-      playbookKey: params?.playbookKey || activePlaybookKey,
+      playbookKey: resolvedPlaybookKey,
       thesisKey: lensKey || '',
       thesisLabel: options.thesisLabel ?? lens?.label ?? '',
       acquisitionInputs: readAcquisitionInputs(scenarioRun) || options.acquisitionInputs || latestScenarioAcquisitionInputs || undefined,
@@ -323,13 +340,12 @@ export function ResearchWorkspace({
       targetUseCase: options.targetUseCase || lens?.targetUseCase || targetUseCase || params?.targetUseCase || 'farmland_investment',
     };
   }, [
-    activePlaybookKey,
     assetType,
+    currentPlaybookKey,
     getCountyContext,
     latestScenarioAcquisitionInputs,
     latestScenarioCreditInputs,
     params?.assetType,
-    params?.playbookKey,
     params?.targetUseCase,
     targetUseCase,
     thesisLensKey,
@@ -343,6 +359,7 @@ export function ResearchWorkspace({
         method:'PUT',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
+          playbook_key: currentPlaybookKey || '',
           thesis: thesis.trim(),
           analysis: {
             thesis: thesis.trim(),
@@ -354,7 +371,7 @@ export function ResearchWorkspace({
             asset_type: assetType,
             target_use_case: targetUseCase,
             thesis_lens_key: thesisLensKey,
-            thesis_lens_label: getThesisLens(thesisLensKey, params?.playbookKey || activePlaybookKey)?.label || '',
+            thesis_lens_label: getThesisLens(thesisLensKey, currentPlaybookKey)?.label || '',
             critical_dependencies: parseTags(criticalDependenciesInput),
             missing_data_notes: parseTags(missingDataNotesInput),
             approval_state: approvalState,
@@ -423,8 +440,8 @@ export function ResearchWorkspace({
     .filter(r => r.thesis || r.analysis?.bull_case || r.analysis?.bear_case || r.analysis?.target_use_case || r.analysis?.critical_dependencies?.length || r.analysis?.missing_data_notes?.length || r.tags.length || r.notes.length || r.scenario_packs.length || r.scenario_runs.length)
     .sort((a,b) => (b.updated_at || '').localeCompare(a.updated_at || '')), [store]);
   const researchRows = React.useMemo(
-    () => hydrateResearchRows(records, countyMap, params?.playbookKey || activePlaybookKey),
-    [records, countyMap, params?.playbookKey, activePlaybookKey],
+    () => hydrateResearchRows(records, countyMap, currentPlaybookKey),
+    [records, countyMap, currentPlaybookKey],
   );
   const filteredResearchRows = React.useMemo(() => {
     const query = researchSearch.trim().toLowerCase();
@@ -515,6 +532,7 @@ export function ResearchWorkspace({
             setCounty={setCounty}
             nav={nav}
             buildScenarioNavParams={(recordRow) => buildScenarioNavParamsForFips(recordRow.fips, {
+              playbookKey: recordRow.playbook_key || recordRow._playbook_key || currentPlaybookKey,
               thesisKey: recordRow.analysis?.thesis_lens_key || '',
               thesisLabel: recordRow.analysis?.thesis_lens_label || '',
               assetType: recordRow.analysis?.asset_type || '',
@@ -533,7 +551,7 @@ export function ResearchWorkspace({
           </div>
         </div>
         <div className="rw-actions" style={{margin:0}}>
-          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county, thesisKey: thesisLensKey})}>Open County Detail</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county, playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open County Detail</button>
           <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>
         </div>
       </div>
@@ -898,7 +916,7 @@ export function ResearchWorkspace({
           <div style={{fontSize:'.8rem',fontWeight:600,marginBottom:'.18rem'}}>{pack.name}</div>
           <div style={{fontSize:'.74rem',color:'var(--text2)'}}>Risk Premium {pack.risk_premium}% | Growth {pack.growth_rate}% | Rent Shock {pack.rent_shock}%</div>
         </div>
-        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county,pack_id:pack.id, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research'})}>Open</button>
+        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county,pack_id:pack.id, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research', playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open</button>
       </div>)}
     </div>
 

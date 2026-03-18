@@ -226,6 +226,7 @@ class ResearchWorkspace(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     owner_key = Column(String(120), nullable=False, default="owner_default")
     geo_key = Column(String(10), ForeignKey("geo_county.fips"), nullable=False)
+    playbook_key = Column(String(80))
     thesis = Column(Text)
     analysis_json = Column(JSON)
     tags_json = Column(JSON)

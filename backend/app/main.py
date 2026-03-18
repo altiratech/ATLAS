@@ -72,6 +72,7 @@ def _migrate_research_workspace_owner_schema():
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     owner_key VARCHAR(120) NOT NULL DEFAULT 'owner_default',
                     geo_key VARCHAR(10) NOT NULL REFERENCES geo_county(fips),
+                    playbook_key VARCHAR(80),
                     thesis TEXT,
                     analysis_json JSON,
                     tags_json JSON,
@@ -84,12 +85,13 @@ def _migrate_research_workspace_owner_schema():
             """))
             conn.execute(text("""
                 INSERT INTO research_workspaces_new (
-                    id, owner_key, geo_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
+                    id, owner_key, geo_key, playbook_key, thesis, analysis_json, tags_json, status, conviction, created_at, updated_at
                 )
                 SELECT
                     id,
                     'owner_default',
                     geo_key,
+                    NULL,
                     thesis,
                     NULL,
                     tags_json,
@@ -118,6 +120,9 @@ def ensure_schema_tables():
             col_names = {row[1] for row in cols}
             if "analysis_json" not in col_names and cols:
                 conn.execute(text("ALTER TABLE research_workspaces ADD COLUMN analysis_json JSON"))
+                conn.commit()
+            if "playbook_key" not in col_names and cols:
+                conn.execute(text("ALTER TABLE research_workspaces ADD COLUMN playbook_key VARCHAR(80)"))
                 conn.commit()
             conn.execute(text(
                 """
@@ -462,6 +467,7 @@ def _clamp_conviction(value: float | int | None) -> float:
 def _workspace_defaults(geo_key: str) -> dict:
     return {
         "geo_key": geo_key,
+        "playbook_key": "",
         "thesis": "",
         "analysis": {
             "thesis": "",
@@ -470,6 +476,13 @@ def _workspace_defaults(geo_key: str) -> dict:
             "key_risks": [],
             "catalysts": [],
             "decision_state": "exploring",
+            "asset_type": "",
+            "target_use_case": "",
+            "thesis_lens_key": "",
+            "thesis_lens_label": "",
+            "critical_dependencies": [],
+            "missing_data_notes": [],
+            "approval_state": "",
         },
         "tags": [],
         "status": "exploring",
@@ -498,8 +511,16 @@ def _serialize_workspace(db: Session, workspace: ResearchWorkspace) -> dict:
         "key_risks": analysis.get("key_risks", []) if isinstance(analysis.get("key_risks"), list) else [],
         "catalysts": analysis.get("catalysts", []) if isinstance(analysis.get("catalysts"), list) else [],
         "decision_state": analysis.get("decision_state", "exploring"),
+        "asset_type": analysis.get("asset_type", ""),
+        "target_use_case": analysis.get("target_use_case", ""),
+        "thesis_lens_key": analysis.get("thesis_lens_key", ""),
+        "thesis_lens_label": analysis.get("thesis_lens_label", ""),
+        "critical_dependencies": analysis.get("critical_dependencies", []) if isinstance(analysis.get("critical_dependencies"), list) else [],
+        "missing_data_notes": analysis.get("missing_data_notes", []) if isinstance(analysis.get("missing_data_notes"), list) else [],
+        "approval_state": analysis.get("approval_state", ""),
     }
     payload.update({
+        "playbook_key": workspace.playbook_key or "",
         "thesis": workspace.thesis or "",
         "analysis": analysis_payload,
         "tags": workspace.tags_json if isinstance(workspace.tags_json, list) else [],
@@ -1699,6 +1720,7 @@ def auth_logout(request: Request, db: Session = Depends(get_db)):
 # ═══════════════════════════════════════════════════════════════════════
 
 class ResearchWorkspaceUpsert(BaseModel):
+    playbook_key: str | None = None
     thesis: str | None = None
     analysis: dict | None = None
     tags: list[str] | None = None
@@ -1746,6 +1768,7 @@ def upsert_research_workspace(
 ):
     user_key = _get_research_user(request, db)
     workspace = _get_or_create_workspace(db, user_key, geo_key)
+    workspace.playbook_key = (body.playbook_key or "").strip() or None
     workspace.thesis = (body.thesis or "").strip()
     existing_analysis = workspace.analysis_json if isinstance(workspace.analysis_json, dict) else {}
     merged_analysis = {
@@ -1755,6 +1778,13 @@ def upsert_research_workspace(
         "key_risks": body.analysis.get("key_risks", existing_analysis.get("key_risks", [])) if body.analysis else existing_analysis.get("key_risks", []),
         "catalysts": body.analysis.get("catalysts", existing_analysis.get("catalysts", [])) if body.analysis else existing_analysis.get("catalysts", []),
         "decision_state": body.analysis.get("decision_state", existing_analysis.get("decision_state", "exploring")) if body.analysis else existing_analysis.get("decision_state", "exploring"),
+        "asset_type": body.analysis.get("asset_type", existing_analysis.get("asset_type", "")) if body.analysis else existing_analysis.get("asset_type", ""),
+        "target_use_case": body.analysis.get("target_use_case", existing_analysis.get("target_use_case", "")) if body.analysis else existing_analysis.get("target_use_case", ""),
+        "thesis_lens_key": body.analysis.get("thesis_lens_key", existing_analysis.get("thesis_lens_key", "")) if body.analysis else existing_analysis.get("thesis_lens_key", ""),
+        "thesis_lens_label": body.analysis.get("thesis_lens_label", existing_analysis.get("thesis_lens_label", "")) if body.analysis else existing_analysis.get("thesis_lens_label", ""),
+        "critical_dependencies": body.analysis.get("critical_dependencies", existing_analysis.get("critical_dependencies", [])) if body.analysis else existing_analysis.get("critical_dependencies", []),
+        "missing_data_notes": body.analysis.get("missing_data_notes", existing_analysis.get("missing_data_notes", [])) if body.analysis else existing_analysis.get("missing_data_notes", []),
+        "approval_state": body.analysis.get("approval_state", existing_analysis.get("approval_state", "")) if body.analysis else existing_analysis.get("approval_state", ""),
     }
     workspace.analysis_json = merged_analysis
     workspace.tags_json = [
