@@ -1,4 +1,4 @@
-import { PG } from '../config.js';
+import { PG, RESEARCH_GRID_VIEW_KEY } from '../config.js';
 import { $, $$, $int, $pct, benchmarkMethodBand, droughtRiskBand, floodRiskBand, sourceBand, parseTags, toast } from '../formatting.js';
 import {
   api,
@@ -19,6 +19,7 @@ import {
   hydrateResearchRows,
   ResearchRecordPanel,
 } from '../shared/research-grid.jsx';
+import { persistGridViewState, readStoredGridViewState } from '../shared/grid-view-state.js';
 import { getThesisLens, getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 
@@ -41,7 +42,7 @@ export function ResearchWorkspace({
   const [researchSearch, setResearchSearch] = React.useState('');
   const [researchStatusFilter, setResearchStatusFilter] = React.useState('');
   const [researchThesisFilter, setResearchThesisFilter] = React.useState('');
-  const [researchViewConfig, setResearchViewConfig] = React.useState(() => getDefaultResearchViewState());
+  const [researchViewConfig, setResearchViewConfig] = React.useState(() => readStoredGridViewState(RESEARCH_GRID_VIEW_KEY, getDefaultResearchViewState));
   const [thesis, setThesis] = React.useState('');
   const [tagsInput, setTagsInput] = React.useState('');
   const [status, setStatus] = React.useState('exploring');
@@ -156,6 +157,10 @@ export function ResearchWorkspace({
     setMissingDataNotesInput((rec.analysis?.missing_data_notes || []).join(', '));
     setApprovalState(rec.analysis?.approval_state || '');
   }, [county, store, params?.assetType, params?.targetUseCase, params?.thesisKey, activeThesisKey]);
+
+  React.useEffect(() => {
+    persistGridViewState(RESEARCH_GRID_VIEW_KEY, researchViewConfig);
+  }, [researchViewConfig]);
 
   React.useEffect(() => {
     if (!county) return;
@@ -478,16 +483,19 @@ export function ResearchWorkspace({
           </select>
         </div>
         <div style={{display:'flex',justifyContent:'flex-end'}}>
-          {hasResearchFilters && <button
-            className="btn btn-sm"
-            onClick={() => {
-              setResearchSearch('');
-              setResearchStatusFilter('');
-              setResearchThesisFilter('');
-            }}
-          >
-            Clear Filters
-          </button>}
+          <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
+            <button className="btn btn-sm" onClick={() => setResearchViewConfig(getDefaultResearchViewState())}>Reset Grid View</button>
+            {hasResearchFilters && <button
+              className="btn btn-sm"
+              onClick={() => {
+                setResearchSearch('');
+                setResearchStatusFilter('');
+                setResearchThesisFilter('');
+              }}
+            >
+              Clear Filters
+            </button>}
+          </div>
         </div>
       </div>
       {storeLoading && records.length === 0 ? <Loading/>

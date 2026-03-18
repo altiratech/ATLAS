@@ -6,11 +6,13 @@ import {
   $pct,
   toast,
 } from '../formatting.js';
+import { PORTFOLIO_GRID_VIEW_KEY } from '../config.js';
 import { api } from '../auth.js';
 import { ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, DataGrid } from '../shared/data-ui.jsx';
 import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
 import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
+import { persistGridViewState, readStoredGridViewState } from '../shared/grid-view-state.js';
 import {
   getDefaultPortfolioViewState,
   getPortfolioColumns,
@@ -95,7 +97,7 @@ export function PortfolioPage({
   const [savingHolding, setSavingHolding] = React.useState(false);
   const [holdingSearch, setHoldingSearch] = React.useState('');
   const [holdingReadFilter, setHoldingReadFilter] = React.useState('');
-  const [portfolioViewConfig, setPortfolioViewConfig] = React.useState(() => getDefaultPortfolioViewState());
+  const [portfolioViewConfig, setPortfolioViewConfig] = React.useState(() => readStoredGridViewState(PORTFOLIO_GRID_VIEW_KEY, getDefaultPortfolioViewState));
 
   const loadPortfolios = React.useCallback(async () => {
     setLoading(true);
@@ -136,6 +138,10 @@ export function PortfolioPage({
     if (!selId) return;
     loadDetail(selId);
   }, [selId, loadDetail]);
+
+  React.useEffect(() => {
+    persistGridViewState(PORTFOLIO_GRID_VIEW_KEY, portfolioViewConfig);
+  }, [portfolioViewConfig]);
 
   const createPortfolio = async () => {
     if (!newName.trim()) return;
@@ -450,10 +456,13 @@ export function PortfolioPage({
             </select>
           </div>
           <div style={{display:'flex',justifyContent:'flex-end'}}>
-            {hasHoldingFilters && <button className="btn btn-sm" onClick={() => {
-              setHoldingSearch('');
-              setHoldingReadFilter('');
-            }}>Clear Filters</button>}
+            <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
+              <button className="btn btn-sm" onClick={() => setPortfolioViewConfig(getDefaultPortfolioViewState())}>Reset Grid View</button>
+              {hasHoldingFilters && <button className="btn btn-sm" onClick={() => {
+                setHoldingSearch('');
+                setHoldingReadFilter('');
+              }}>Clear Filters</button>}
+            </div>
           </div>
         </div>
         <DataGrid
