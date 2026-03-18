@@ -1,9 +1,9 @@
 import { APP_NAME, PG } from '../config.js';
 import { api } from '../auth.js';
-import { playbookBadgeClass, playbookNavLabel } from '../shared/playbooks.js';
+import { playbookBadgeClass } from '../shared/playbooks.js';
 import { thesisBadgeClass } from '../shared/thesis-lenses.js';
 
-function CmdPalette({ isOpen, onClose, nav, activePlaybook, activeThesis }) {
+function CmdPalette({ isOpen, onClose, nav, activeThesis }) {
   const [q, setQ] = React.useState('');
   const [sel, setSel] = React.useState(0);
   const [results, setResults] = React.useState([]);
@@ -32,11 +32,10 @@ function CmdPalette({ isOpen, onClose, nav, activePlaybook, activeThesis }) {
   if (!isOpen) return null;
 
   const pages = [
+    { name: 'About', desc: 'What Atlas is, how it works, and where it is going', action: () => nav(PG.ABOUT) },
     { name: 'Home', desc: 'Choose a perspective, pick a thesis lens, and resume work', action: () => nav(PG.HOME) },
-    { name: 'Mission', desc: 'What this platform does and why', action: () => nav(PG.MISSION) },
-    { name: 'About', desc: 'Project purpose and scope', action: () => nav(PG.ABOUT) },
     {
-      name: activePlaybook?.label || 'Perspective Home',
+      name: 'Perspective Home',
       desc: activeThesis?.label
         ? `Current perspective home with ${activeThesis.label}`
         : 'Current perspective home',
@@ -96,7 +95,7 @@ function CmdPalette({ isOpen, onClose, nav, activePlaybook, activeThesis }) {
 
 const titles = {
   [PG.HOME]: 'Atlas Home',
-  [PG.MISSION]: 'Mission',
+  [PG.MISSION]: 'About',
   [PG.ABOUT]: 'About',
   [PG.RESEARCH]: 'Research Workspace',
   [PG.DASH]: 'Perspective Home',
@@ -112,20 +111,19 @@ const titles = {
   [PG.SOURCES]: 'Data Sources',
 };
 
-function buildNavItems(activePlaybook) {
+function buildNavItems() {
   return [
     {
       section: 'Start Here',
       items: [
-        { id: PG.HOME, label: 'Home', icon: 'HM' },
-        { id: PG.MISSION, label: 'Mission', icon: 'MN' },
         { id: PG.ABOUT, label: 'About', icon: 'AB' },
+        { id: PG.HOME, label: 'Home', icon: 'HM' },
       ],
     },
     {
       section: 'Explore',
       items: [
-        { id: PG.DASH, label: playbookNavLabel(activePlaybook), icon: 'PB' },
+        { id: PG.DASH, label: 'Perspective Home', icon: 'PB' },
         { id: PG.SCREEN, label: 'Screener', icon: 'SC' },
         { id: PG.WATCH, label: 'Watchlist', icon: 'WL' },
         { id: PG.COMPARE, label: 'Comparison', icon: 'CP' },
@@ -168,7 +166,7 @@ export function AppShell({
   toasts,
   dismissToast,
 }) {
-  const navItems = React.useMemo(() => buildNavItems(activePlaybook), [activePlaybook]);
+  const navItems = React.useMemo(() => buildNavItems(), []);
   const authSourceLabel = authSource === 'edge_identity'
     ? 'edge identity'
     : authSource === 'dev_header'
@@ -217,7 +215,7 @@ export function AppShell({
       </div>}
       <div className="content">{content}</div>
     </div>
-    <CmdPalette isOpen={cmdOpen} onClose={() => setCmdOpen(false)} nav={nav} activePlaybook={activePlaybook} activeThesis={activeThesis}/>
+    <CmdPalette isOpen={cmdOpen} onClose={() => setCmdOpen(false)} nav={nav} activeThesis={activeThesis}/>
     <div className="toast-c">{toasts.map((t) => <div key={t.id} className={`toast ${t.type === 'ok' ? 'ok' : t.type === 'err' ? 'err' : ''}`}>
       <div style={{ fontSize: '.85rem', flex: 1 }}>{t.msg}</div>
       <button className="toast-x" onClick={() => dismissToast(t.id)}>✕</button>

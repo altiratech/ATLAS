@@ -18,7 +18,7 @@ import { PortfolioPage } from './features/portfolio-page.jsx';
 import { ResearchWorkspace } from './features/research-workspace.jsx';
 import { ScenarioLab } from './features/scenario-lab.jsx';
 import { Screener } from './features/screener.jsx';
-import { AboutPage, AtlasHomePage, MissionPage } from './features/start-pages.jsx';
+import { AboutPage, AtlasHomePage } from './features/start-pages.jsx';
 import { getPlaybook } from './shared/playbooks.js';
 import { getDefaultThesisLensKey, getThesisLens, getThesisLensesForPlaybook } from './shared/thesis-lenses.js';
 
@@ -197,8 +197,8 @@ function App() {
     );
     switch(pg) {
       case PG.HOME: return <AtlasHomePage nav={nav} researchUser={researchUser} {...playbookProps} {...thesisProps}/>;
-      case PG.MISSION: return <MissionPage nav={nav} {...playbookProps} {...thesisProps}/>;
-      case PG.ABOUT: return <AboutPage/>;
+      case PG.MISSION: return <AboutPage nav={nav} {...playbookProps} {...thesisProps}/>;
+      case PG.ABOUT: return <AboutPage nav={nav} {...playbookProps} {...thesisProps}/>;
       case PG.RESEARCH: return <ResearchWorkspace addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
       case PG.DASH: return <Dashboard addToast={addToast} nav={nav} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
       case PG.SCREEN: return <Screener addToast={addToast} nav={nav} params={pp} {...assumptionProps} {...playbookProps} {...thesisProps}/>;

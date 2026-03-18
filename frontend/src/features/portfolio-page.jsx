@@ -104,13 +104,15 @@ export function PortfolioPage({
     setLoading(true);
     try {
       const d = await api('/portfolios');
-      setPortfolios(d);
+      const rows = Array.isArray(d) ? d : [];
+      setPortfolios(rows);
       setSelId((current) => {
-        if (current && d.some((p) => String(p.id) === String(current))) return current;
-        return d.length > 0 ? d[0].id : null;
+        if (current && rows.some((p) => String(p.id) === String(current))) return current;
+        return rows.length > 0 ? rows[0].id : null;
       });
     } catch {
       setPortfolios([]);
+      setSelId(null);
     } finally {
       setLoading(false);
     }
@@ -122,6 +124,9 @@ export function PortfolioPage({
     setDetailErr(null);
     try {
       const d = await api(appendAssumptionParam(`/portfolios/${portfolioId}`, activeAssumptionSetId));
+      if (!d || typeof d !== 'object' || Array.isArray(d)) {
+        throw new Error('Invalid portfolio detail response');
+      }
       setDetail(d);
     } catch (e) {
       setDetail(null);
@@ -137,7 +142,7 @@ export function PortfolioPage({
 
   React.useEffect(() => {
     if (!params?.portfolioId) return;
-    setSelId(params.portfolioId);
+    setSelId(String(params.portfolioId));
   }, [params?.portfolioId]);
 
   React.useEffect(() => {
@@ -216,8 +221,6 @@ export function PortfolioPage({
     }
   };
 
-  if (loading) return <Loading/>;
-
   const holdingsWithRead = (detail?.holdings || []).map((holding) => {
     const read = evaluateAtlasCountyRead({
       metrics: holding.metrics || {},
@@ -273,6 +276,8 @@ export function PortfolioPage({
 
   const riskSummary = detail?.risk_summary || {};
   const weightedMetrics = detail?.weighted_metrics || {};
+
+  if (loading) return <Loading/>;
 
   return <div>
     <div className="card" style={{marginBottom:'1.5rem'}}>

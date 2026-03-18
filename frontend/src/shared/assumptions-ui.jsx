@@ -70,6 +70,7 @@ export function AssumptionContextBar({
   title = 'Assumption Set',
   description = 'Model outputs on this page use the active assumption set.',
 }) {
+  const safeSets = Array.isArray(assumptionSets) ? assumptionSets : [];
   return <div className="card" style={{marginBottom:'.7rem',padding:'.65rem .75rem'}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.75rem',flexWrap:'wrap'}}>
       <div>
@@ -80,7 +81,7 @@ export function AssumptionContextBar({
       <div className="fg" style={{margin:0,minWidth:'260px',flex:'0 1 320px'}}>
         <label>Active Assumption Set</label>
         <select value={activeAssumptionSetId ? String(activeAssumptionSetId) : ''} onChange={(e) => onChange?.(e.target.value)}>
-          {assumptionSets.map((set) => <option key={set.id} value={String(set.id)}>{assumptionSetLabel(set)}</option>)}
+          {safeSets.map((set) => <option key={set.id} value={String(set.id)}>{assumptionSetLabel(set)}</option>)}
         </select>
       </div>
     </div>

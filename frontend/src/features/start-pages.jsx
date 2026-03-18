@@ -15,6 +15,7 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
   const [savedViews, setSavedViews] = React.useState([]);
   const [portfolios, setPortfolios] = React.useState([]);
   const [scenarioRuns, setScenarioRuns] = React.useState([]);
+  const perspectivesRef = React.useRef(null);
 
   React.useEffect(() => {
     setLoading(true);
@@ -24,10 +25,10 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
       api('/portfolios').catch(() => []),
       api('/research/scenario-runs/recent?limit=6').catch(() => []),
     ]).then(([researchRows, screenRows, portfolioRows, runRows]) => {
-      setResearch((researchRows || []).slice(0, 6));
-      setSavedViews((screenRows || []).slice(0, 6));
-      setPortfolios((portfolioRows || []).slice(0, 6));
-      setScenarioRuns((runRows || []).slice(0, 6));
+      setResearch((Array.isArray(researchRows) ? researchRows : []).slice(0, 6));
+      setSavedViews((Array.isArray(screenRows) ? screenRows : []).slice(0, 6));
+      setPortfolios((Array.isArray(portfolioRows) ? portfolioRows : []).slice(0, 6));
+      setScenarioRuns((Array.isArray(runRows) ? runRows : []).slice(0, 6));
     }).finally(() => setLoading(false));
   }, []);
 
@@ -67,18 +68,18 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
       <h2 className="hero-h">{APP_NAME}</h2>
       <p className="hero-p">{APP_TAGLINE}. Atlas is one geo/opportunity platform organized around perspectives and thesis lenses, with shared tools for screening, underwriting, research, and portfolio work.</p>
       <div className="hero-actions">
-        <button className="btn btn-p" onClick={() => openPlaybook(activePlaybookKey || PLAYBOOKS[0].key)}>Open {activePlaybook?.label || 'Perspective'}</button>
-        <button className="btn" onClick={() => nav(PG.MISSION)}>Read Mission</button>
+        <button className="btn btn-p" onClick={() => perspectivesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Explore Perspectives</button>
+        <button className="btn" onClick={() => nav(PG.ABOUT)}>About Atlas</button>
       </div>
     </div>
 
-    <div className="card" style={{ marginBottom: '.9rem' }}>
+    <div ref={perspectivesRef} className="card" style={{ marginBottom: '.9rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '.7rem', flexWrap: 'wrap' }}>
         <div>
           <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Perspectives</h3>
           <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Choose the default universe and workflow you want Atlas to optimize around. Perspectives provide strong defaults, but the shared tools remain editable and reusable.</div>
         </div>
-        {activePlaybook && <span className={`badge ${playbookBadgeClass(activePlaybook.status)}`}>ACTIVE {activePlaybook.label}</span>}
+        {activePlaybook && <span className={`badge ${playbookBadgeClass(activePlaybook.status)}`}>CURRENT {activePlaybook.label}</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.75rem' }}>
         {PLAYBOOKS.map((playbook) => {
@@ -112,7 +113,7 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
           <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Thesis Lenses</h3>
           <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>A thesis lens is the investment question Atlas applies to the current perspective. It changes how we frame the workflow without pretending the underlying data is broader than it is.</div>
         </div>
-        {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>ACTIVE {activeThesis.label}</span>}
+        {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>CURRENT {activeThesis.label}</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '.75rem' }}>
         {availableLenses.map((lens) => {
@@ -222,93 +223,34 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
   </div>;
 }
 
-export function MissionPage({ nav, activePlaybook, activeThesis }) {
+export function AboutPage({ nav, activePlaybook, activeThesis }) {
+  const roadmap = [
+    { phase: 'Now', body: 'Atlas Home, the live Farmland Income perspective, and the shared underwriting/research spine define the current product.' },
+    { phase: 'Next', body: 'Additional land perspectives should be added only when they have real evidence stacks, real model packs, and reusable value inside the shared tools.' },
+    { phase: 'Later', body: 'Open sync, export, API, and AI layers should operate on structured Atlas objects rather than forcing Atlas to become a generic workspace tool.' },
+  ];
   const workflow = [
     { id: '01', title: 'Choose a perspective', body: 'Start with the opportunity universe that matches the job you are trying to do, then let Atlas preload the right evidence and workflow defaults.' },
     { id: '02', title: 'Apply a thesis lens', body: 'Use a lens to tell Atlas what question you are asking of that universe, so the workflow can stay honest about what the current evidence does and does not support.' },
     { id: '03', title: 'Underwrite and pressure test', body: 'Run scenario, credit, acquisition, and refinancing logic before moving anything into a higher-conviction decision state.' },
     { id: '04', title: 'Capture research and aggregation', body: 'Save conviction, compare alternatives, and carry risk and valuation context into portfolio-level views.' },
   ];
-
-  const toolGuide = [
-    { tool: 'Atlas Home', why: 'Choose a perspective, activate a thesis lens, reopen recent work, and route into the right workflow quickly.', next: 'Open the live Farmland Income perspective and choose a lens.' },
-    { tool: 'Perspective Home', why: 'Defines the active universe, current evidence stack, and thesis framing for the workflow you are about to run.', next: 'Launch a starter strategy into Screener.' },
-    { tool: 'Screener', why: 'Filter land opportunities instead of reviewing every county manually.', next: 'Use a preset, then tune filters and save the resulting view.' },
-    { tool: 'County Detail', why: 'Inspect valuation logic, physical evidence, underwriting, and decision signals in one place.', next: 'Open a county and decide whether it belongs in research.' },
-    { tool: 'Research Workspace', why: 'Capture thesis, status, conviction, and decision record context.', next: 'Save a top county and turn it into a defendable investment view.' },
-    { tool: 'Scenario Lab', why: 'Test upside/downside and deal structure assumptions before acting.', next: 'Run a base, downside, and refinancing case.' },
-    { tool: 'Portfolio', why: 'Quantify concentration, hazard, and value gaps across holdings.', next: 'Add a model portfolio and review weighted risk context.' },
-    { tool: 'Data Sources', why: 'Verify where every input comes from and how often it updates.', next: 'Confirm source lineage before presenting outputs.' },
-  ];
-  const buildout = [
-    { status: 'Live', title: 'Farmland Income Perspective', body: 'Atlas now has a real farmland entry point with shared tools for screening, county analysis, underwriting, research, and portfolio synthesis.' },
-    { status: 'In Build', title: 'Additional Land Perspectives', body: 'Industrial, powered-site, and development-oriented perspectives should reuse the same workflow spine once their evidence layers and model packs are real enough.' },
-    { status: 'Live', title: 'Shared Tool Spine', body: 'Screener, County Detail, Scenario Lab, Research Workspace, and Portfolio remain shared tools rather than separate mini-products.' },
-    { status: 'Planned', title: 'Open Sync Layer', body: 'Saved views, research records, scenario runs, and portfolio summaries should become cleaner sync/export objects for future integrations and AI workflows.' },
-  ];
-
-  return <div>
-    <div className="card hero-card">
-      <div className="hero-k">Mission</div>
-      <h2 className="hero-h">{APP_NAME}</h2>
-      <p className="hero-p">{APP_TAGLINE}. Atlas is a thesis-driven geo/opportunity intelligence and underwriting product with shared tools, editable perspectives, and a structure designed to support future sync, API, and AI layers without turning into a generic database app.</p>
-      <div className="hero-actions">
-        <button className="btn btn-p" onClick={() => nav(PG.HOME)}>Open Atlas Home</button>
-        <button className="btn" onClick={() => nav(PG.ABOUT)}>Read About</button>
-      </div>
-    </div>
-
-    {(activePlaybook || activeThesis) && <div className="card" style={{ marginBottom: '.8rem' }}>
-      <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-        {activePlaybook && <span className={`badge ${playbookBadgeClass(activePlaybook.status)}`}>ACTIVE PERSPECTIVE {activePlaybook.label}</span>}
-        {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>ACTIVE LENS {activeThesis.label}</span>}
-      </div>
-    </div>}
-
-    <div className="workflow-grid">
-      {workflow.map((step) => <div key={step.id} className="workflow-card">
-        <div className="workflow-step">Step {step.id}</div>
-        <div className="workflow-h">{step.title}</div>
-        <div className="workflow-p">{step.body}</div>
-      </div>)}
-    </div>
-
-    <div className="card" style={{ marginBottom: '.8rem' }}>
-      <h3 style={{ fontSize: '.94rem', marginBottom: '.55rem' }}>Why Each Tool Exists</h3>
-      <div className="why-grid">
-        {toolGuide.map((item) => <div key={item.tool} className="why-row">
-          <div className="why-tool">{item.tool}</div>
-          <div className="why-why">{item.why}</div>
-          <div className="why-next">{item.next}</div>
-        </div>)}
-      </div>
-    </div>
-
-    <div className="card">
-      <h3 style={{ fontSize: '.94rem', marginBottom: '.55rem' }}>Current Buildout</h3>
-      <div className="why-grid">
-        {buildout.map((item) => <div key={item.title} className="why-row">
-          <div className="why-tool"><span className={`badge ${item.status === 'Live' ? 'badge-g' : item.status === 'In Build' ? 'badge-b' : item.status === 'Partial' ? 'badge-a' : 'badge-r'}`}>{item.status}</span></div>
-          <div className="why-why" style={{ fontWeight: 600, color: 'var(--text1)' }}>{item.title}</div>
-          <div className="why-next">{item.body}</div>
-        </div>)}
-      </div>
-    </div>
-  </div>;
-}
-
-export function AboutPage() {
-  const roadmap = [
-    { phase: 'Now', body: 'Atlas Home, the live Farmland Income perspective, and the shared underwriting/research spine define the current product.' },
-    { phase: 'Next', body: 'Additional land perspectives should be added only when they have real evidence stacks, real model packs, and reusable value inside the shared tools.' },
-    { phase: 'Later', body: 'Open sync, export, API, and AI layers should operate on structured Atlas objects rather than forcing Atlas to become a generic workspace tool.' },
-  ];
   return <div>
     <div className="card hero-card" style={{ marginBottom: '.8rem' }}>
       <div className="hero-k">About</div>
       <h2 className="hero-h">{APP_NAME}</h2>
       <p className="hero-p">Altira Atlas is a land intelligence and underwriting platform built to connect perspective-driven discovery, site and county analysis, underwriting, and decision workflow support inside one shared product.</p>
+      <div className="hero-actions">
+        <button className="btn btn-p" onClick={() => nav?.(PG.HOME)}>Open Atlas Home</button>
+      </div>
     </div>
+
+    {(activePlaybook || activeThesis) && <div className="card" style={{ marginBottom: '.8rem' }}>
+      <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+        {activePlaybook && <span className={`badge ${playbookBadgeClass(activePlaybook.status)}`}>CURRENT PERSPECTIVE {activePlaybook.label}</span>}
+        {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>CURRENT LENS {activeThesis.label}</span>}
+      </div>
+    </div>}
 
     <div className="about-grid">
       <div className="about-block">
@@ -327,6 +269,14 @@ export function AboutPage() {
         <div className="about-h">Open-by-Design</div>
         <div className="about-p">Atlas should stay native and specialized, but its core objects need to remain structured enough for future exports, sync adapters, API access, MCP integration, and AI-assisted workflows.</div>
       </div>
+    </div>
+
+    <div className="workflow-grid" style={{ marginBottom: '.8rem' }}>
+      {workflow.map((step) => <div key={step.id} className="workflow-card">
+        <div className="workflow-step">Step {step.id}</div>
+        <div className="workflow-h">{step.title}</div>
+        <div className="workflow-p">{step.body}</div>
+      </div>)}
     </div>
 
     <div className="card">
