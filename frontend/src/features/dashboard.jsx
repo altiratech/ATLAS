@@ -162,7 +162,7 @@ export function Dashboard({
     <div className="card hero-card" style={{ marginBottom: '.9rem' }}>
       <div className="hero-k">Perspective Home</div>
       <h2 className="hero-h">{activePlaybook?.label || 'Farmland Income'}</h2>
-      <p className="hero-p">Use this perspective to launch work quickly. Atlas keeps the universe definition and evidence limits available, but the main job of this page is to help you pick a lens, open a strong starter screen, and resume live underwriting work without reading another stats dashboard first.</p>
+      <p className="hero-p">Use this page as a launcher. Review the active lens, pick a strong starter screen, or resume live work without having to read the full reference context first.</p>
       <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '.75rem' }}>
         <span className="badge badge-b">PERSPECTIVE {activePlaybook?.shortLabel || 'Farmland Income'}</span>
         {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel}</span>}
@@ -172,7 +172,6 @@ export function Dashboard({
       <div className="hero-actions">
         <button className="btn btn-p" onClick={() => nav(PG.SCREEN, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Screener</button>
         <button className="btn" onClick={() => nav(PG.RESEARCH, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Workspace</button>
-        <button className="btn" onClick={() => nav(PG.HOME)}>Back to Atlas Home</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '.55rem', marginTop: '.85rem' }}>
         <div className="sc" style={{ margin: 0 }}>
@@ -200,7 +199,7 @@ export function Dashboard({
 
     {err && <ErrBox title="Perspective Home Error" msg={err}/>}
 
-    <div style={{ display: 'grid', gridTemplateColumns: '1.15fr 1fr', gap: '.9rem', marginBottom: '.9rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '.9rem', marginBottom: '.9rem', alignItems: 'start' }}>
       {activeThesis && <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.7rem' }}>
           <div>
@@ -217,7 +216,7 @@ export function Dashboard({
             <div className="sc-v" style={{ fontSize: '.9rem' }}>{activeThesis.question}</div>
             <div className="sc-c">{activeThesis.description}</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.55rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '.55rem' }}>
             <div className="sc" style={{ margin: 0 }}>
               <div className="sc-l">Atlas Uses Now</div>
               <div style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
@@ -275,7 +274,7 @@ export function Dashboard({
       </div>
     </div>
 
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.9rem', marginBottom: '.9rem' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '.9rem', marginBottom: '.9rem', alignItems: 'start' }}>
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
           <h3 style={{ fontSize: '.95rem' }}>Recent Work in This Perspective</h3>
@@ -344,10 +343,10 @@ export function Dashboard({
           </div>
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '.9rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '.9rem', alignItems: 'start' }}>
         <div className="card" style={{ margin: 0 }}>
           <h3 style={{ fontSize: '.95rem', marginBottom: '.55rem' }}>Observed / Basis-Quality Context</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(160px, 1fr))', gap: '.55rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '.55rem' }}>
             <div className="sc" style={{ margin: 0 }}>
               <div className="sc-l">Median Cash Rent / ac</div>
               <div className="sc-v">{loadingSummary ? '--' : $$(rent.median)}</div>
@@ -400,13 +399,13 @@ export function Dashboard({
     <details className="card">
       <summary style={{ cursor: 'pointer', fontSize: '.96rem', fontWeight: 600, marginBottom: '.75rem' }}>Supporting Market Context</summary>
       <div style={{ fontSize: '.78rem', color: 'var(--text2)', marginBottom: '.75rem' }}>These panels support the perspective story. They are context and diagnostics, not the primary decision path.</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem', marginBottom: '.9rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '.75rem', marginBottom: '.9rem', alignItems: 'start' }}>
         <LineChart title="Median Cash Rent / ac" series={charts.cash_rent_median_by_year || []} color="var(--accent)" unitFormatter={(v) => $$(v)} />
         <LineChart title="Median Implied Cap Rate" series={charts.cap_rate_median_by_year || []} color="var(--accent-2)" unitFormatter={(v) => $pct(v)} />
         <LineChart title="Median Fair Value / ac" series={charts.fair_value_median_by_year || []} color="var(--accent)" unitFormatter={(v) => $$(v)} />
         <LineChart title="Treasury 10Y Model Driver" series={charts.treasury_10y_by_year || []} color="var(--line-strong)" unitFormatter={(v) => $pct(v)} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.9rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '.9rem', alignItems: 'start' }}>
         <div>
           <h4 style={{ fontSize: '.86rem', marginBottom: '.45rem' }}>Modeled County Coverage by State</h4>
           <STable
