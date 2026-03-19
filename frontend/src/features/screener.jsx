@@ -658,134 +658,163 @@ export function Screener({
       title="Screening Assumptions"
       description={`${activePlaybook?.label || 'This perspective'} uses this active assumption set for screening, saved views, and any downstream backtests.`}
     />
-    <div className="card" style={{marginBottom:'1.5rem'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.75rem'}}>
-        <h3 style={{fontSize:'1rem'}}>Filter Builder</h3>
-        <div style={{display:'flex',gap:'.5rem'}}>
-          <button className="btn btn-sm" onClick={resetFilters}>Reset Filters</button>
-          <button className="btn btn-sm" onClick={exportCSV}>Export CSV</button>
-          <button className="btn btn-sm btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Screen'}</button>
-        </div>
-      </div>
-      {activeThesis && <div className="sc" style={{ marginTop: 0, marginBottom: '.75rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.45rem' }}>
-          <div>
-            <div className="sc-l">Active Thesis Lens</div>
-            <div className="sc-v" style={{ fontSize: '.92rem' }}>{activeThesis.label}</div>
-            <div className="sc-c">{activeThesis.question}</div>
+
+    <div className="card hero-card" style={{ marginBottom: '.9rem' }}>
+      <div className="hero-k">Screener</div>
+      <h2 className="hero-h">{activePlaybook?.label || 'Farmland Income'} Screening</h2>
+      <p className="hero-p">
+        Build a defendable first pass, run it, then turn the best counties into saved views or research work. This page should feel like a working surface, not a tutorial.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.55rem', marginBottom: '.85rem' }}>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Active Lens</div>
+          <div style={{ fontSize: '.92rem', fontWeight: 600 }}>{activeThesis?.label || '--'}</div>
+          <div style={{ fontSize: '.72rem', color: 'var(--text2)', marginTop: '.22rem' }}>
+            {activeThesis?.question || 'Choose the investment question you want Atlas to frame this screen around.'}
           </div>
-          <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>{activeThesis.statusLabel}</span>
         </div>
-        <div style={{ fontSize: '.76rem', color: 'var(--text2)', marginBottom: '.3rem' }}>
-          <strong style={{ color: 'var(--text1)' }}>Atlas uses now:</strong> {activeThesis.nowSignals.join(', ')}
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Reusable Filters</div>
+          <div className="sc-v" style={{ fontSize: '.95rem' }}>{reusableFilters.length}</div>
+          <div style={{ fontSize: '.72rem', color: 'var(--text2)' }}>
+            {liveOnlyFilters.length > 0 ? `${liveOnlyFilters.length} live-only controls layered on this pass.` : 'No live-only controls layered on this pass yet.'}
+          </div>
         </div>
-        <div style={{ fontSize: '.76rem', color: 'var(--text2)' }}>
-          <strong style={{ color: 'var(--text1)' }}>Use carefully:</strong> {activeThesis.gapSignals.join(', ')}
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Best Next Move</div>
+          <div style={{ fontSize: '.82rem', color: 'var(--text1)', lineHeight: 1.35 }}>
+            Add reusable filters first. Then tune this pass with hazards, soil, power, and basis controls before you run the grid.
+          </div>
         </div>
-      </div>}
-      <CoreFilterBuilder filters={coreFilters} onChange={setCoreFilters} />
-      <div style={{ fontSize: '.72rem', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: '.45rem' }}>
-        Advanced + Live-Only Controls
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'.75rem'}}>
-        <div className="fg"><label>Thesis Lens</label>
-          <select value={activeThesisKey || ''} onChange={e => applyThesisLens(e.target.value, true)}>
-            {thesisLenses.map((lens) => <option key={lens.key} value={lens.key}>{lens.label}</option>)}
-          </select>
+      <div className="hero-actions">
+        <button className="btn btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Screen'}</button>
+        <button className="btn" onClick={resetFilters}>Reset Filters</button>
+        <button className="btn" onClick={exportCSV}>Export CSV</button>
+      </div>
+    </div>
+
+    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.25fr) minmax(320px,.9fr)', gap: '.9rem', marginBottom: '.9rem', alignItems: 'start' }}>
+      <div className="card">
+        <div style={{ marginBottom: '.7rem' }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>Build Screen</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Start with reusable filters, then layer in the current-pass controls that should not become part of the durable saved-view contract.</div>
         </div>
-        <div className="fg"><label>Evidence Preset</label>
-          <select value={preset} onChange={e => applyPreset(e.target.value)}>
-            <option value="">None</option>
-            <option value="quality_land">High-Quality Land</option>
-            <option value="resilient_value">Resilient Value</option>
-            <option value="irrigated_quality">Irrigated Quality</option>
-            <option value="decision_ready">Decision-Ready Counties</option>
-            <option value="ag_transition_thesis">Ag Transition Thesis</option>
-            <option value="resilient_production_base">Resilient Production Base</option>
-          </select>
+        <CoreFilterBuilder filters={coreFilters} onChange={setCoreFilters} />
+        <div style={{ fontSize: '.72rem', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.12em', marginBottom: '.45rem' }}>
+          Tune This Pass
         </div>
-        <div className="fg"><label>Min Power Index</label><input type="number" step="1" value={minPowerIndex} onChange={e => setMinPowerIndex(e.target.value)} placeholder="e.g. 80"/></div>
-        <div className="fg"><label>Max Power Price</label><input type="number" step="0.1" value={maxPowerPrice} onChange={e => setMaxPowerPrice(e.target.value)} placeholder="c/kWh"/></div>
-        <div className="fg"><label>Max Drought Risk</label><input type="number" step="1" value={maxDroughtRisk} onChange={e => setMaxDroughtRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
-        <div className="fg"><label>Max Flood Risk</label><input type="number" step="1" value={maxFloodRisk} onChange={e => setMaxFloodRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
-        <div className="fg"><label>Min NRCS Farmland %</label><input type="number" step="1" value={minSoilFarmlandPct} onChange={e => setMinSoilFarmlandPct(e.target.value)} placeholder="0-100, higher is stronger"/></div>
-        <div className="fg"><label>Z Cap Min</label><input type="number" step="0.1" value={zCapMin} onChange={e => setZCapMin(e.target.value)} placeholder="e.g. 1.0"/></div>
-        <div className="fg"><label>Z Cap Max</label><input type="number" step="0.1" value={zCapMax} onChange={e => setZCapMax(e.target.value)} placeholder="e.g. 2.5"/></div>
-        <div className="fg"><label>Z Fair Min</label><input type="number" step="0.1" value={zFairMin} onChange={e => setZFairMin(e.target.value)} placeholder="e.g. -1.0"/></div>
-        <div className="fg"><label>Z Fair Max</label><input type="number" step="0.1" value={zFairMax} onChange={e => setZFairMax(e.target.value)} placeholder="e.g. 1.0"/></div>
-        <div className="fg"><label>Z Rent Min</label><input type="number" step="0.1" value={zRentMin} onChange={e => setZRentMin(e.target.value)} placeholder="e.g. -0.5"/></div>
-        <div className="fg"><label>Z Rent Max</label><input type="number" step="0.1" value={zRentMax} onChange={e => setZRentMax(e.target.value)} placeholder="e.g. 1.5"/></div>
-        <div className="fg"><label>State</label><input type="text" value={state} onChange={e => setState(e.target.value)} placeholder="e.g. IA"/></div>
-        <div className="fg"><label>Benchmark Basis</label>
-          <select value={basisFilter} onChange={e => setBasisFilter(e.target.value)}>
-            <option value="">All basis types</option>
-            <option value="county_observed">County observed</option>
-            <option value="rent_multiple_proxy">Rent multiple proxy</option>
-            <option value="mixed_fallback">Mixed county/state</option>
-            <option value="state_fallback">State fallback</option>
-            <option value="national_fallback">National fallback</option>
-          </select>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:'.75rem'}}>
+          <div className="fg"><label>Thesis Lens</label>
+            <select value={activeThesisKey || ''} onChange={e => applyThesisLens(e.target.value, true)}>
+              {thesisLenses.map((lens) => <option key={lens.key} value={lens.key}>{lens.label}</option>)}
+            </select>
+          </div>
+          <div className="fg"><label>Evidence Preset</label>
+            <select value={preset} onChange={e => applyPreset(e.target.value)}>
+              <option value="">None</option>
+              <option value="quality_land">High-Quality Land</option>
+              <option value="resilient_value">Resilient Value</option>
+              <option value="irrigated_quality">Irrigated Quality</option>
+              <option value="decision_ready">Decision-Ready Counties</option>
+              <option value="ag_transition_thesis">Ag Transition Thesis</option>
+              <option value="resilient_production_base">Resilient Production Base</option>
+            </select>
+          </div>
+          <div className="fg"><label>Min Power Index</label><input type="number" step="1" value={minPowerIndex} onChange={e => setMinPowerIndex(e.target.value)} placeholder="e.g. 80"/></div>
+          <div className="fg"><label>Max Power Price</label><input type="number" step="0.1" value={maxPowerPrice} onChange={e => setMaxPowerPrice(e.target.value)} placeholder="c/kWh"/></div>
+          <div className="fg"><label>Max Drought Risk</label><input type="number" step="1" value={maxDroughtRisk} onChange={e => setMaxDroughtRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
+          <div className="fg"><label>Max Flood Risk</label><input type="number" step="1" value={maxFloodRisk} onChange={e => setMaxFloodRisk(e.target.value)} placeholder="0-100, lower is safer"/></div>
+          <div className="fg"><label>Min NRCS Farmland %</label><input type="number" step="1" value={minSoilFarmlandPct} onChange={e => setMinSoilFarmlandPct(e.target.value)} placeholder="0-100, higher is stronger"/></div>
+          <div className="fg"><label>Z Cap Min</label><input type="number" step="0.1" value={zCapMin} onChange={e => setZCapMin(e.target.value)} placeholder="e.g. 1.0"/></div>
+          <div className="fg"><label>Z Cap Max</label><input type="number" step="0.1" value={zCapMax} onChange={e => setZCapMax(e.target.value)} placeholder="e.g. 2.5"/></div>
+          <div className="fg"><label>Z Fair Min</label><input type="number" step="0.1" value={zFairMin} onChange={e => setZFairMin(e.target.value)} placeholder="e.g. -1.0"/></div>
+          <div className="fg"><label>Z Fair Max</label><input type="number" step="0.1" value={zFairMax} onChange={e => setZFairMax(e.target.value)} placeholder="e.g. 1.0"/></div>
+          <div className="fg"><label>Z Rent Min</label><input type="number" step="0.1" value={zRentMin} onChange={e => setZRentMin(e.target.value)} placeholder="e.g. -0.5"/></div>
+          <div className="fg"><label>Z Rent Max</label><input type="number" step="0.1" value={zRentMax} onChange={e => setZRentMax(e.target.value)} placeholder="e.g. 1.5"/></div>
+          <div className="fg"><label>State</label><input type="text" value={state} onChange={e => setState(e.target.value)} placeholder="e.g. IA"/></div>
+          <div className="fg"><label>Benchmark Basis</label>
+            <select value={basisFilter} onChange={e => setBasisFilter(e.target.value)}>
+              <option value="">All basis types</option>
+              <option value="county_observed">County observed</option>
+              <option value="rent_multiple_proxy">Rent multiple proxy</option>
+              <option value="mixed_fallback">Mixed county/state</option>
+              <option value="state_fallback">State fallback</option>
+              <option value="national_fallback">National fallback</option>
+            </select>
+          </div>
+          <div className="fg"><label>Sort By</label>
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+              <option value="implied_cap_rate">Cap Rate</option>
+              <option value="fair_value">Fair Value</option>
+              <option value="cash_rent">Cash Rent</option>
+              <option value="benchmark_value">Benchmark Value</option>
+              <option value="access_score">Access Score</option>
+              <option value="yield_productivity_factor">Yield Factor</option>
+              <option value="irrigated_ag_land_acres">Irrigated Acres</option>
+              <option value="power_cost_index">Power Cost Index</option>
+              <option value="industrial_power_price">Power Price</option>
+              <option value="drought_risk_score">Drought Risk</option>
+              <option value="flood_hazard_score">Flood Risk</option>
+              <option value="soil_significant_farmland_share_pct">NRCS Farmland %</option>
+              <option value="soil_rootzone_aws_100cm">AWS 100cm</option>
+              <option value="noi_per_acre">NOI/Acre</option>
+              <option value="rent_multiple">Rent Multiple</option>
+            </select>
+          </div>
         </div>
-        <div className="fg"><label>Sort By</label>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
-            <option value="implied_cap_rate">Cap Rate</option>
-            <option value="fair_value">Fair Value</option>
-            <option value="cash_rent">Cash Rent</option>
-            <option value="benchmark_value">Benchmark Value</option>
-            <option value="access_score">Access Score</option>
-            <option value="yield_productivity_factor">Yield Factor</option>
-            <option value="irrigated_ag_land_acres">Irrigated Acres</option>
-            <option value="power_cost_index">Power Cost Index</option>
-            <option value="industrial_power_price">Power Price</option>
-            <option value="drought_risk_score">Drought Risk</option>
-            <option value="flood_hazard_score">Flood Risk</option>
-            <option value="soil_significant_farmland_share_pct">NRCS Farmland %</option>
-            <option value="soil_rootzone_aws_100cm">AWS 100cm</option>
-            <option value="noi_per_acre">NOI/Acre</option>
-            <option value="rent_multiple">Rent Multiple</option>
-          </select>
+      </div>
+
+      <div className="card">
+        <div style={{ marginBottom: '.7rem' }}>
+          <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>Save / Reopen</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Keep the reusable parts of this screen so you can reopen it later or replay the core metric contract in Backtest.</div>
         </div>
-        <div className="fg"><label>Saved View</label>
+        <div className="sc" style={{ marginTop: 0, marginBottom: '.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.45rem' }}>
+            <div>
+              <div className="sc-l">Current Lens</div>
+              <div className="sc-v" style={{ fontSize: '.92rem' }}>{activeThesis?.label || 'No active thesis lens'}</div>
+              <div className="sc-c">{activeThesis?.question || 'Choose a thesis lens to frame this screen.'}</div>
+            </div>
+            {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>{activeThesis.statusLabel}</span>}
+          </div>
+          {activeThesis && <div style={{ fontSize: '.76rem', color: 'var(--text2)' }}>
+            <strong style={{ color: 'var(--text1)' }}>Atlas uses now:</strong> {activeThesis.nowSignals.join(', ')}
+          </div>}
+        </div>
+        <div className="fg" style={{ marginBottom: '.65rem' }}>
+          <label>Saved View</label>
           <select value={selScreen} onChange={e => setSelScreen(e.target.value)}>
             <option value="">None</option>
             {availableScreens.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
-      </div>
-      <div style={{marginTop:'.85rem',paddingTop:'.85rem',borderTop:'1px solid var(--line)'}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.75rem',flexWrap:'wrap',marginBottom:'.55rem'}}>
-            <div>
-              <div style={{fontSize:'.78rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.18rem'}}>Saved View</div>
-            <div style={{fontSize:'.8rem',color:'var(--text2)'}}>Save the perspective, thesis lens, sort, notes, and reusable core metric filters that Atlas can reopen later.</div>
-          </div>
-          <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
-            <button className="btn btn-sm" onClick={() => persistScreen(false)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save View'}</button>
-            <button className="btn btn-sm btn-p" onClick={() => persistScreen(true)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save View + Backtest'}</button>
-          </div>
+        <div className="fg" style={{margin:0}}>
+          <label>View Name</label>
+          <input type="text" value={screenName} onChange={e => setScreenName(e.target.value)} placeholder="e.g. Defensive Midwest Income View"/>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'minmax(220px,1.4fr) 1fr',gap:'.75rem',alignItems:'start'}}>
-          <div className="fg" style={{margin:0}}>
-            <label>View Name</label>
-            <input type="text" value={screenName} onChange={e => setScreenName(e.target.value)} placeholder="e.g. Defensive Midwest Income View"/>
-          </div>
-          <div className="fg" style={{margin:0}}>
-            <label>View Notes</label>
-            <input type="text" value={screenNotes} onChange={e => setScreenNotes(e.target.value)} placeholder="Optional context for future reopening or sync"/>
-          </div>
+        <div className="fg" style={{marginTop:'.65rem', marginBottom:0}}>
+          <label>View Notes</label>
+          <input type="text" value={screenNotes} onChange={e => setScreenNotes(e.target.value)} placeholder="Optional context for future reopening or sync"/>
         </div>
-        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center'}}>
+        <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center',marginTop:'.75rem'}}>
           <span className="badge badge-b">PERSPECTIVE {(activePlaybook?.shortLabel || 'Farmland Income').toUpperCase()}</span>
           {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel.toUpperCase()}</span>}
           {activeAssumptionSet && <span className="badge badge-a">MODEL {activeAssumptionSet.name} v{activeAssumptionSet.version}</span>}
         </div>
         <div style={{display:'flex',gap:'.4rem',flexWrap:'wrap',alignItems:'center',marginTop:'.55rem'}}>
-            {reusableFilters.length > 0
-              ? reusableFilters.map((filter, idx) => <span key={`${filter.metric}-${idx}`} className="badge badge-g">{filter.metric} {filter.op} {filter.value}</span>)
-              : <span className="badge badge-r">NO REUSABLE CORE FILTERS SET</span>}
-            {liveOnlyFilters.length > 0 && <span className="badge badge-a">LIVE-ONLY: {liveOnlyFilters.join(' • ')}</span>}
+          {reusableFilters.length > 0
+            ? reusableFilters.map((filter, idx) => <span key={`${filter.metric}-${idx}`} className="badge badge-g">{filter.metric} {filter.op} {filter.value}</span>)
+            : <span className="badge badge-r">NO REUSABLE CORE FILTERS SET</span>}
+          {liveOnlyFilters.length > 0 && <span className="badge badge-a">LIVE-ONLY: {liveOnlyFilters.join(' • ')}</span>}
         </div>
-        <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.45rem'}}>
-          Saved views now keep the perspective, thesis lens, notes, sort order, active model basis, and full Screener state for reopening. Backtest still reuses the core metric filters only, because historical replay is not yet wired to every live-only screen control.
+        <div className="rw-actions">
+          <button className="btn btn-sm" onClick={() => persistScreen(false)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save View'}</button>
+          <button className="btn btn-sm btn-p" onClick={() => persistScreen(true)} disabled={savingScreen}>{savingScreen ? 'Saving...' : 'Save View + Backtest'}</button>
+        </div>
+        <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.25rem'}}>
+          Saved views keep the perspective, lens, notes, sort order, active model basis, and full Screener state for reopening. Backtest still reuses the reusable core metric filters only.
         </div>
       </div>
     </div>
@@ -793,26 +822,31 @@ export function Screener({
     {err && <ErrBox title="Screener Error" msg={err}/>}
 
     {results && <div className="card">
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.5rem'}}>
-        <h3 style={{fontSize:'1rem'}}>Results ({basisFilter ? `${visibleRows.length} of ${results.count}` : results.count} counties)</h3>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'.7rem',gap:'.75rem',flexWrap:'wrap'}}>
+        <div>
+          <h3 style={{fontSize:'1rem',marginBottom:'.18rem'}}>Results ({basisFilter ? `${visibleRows.length} of ${results.count}` : results.count} counties)</h3>
+          <div style={{fontSize:'.78rem',color:'var(--text2)'}}>Read the current pass, open the best counties, and turn the defensible ones into research records.</div>
+        </div>
         <span className="badge badge-b">as of {results.as_of}</span>
       </div>
-      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.45rem',maxWidth:'980px'}}>
-        Atlas is showing an underwriting benchmark for the current land lens in each county, not a whole-county urban appraisal. Rows tagged <strong style={{color:'var(--text1)'}}>PROXY</strong> derive benchmark value from county cash rent multiplied by the state land-value rent multiple when direct county land value is unavailable.
+      <div className="workflow-grid" style={{ marginBottom: '.75rem' }}>
+        <div className="workflow-card">
+          <div className="workflow-step">What These Rows Mean</div>
+          <div className="workflow-p">
+            <div style={{ marginBottom: '.32rem' }}>Atlas is showing an underwriting benchmark for the current land lens in each county, not a whole-county urban appraisal.</div>
+            <div style={{ marginBottom: '.32rem' }}>Rows tagged <strong style={{ color: 'var(--text1)' }}>PROXY</strong> derive benchmark value from county cash rent multiplied by the state land-value rent multiple when direct county land value is unavailable.</div>
+            <div>Presets and thesis lenses are evidence-aware. Atlas is not inventing missing factors just to make the screen feel more complete.</div>
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">Current Run Context</div>
+          <div className="workflow-p">
+            <div style={{ marginBottom: '.32rem' }}>Irrigated acreage is a USDA Census water-footprint layer carried forward between census years. NRCS farmland and AWS 100cm are county-weighted SSURGO-derived land-quality signals.</div>
+            {activeThesis && <div>Active lens <strong style={{ color: 'var(--text1)' }}>{activeThesis.label}</strong> is using current Atlas proxies: {activeThesis.nowSignals.join(', ')}. Missing inputs such as {activeThesis.gapSignals.join(', ')} are not being faked into the screen.</div>}
+          </div>
+        </div>
       </div>
-      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
-        Irrigated acreage is a USDA Census water-footprint layer. Atlas carries the latest census baseline forward between census years so it remains visible in current screening views.
-      </div>
-      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
-        NRCS farmland and soil-water fields are county-weighted from the official SSURGO survey areas that overlap each county. Use NRCS Farmland % as a land-quality screen and AWS 100cm as a soil moisture-buffering signal.
-      </div>
-      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
-        New screener presets are evidence-aware, not synthetic. They simply prefill real Atlas filters for land quality, hazard burden, irrigation footprint, and decision-readiness so an analyst can get to a defendable first pass faster.
-      </div>
-      {activeThesis && <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem',maxWidth:'980px'}}>
-        Active lens <strong style={{color:'var(--text1)'}}>{activeThesis.label}</strong> is using current Atlas proxies: {activeThesis.nowSignals.join(', ')}. Missing inputs such as {activeThesis.gapSignals.join(', ')} are not being faked into the screen.
-      </div>}
-      {results.as_of_meta && <div style={{marginBottom:'.55rem',display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
+      {results.as_of_meta && <div style={{marginBottom:'.65rem',display:'flex',gap:'.4rem',flexWrap:'wrap'}}>
         <span className="badge badge-b">PERSPECTIVE {(activePlaybook?.shortLabel || 'Farmland Income').toUpperCase()}</span>
         {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel.toUpperCase()}</span>}
         <span className={`badge ${results.as_of_meta.coverage_pct >= 0.7 ? 'badge-g' : 'badge-r'}`}>

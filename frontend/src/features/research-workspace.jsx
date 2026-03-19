@@ -460,13 +460,46 @@ export function ResearchWorkspace({
 
   return <div>
     {storeErr && <ErrBox title="Research Sync Error" msg={storeErr} onRetry={loadStore}/>}
-    <div className="card" style={{marginBottom:'.7rem'}}>
+    <div className="card hero-card" style={{marginBottom:'.8rem'}}>
+      <div className="hero-k">Research Workspace</div>
+      <h2 className="hero-h">{county ? selectedCountyLabel : 'Open A Record Or Start A Memo'}</h2>
+      <p className="hero-p">
+        {county
+          ? `${sourceLabel ? `Opened from ${sourceLabel}. ` : ''}${hasSavedWorkspace ? 'Existing research workspace loaded. ' : 'New research workspace ready. '}Use this page to turn a county read into a defendable decision record.`
+          : 'Browse the research queue, open a record from the side panel, then move the best counties into the memo editor.'}
+      </p>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'.55rem',marginBottom:'.85rem'}}>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Queue</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{filteredResearchRows.length} in view</div>
+          <div style={{fontSize:'.72rem',color:'var(--text2)'}}>{records.length} total saved records across the current workspace.</div>
+        </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Active Record</div>
+          <div style={{fontSize:'.92rem',fontWeight:600}}>{county ? memoVerdict : 'No county selected'}</div>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.22rem'}}>
+            {county ? `${String(memoStatus || 'exploring').replace(/_/g, ' ')} • conviction ${Math.round(conviction)}/100` : 'Open a record or pick a county to start a new memo.'}
+          </div>
+        </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Best Next Move</div>
+          <div style={{fontSize:'.82rem',color:'var(--text1)',lineHeight:1.35}}>
+            {county ? 'Tighten the thesis, save the memo, then pressure test it in Scenario Lab.' : 'Open a record from the queue first, or select a county and start writing the memo directly.'}
+          </div>
+        </div>
+      </div>
+      <div className="hero-actions">
+        {county && <button className="btn btn-p" onClick={() => nav(PG.COUNTY, {fips: county, playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open County Detail</button>}
+        {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>}
+      </div>
+    </div>
+
+    <div className="card" style={{marginBottom:'.8rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.65rem',flexWrap:'wrap'}}>
         <div>
-          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Research Landing View</div>
-          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.18rem'}}>Open a record before you drop into the memo editor</div>
+          <h3 style={{fontSize:'1rem',marginBottom:'.18rem'}}>Research Queue</h3>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'900px'}}>
-            Browse the full research queue, group records by workflow state or thesis lens, and open the side panel for a quick read before switching the active workspace.
+            Open a record before you drop into the memo editor. Use the side panel for a quick read, then make one county the active workspace.
           </div>
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
@@ -541,59 +574,58 @@ export function ResearchWorkspace({
           />}
         />}
     </div>
-    {county && <div className="card" style={{marginBottom:'.7rem'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
+
+    {county && <div className="card" style={{marginBottom:'.8rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
         <div>
-          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Workflow Context</div>
-          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{selectedCountyLabel}</div>
-          <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
-            {sourceLabel ? `Carried forward from ${sourceLabel}. ` : ''}{hasSavedWorkspace ? 'Existing research workspace loaded.' : 'New research workspace ready to capture thesis and next steps.'}
-          </div>
-        </div>
-        <div className="rw-actions" style={{margin:0}}>
-          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county, playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open County Detail</button>
-          <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>
-        </div>
-      </div>
-    </div>}
-    {county && <div className="card hero-card" style={{marginBottom:'.7rem'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap',marginBottom:'.7rem'}}>
-        <div>
-          <div className="hero-k">Investment Memo Snapshot</div>
-          <div className="hero-h" style={{fontSize:'1.05rem',marginBottom:'.25rem'}}>{memoVerdict} | {selectedCountyLabel}</div>
-          <div className="hero-p" style={{maxWidth:'920px',fontSize:'.82rem'}}>
-            {thesisPreview}
+          <h3 style={{fontSize:'1rem',marginBottom:'.18rem'}}>Active Record</h3>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'900px'}}>
+            Keep the working call, county read, and model basis visible in one place so the memo editor does not have to carry all the context by itself.
           </div>
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
           <span className="badge badge-a">{String(memoStatus || 'exploring').replace(/_/g, ' ').toUpperCase()}</span>
           <span className={`badge ${conviction >= 75 ? 'badge-g' : conviction >= 45 ? 'badge-a' : 'badge-r'}`}>CONVICTION {Math.round(conviction)}/100</span>
           {countyDecisionRead && <span className={`badge ${countyDecisionRead.overall.className}`}>{countyDecisionRead.overall.label}</span>}
-          {assetType && <span className="badge badge-b">{assetType.replace(/_/g, ' ').toUpperCase()}</span>}
-          {targetUseCase && <span className="badge badge-b">{targetUseCase.replace(/_/g, ' ').toUpperCase()}</span>}
           {selectedThesisLens && <span className={`badge ${thesisBadgeClass(selectedThesisLens.status)}`}>{selectedThesisLens.shortLabel.toUpperCase()}</span>}
+          {countyThesisRead && <span className={`badge ${countyThesisRead.overall.className}`}>LENS {countyThesisRead.overall.label}</span>}
         </div>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr 1fr',gap:'.75rem'}}>
+      <div className="workflow-grid" style={{marginBottom:0}}>
         <div className="workflow-card">
-          <div className="workflow-step">Core View</div>
+          <div className="workflow-step">Memo Call</div>
           <div className="workflow-p">
             <div style={{marginBottom:'.32rem'}}><strong>Thesis:</strong> {thesisPreview}</div>
-            <div><strong>Scenario read:</strong> {memoScenarioText}</div>
-            <div style={{marginTop:'.35rem'}}><strong>Underwrite:</strong> {memoAcquisitionText}</div>
+            <div style={{marginBottom:'.32rem'}}><strong>Bull:</strong> {bullCase.trim() || 'Bull case not yet written.'}</div>
+            <div><strong>Bear:</strong> {bearCase.trim() || 'Bear case not yet written.'}</div>
           </div>
         </div>
         <div className="workflow-card">
-          <div className="workflow-step">Upside / Risks</div>
+          <div className="workflow-step">Scenario / Underwrite</div>
           <div className="workflow-p">
-            <div style={{marginBottom:'.32rem'}}><strong>Bull:</strong> {bullCase.trim() || 'Bull case not yet written.'}</div>
-            <div><strong>Bear:</strong> {bearCase.trim() || 'Bear case not yet written.'}</div>
-            {keyRisks.length > 0 && <div style={{marginTop:'.35rem'}}><strong>Key risks:</strong> {keyRisks.join(', ')}</div>}
+            <div style={{marginBottom:'.32rem'}}>{memoScenarioText}</div>
+            <div>{memoAcquisitionText}</div>
+          </div>
+        </div>
+        <div className="workflow-card">
+          <div className="workflow-step">County / Lens Read</div>
+          <div className="workflow-p">
+            {countySummaryLoading
+              ? 'Refreshing the live county read for the active assumption set.'
+              : countyDecisionRead
+                ? <>
+                    <div style={{marginBottom:'.32rem'}}>{countyDecisionRead.overall.summary}</div>
+                    <div style={{marginBottom:'.32rem'}}><strong>Benchmark / Fair:</strong> {$$(countyMetrics.benchmark_value)} / {$$(countyMetrics.fair_value)}</div>
+                    <div style={{marginBottom:'.32rem'}}><strong>Access / DSCR:</strong> {countyMetrics.access_score != null ? `${$(countyMetrics.access_score, 1)} / 100` : 'N/A'} • {countyCredit?.combined_stress_dscr != null ? `${$(countyCredit.combined_stress_dscr, 2)}x stress` : countyMetrics.dscr != null ? `${$(countyMetrics.dscr, 2)}x base` : 'DSCR N/A'}</div>
+                    <div><strong>Hazards:</strong> Drought {countyDrought?.risk_score != null ? $(countyDrought.risk_score, 0) : 'N/A'} • Flood {countyFlood?.hazard_score != null ? $(countyFlood.hazard_score, 0) : 'N/A'}</div>
+                  </>
+                : 'Live county decision context is unavailable right now; the research record still remains editable.'}
           </div>
         </div>
         <div className="workflow-card">
           <div className="workflow-step">What Still Needs Work</div>
           <div className="workflow-p">
+            <div style={{marginBottom:'.32rem'}}><strong>Model basis:</strong> {assumptionSetLabel(activeAssumptionSet)}</div>
             <div style={{marginBottom:'.32rem'}}><strong>Catalysts:</strong> {catalysts.length ? catalysts.join(', ') : 'No catalysts recorded yet.'}</div>
             <div style={{marginBottom:'.32rem'}}><strong>Dependencies:</strong> {criticalDependencies.length ? criticalDependencies.join(', ') : 'No critical dependencies recorded yet.'}</div>
             <div><strong>Missing data:</strong> {missingDataNotes.length ? missingDataNotes.join(', ') : 'No missing-data notes recorded yet.'}</div>
@@ -601,103 +633,9 @@ export function ResearchWorkspace({
         </div>
       </div>
     </div>}
-    <div className="card" style={{marginBottom:'.7rem'}}>
-      <div style={{display:'grid',gridTemplateColumns:'1.2fr 1fr',gap:'.75rem'}}>
-        <div className="sc" style={{margin:0}}>
-          <div className="sc-l">Active Modeling Context</div>
-          <div className="sc-v" style={{fontSize:'.95rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div>
-          <div className="sc-c">Perspective Home, Screener, County Detail, Compare, Backtest, and new Scenario Lab runs all inherit this saved assumption set.</div>
-        </div>
-        <div className="sc" style={{margin:0}}>
-          <div className="sc-l">Research Guardrail</div>
-          <div className="sc-v" style={{fontSize:'.95rem'}}>REPRODUCIBLE</div>
-          <div className="sc-c">Workspace notes do not recalculate on their own, so keep the active set visible when moving between analysis surfaces and saved scenario runs.</div>
-        </div>
-      </div>
-    </div>
-    {county && <div className="card" style={{marginBottom:'.7rem'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.7rem',flexWrap:'wrap'}}>
-        <div>
-          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Decision Record Context</div>
-          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{selectedCountyLabel}</div>
-          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'860px'}}>
-            {countySummaryLoading
-              ? 'Refreshing the live county read for the active assumption set.'
-              : countyDecisionRead
-                ? `${countyDecisionRead.overall.summary} This gives the memo a shared county read instead of forcing Atlas users to reconstruct it from separate pages.`
-                : 'Live county decision context is unavailable right now; the research record still remains editable.'}
-          </div>
-        </div>
-        <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
-          {countyDecisionRead && <span className={`badge ${countyDecisionRead.overall.className}`}>{countyDecisionRead.overall.label}</span>}
-          {selectedThesisLens && countyThesisRead && <span className={`badge ${countyThesisRead.overall.className}`}>LENS {countyThesisRead.overall.label}</span>}
-          {countySummary?.source_quality && <span className={`badge ${sourceBand(countySummary.source_quality).className}`}>{sourceBand(countySummary.source_quality).label}</span>}
-          {countySummary?.benchmark_method && <span className={`badge ${benchmarkMethodBand(countySummary.benchmark_method).className}`}>{benchmarkMethodBand(countySummary.benchmark_method).label}</span>}
-          {countyDrought?.risk_score != null && <span className={`badge ${countyDroughtBadge.className}`}>{countyDroughtBadge.label}</span>}
-          {countyFlood?.hazard_score != null && <span className={`badge ${countyFloodBadge.className}`}>{countyFloodBadge.label}</span>}
-        </div>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'.75rem'}}>
-        <div className="workflow-card">
-          <div className="workflow-step">Decision Signals</div>
-          <div className="workflow-p">
-            {!countyDecisionRead
-              ? 'Select a county to load the shared county read.'
-              : <>
-                  <div style={{marginBottom:'.28rem'}}><strong>Valuation:</strong> <span className={`badge ${countyDecisionRead.pillars.valuation.className}`}>{countyDecisionRead.pillars.valuation.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.valuation.detail}</span></div>
-                  <div style={{marginBottom:'.28rem'}}><strong>Land Quality:</strong> <span className={`badge ${countyDecisionRead.pillars.site.className}`}>{countyDecisionRead.pillars.site.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.site.detail}</span></div>
-                  <div style={{marginBottom:'.28rem'}}><strong>Hazards:</strong> <span className={`badge ${countyDecisionRead.pillars.resilience.className}`}>{countyDecisionRead.pillars.resilience.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.resilience.detail}</span></div>
-                  <div><strong>Debt View:</strong> <span className={`badge ${countyDecisionRead.pillars.finance.className}`}>{countyDecisionRead.pillars.finance.label}</span> <span style={{marginLeft:'.35rem'}}>{countyDecisionRead.pillars.finance.detail}</span></div>
-                </>}
-          </div>
-        </div>
-        <div className="workflow-card">
-          <div className="workflow-step">Evidence Snapshot</div>
-          <div className="workflow-p">
-            {!countySummary
-              ? 'Live county evidence is unavailable.'
-              : <>
-                  <div style={{marginBottom:'.28rem'}}><strong>Benchmark / Fair:</strong> {$$(countyMetrics.benchmark_value)} / {$$(countyMetrics.fair_value)}</div>
-                  <div style={{marginBottom:'.28rem'}}><strong>Access / DSCR:</strong> {countyMetrics.access_score != null ? `${$(countyMetrics.access_score, 1)} / 100` : 'N/A'} • {countyCredit?.combined_stress_dscr != null ? `${$(countyCredit.combined_stress_dscr, 2)}x stress` : countyMetrics.dscr != null ? `${$(countyMetrics.dscr, 2)}x base` : 'DSCR N/A'}</div>
-                  <div style={{marginBottom:'.28rem'}}><strong>NRCS / Irrigation:</strong> {$pct(countySoil?.significant_share_pct)} • {$int(countyIrrigation?.irrigated_acres)} acres</div>
-                  <div><strong>Hazards:</strong> Drought {countyDrought?.risk_score != null ? $(countyDrought.risk_score, 0) : 'N/A'} • Flood {countyFlood?.hazard_score != null ? $(countyFlood.hazard_score, 0) : 'N/A'}</div>
-                </>}
-          </div>
-        </div>
-        <div className="workflow-card">
-          <div className="workflow-step">Support For The Memo</div>
-          <div className="workflow-p">
-            {!countyDecisionRead
-              ? 'County support signals will appear here once live evidence is loaded.'
-              : countyDecisionRead.supportPoints.length
-                ? countyDecisionRead.supportPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)
-                : 'No strong support signals are currently surfaced beyond the visible model outputs.'}
-          </div>
-        </div>
-        {selectedThesisLens && countyThesisRead && <div className="workflow-card">
-          <div className="workflow-step">Thesis Lens Read</div>
-          <div className="workflow-p">
-            <div style={{marginBottom:'.28rem'}}><span className={`badge ${countyThesisRead.overall.className}`}>{countyThesisRead.overall.label}</span> <span style={{marginLeft:'.35rem'}}>{countyThesisRead.overall.summary}</span></div>
-            {countyThesisRead.supportPoints.length
-              ? countyThesisRead.supportPoints.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)
-              : 'No lens-specific support signals are surfaced beyond the county read.'}
-          </div>
-        </div>}
-        <div className="workflow-card">
-          <div className="workflow-step">What Could Change The Call</div>
-          <div className="workflow-p">
-            {!countyDecisionRead
-              ? 'Gating checks will appear here when live county context is available.'
-              : countyDecisionRead.gatingChecks.length
-                ? countyDecisionRead.gatingChecks.map((item, idx) => <div key={idx} style={{marginBottom:'.28rem'}}>• {item}</div>)
-                : 'No immediate gating checks are surfaced beyond the editable thesis and scenario work.'}
-          </div>
-        </div>
-      </div>
-    </div>}
     <div className="rw-grid">
       <div className="card">
-        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Research Workspace</h3>
+        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Memo Editor</h3>
         <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} placeholder="Select county for research workspace..." selectedLabel={selectedCountyLabel}/></div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
           <div className="fg"><label>Decision Status</label>
@@ -788,7 +726,7 @@ export function ResearchWorkspace({
       </div>
 
       <div className="card">
-        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Workspace Snapshot</h3>
+        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Current Record</h3>
         <div className="sc"><div className="sc-l">Session User</div><div className="sc-v" style={{fontSize:'.82rem'}}>{researchUser || '--'}</div></div>
         <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{selectedCountyLabel}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Active Assumption Set</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div></div>
@@ -799,6 +737,9 @@ export function ResearchWorkspace({
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Runs</div><div className="sc-v">{scenarioRuns.length}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Research Notes</div><div className="sc-v">{active.notes.length}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Last Update</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.updated_at ? new Date(active.updated_at).toLocaleString() : '--'}</div></div>
+        <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.55rem',lineHeight:1.45}}>
+          Workspace notes do not recalculate on their own. Keep the active assumption set visible when moving between the memo, county read, and saved scenario runs.
+        </div>
       </div>
     </div>
 
