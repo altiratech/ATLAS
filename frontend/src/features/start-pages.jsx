@@ -1,4 +1,4 @@
-import { APP_NAME, APP_TAGLINE, PG } from '../config.js';
+import { APP_NAME, PG } from '../config.js';
 import { api, fetchResearchWorkspaces } from '../auth.js';
 import { getPlaybook, PLAYBOOKS, playbookBadgeClass } from '../shared/playbooks.js';
 import { getThesisLens, getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
@@ -7,6 +7,12 @@ import { Loading } from '../shared/system.jsx';
 function recentDate(value) {
   if (!value) return '--';
   return String(value).replace('T', ' ').slice(0, 16);
+}
+
+function statusColor(status) {
+  if (status === 'live') return 'var(--green)';
+  if (status === 'in_build') return 'var(--accent-2)';
+  return 'var(--text3)';
 }
 
 export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActivePlaybookKey, activeThesis, activeThesisKey, setActiveThesisKey }) {
@@ -66,20 +72,39 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
     <div className="card hero-card" style={{ marginBottom: '.9rem' }}>
       <div className="hero-k">Atlas Home</div>
       <h2 className="hero-h">{APP_NAME}</h2>
-      <p className="hero-p">{APP_TAGLINE}. Atlas is one geo/opportunity platform organized around perspectives and thesis lenses, with shared tools for screening, underwriting, research, and portfolio work.</p>
+      <p className="hero-p">Atlas helps investors screen geographies, pressure-test land theses, and capture research inside one shared workbench. Start with a perspective, apply a thesis lens, then move into screening, underwriting, and decision work.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.55rem', marginBottom: '.8rem' }}>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Current Perspective</div>
+          <div style={{ fontSize: '.92rem', fontWeight: 600 }}>{activePlaybook?.label || '--'}</div>
+          <div style={{ fontSize: '.7rem', color: statusColor(activePlaybook?.status), marginTop: '.22rem', textTransform: 'uppercase', letterSpacing: '.12em', fontFamily: 'IBM Plex Mono, monospace' }}>
+            {activePlaybook?.statusLabel || 'Live'}
+          </div>
+        </div>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Active Thesis Lens</div>
+          <div style={{ fontSize: '.92rem', fontWeight: 600 }}>{activeThesis?.label || '--'}</div>
+          <div style={{ fontSize: '.72rem', color: 'var(--text2)', marginTop: '.22rem' }}>
+            {activeThesis?.question || 'Choose the investment question you want Atlas to frame.'}
+          </div>
+        </div>
+      </div>
       <div className="hero-actions">
-        <button className="btn btn-p" onClick={() => perspectivesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Explore Perspectives</button>
-        <button className="btn" onClick={() => nav(PG.ABOUT)}>About Atlas</button>
+        <button className="btn btn-p" onClick={() => perspectivesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Browse Perspectives</button>
+        <button className="btn" onClick={() => nav(PG.SCREEN, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Screener</button>
+        <button className="btn" onClick={() => nav(PG.RESEARCH, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Workspace</button>
       </div>
     </div>
 
     <div ref={perspectivesRef} className="card" style={{ marginBottom: '.9rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '.7rem', flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Perspectives</h3>
-          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Choose the default universe and workflow you want Atlas to optimize around. Perspectives provide strong defaults, but the shared tools remain editable and reusable.</div>
+          <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Start With a Perspective</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Perspectives define the starting universe and workflow defaults. Atlas stays one product underneath them.</div>
         </div>
-        {activePlaybook && <span className={`badge ${playbookBadgeClass(activePlaybook.status)}`}>CURRENT {activePlaybook.label}</span>}
+        {activePlaybook && <div style={{ fontSize: '.68rem', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.14em', fontFamily: 'IBM Plex Mono, monospace' }}>
+          Current: <span style={{ color: 'var(--text1)' }}>{activePlaybook.label}</span>
+        </div>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.75rem' }}>
         {PLAYBOOKS.map((playbook) => {
@@ -88,7 +113,9 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
           return <div key={playbook.key} className="sc" style={{ margin: 0, borderColor: isActive ? 'var(--line-strong)' : 'var(--line)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.45rem' }}>
               <div style={{ fontSize: '.9rem', fontWeight: 600 }}>{playbook.label}</div>
-              <span className={`badge ${playbookBadgeClass(playbook.status)}`}>{playbook.statusLabel}</span>
+              <span style={{ fontSize: '.62rem', color: statusColor(playbook.status), textTransform: 'uppercase', letterSpacing: '.14em', fontFamily: 'IBM Plex Mono, monospace' }}>
+                {playbook.statusLabel}
+              </span>
             </div>
             <div style={{ fontSize: '.78rem', color: 'var(--text2)', minHeight: '54px' }}>{playbook.description}</div>
             {playbook.universeLabel && <div style={{ fontSize: '.72rem', color: 'var(--text2)', marginTop: '.5rem' }}>
@@ -97,9 +124,12 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
             {playbook.unitsLabel && <div style={{ fontSize: '.72rem', color: 'var(--text2)', marginTop: '.18rem' }}>
               <strong style={{ color: 'var(--text1)' }}>Units:</strong> {playbook.unitsLabel}
             </div>}
+            {isActive && <div style={{ fontSize: '.65rem', color: 'var(--accent)', marginTop: '.45rem', textTransform: 'uppercase', letterSpacing: '.14em', fontFamily: 'IBM Plex Mono, monospace' }}>
+              Current Perspective
+            </div>}
             <div style={{ display: 'flex', gap: '.45rem', marginTop: '.7rem', flexWrap: 'wrap' }}>
               <button className={`btn btn-sm ${isLive ? 'btn-p' : ''}`} onClick={() => isLive && openPlaybook(playbook.key)} disabled={!isLive}>
-                {isLive ? (isActive ? 'Open Active' : 'Open Perspective') : 'Not Live Yet'}
+                {isLive ? (isActive ? 'Open Current' : 'Open Perspective') : 'Not Live Yet'}
               </button>
             </div>
           </div>;
@@ -110,10 +140,12 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
     <div className="card" style={{ marginBottom: '.9rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '.7rem', flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Thesis Lenses</h3>
-          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>A thesis lens is the investment question Atlas applies to the current perspective. It changes how we frame the workflow without pretending the underlying data is broader than it is.</div>
+          <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Current Perspective Lenses</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>A lens changes the question Atlas asks of the same evidence stack. It should sharpen the workflow, not create a separate app.</div>
         </div>
-        {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>CURRENT {activeThesis.label}</span>}
+        {activeThesis && <div style={{ fontSize: '.68rem', color: 'var(--text2)', textTransform: 'uppercase', letterSpacing: '.14em', fontFamily: 'IBM Plex Mono, monospace' }}>
+          Current: <span style={{ color: 'var(--text1)' }}>{activeThesis.label}</span>
+        </div>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '.75rem' }}>
         {availableLenses.map((lens) => {
@@ -121,21 +153,26 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
           return <div key={lens.key} className="sc" style={{ margin: 0, borderColor: isActive ? 'var(--line-strong)' : 'var(--line)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.5rem', marginBottom: '.45rem' }}>
               <div style={{ fontSize: '.9rem', fontWeight: 600 }}>{lens.label}</div>
-              <span className={`badge ${thesisBadgeClass(lens.status)}`}>{lens.statusLabel}</span>
+              <span style={{ fontSize: '.62rem', color: statusColor(lens.status), textTransform: 'uppercase', letterSpacing: '.14em', fontFamily: 'IBM Plex Mono, monospace' }}>
+                {lens.statusLabel}
+              </span>
             </div>
             <div style={{ fontSize: '.78rem', color: 'var(--text2)', marginBottom: '.45rem' }}>{lens.description}</div>
             <div style={{ fontSize: '.74rem', color: 'var(--text2)', marginBottom: '.35rem' }}>
               <strong style={{ color: 'var(--text1)' }}>Question:</strong> {lens.question}
             </div>
             <div style={{ fontSize: '.72rem', color: 'var(--text2)', marginBottom: '.28rem' }}>
-              <strong style={{ color: 'var(--text1)' }}>Atlas uses now:</strong> {lens.nowSignals.join(', ')}
+              <strong style={{ color: 'var(--text1)' }}>Signals now:</strong> {lens.nowSignals.slice(0, 2).join(' • ')}
             </div>
             <div style={{ fontSize: '.72rem', color: 'var(--text2)' }}>
-              <strong style={{ color: 'var(--text1)' }}>Still missing:</strong> {lens.gapSignals.join(', ')}
+              <strong style={{ color: 'var(--text1)' }}>Use carefully:</strong> {lens.gapSignals[0]}
             </div>
+            {isActive && <div style={{ fontSize: '.65rem', color: 'var(--accent)', marginTop: '.45rem', textTransform: 'uppercase', letterSpacing: '.14em', fontFamily: 'IBM Plex Mono, monospace' }}>
+              Active Lens
+            </div>}
             <div style={{ display: 'flex', gap: '.45rem', marginTop: '.7rem', flexWrap: 'wrap' }}>
               <button className="btn btn-sm btn-p" onClick={() => openLens(lens.key)}>
-                {isActive ? 'Open Active Lens' : 'Activate Lens'}
+                {isActive ? 'Open Current Lens' : 'Use Lens'}
               </button>
             </div>
           </div>;
@@ -143,8 +180,57 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
       </div>
     </div>
 
-    {loading ? <Loading/> : <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: '.9rem' }}>
-      <div style={{ display: 'grid', gap: '.9rem' }}>
+    {loading ? <Loading/> : <div style={{ display: 'grid', gap: '.9rem' }}>
+      <div className="card">
+        <div style={{ marginBottom: '.75rem' }}>
+          <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Workbench</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Reopen work already in motion or jump directly into the next analytical surface.</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '.75rem' }}>
+          <div className="sc" style={{ margin: 0 }}>
+            <div className="sc-l">Recent Research</div>
+            <div className="sc-v" style={{ fontSize: '.95rem' }}>{research.length}</div>
+            <div style={{ fontSize: '.75rem', color: 'var(--text2)', minHeight: '48px' }}>
+              {research.length ? 'Open recent decision work without losing perspective and lens context.' : 'No research records yet. Save a county from Screener to start a decision record.'}
+            </div>
+            <div style={{ marginTop: '.6rem' }}>
+              <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Workspace</button>
+            </div>
+          </div>
+          <div className="sc" style={{ margin: 0 }}>
+            <div className="sc-l">Saved Views</div>
+            <div className="sc-v" style={{ fontSize: '.95rem' }}>{savedViews.length}</div>
+            <div style={{ fontSize: '.75rem', color: 'var(--text2)', minHeight: '48px' }}>
+              {savedViews.length ? 'Reopen filters, columns, and grouping from prior screening work.' : 'No saved views yet. Launch a screen, tune it, and save the result.'}
+            </div>
+            <div style={{ marginTop: '.6rem' }}>
+              <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR)}>Open Saved Views</button>
+            </div>
+          </div>
+          <div className="sc" style={{ margin: 0 }}>
+            <div className="sc-l">Recent Scenario Runs</div>
+            <div className="sc-v" style={{ fontSize: '.95rem' }}>{scenarioRuns.length}</div>
+            <div style={{ fontSize: '.75rem', color: 'var(--text2)', minHeight: '48px' }}>
+              {scenarioRuns.length ? 'Return to saved pressure tests and acquisition cases.' : 'No saved scenario runs yet for the current working context.'}
+            </div>
+            <div style={{ marginTop: '.6rem' }}>
+              <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Scenario Lab</button>
+            </div>
+          </div>
+          <div className="sc" style={{ margin: 0 }}>
+            <div className="sc-l">Portfolio Resume</div>
+            <div className="sc-v" style={{ fontSize: '.95rem' }}>{portfolios.length}</div>
+            <div style={{ fontSize: '.75rem', color: 'var(--text2)', minHeight: '48px' }}>
+              {portfolios.length ? 'Review live holdings and aggregated exposure from one place.' : 'No portfolios yet. Create one once you want Atlas to aggregate holdings.'}
+            </div>
+            <div style={{ marginTop: '.6rem' }}>
+              <button className="btn btn-sm" onClick={() => nav(PG.PORTFOLIO, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Portfolio</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '.9rem', alignItems: 'start' }}>
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
             <h3 style={{ fontSize: '.95rem' }}>Recent Research</h3>
@@ -164,24 +250,6 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
 
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
-            <h3 style={{ fontSize: '.95rem' }}>Recent Scenario Runs</h3>
-            <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Scenario Lab</button>
-          </div>
-          {scenarioRuns.length === 0 ? <div className="empty"><p>No saved scenario runs yet.</p></div> : <div style={{ display: 'grid', gap: '.55rem' }}>
-            {scenarioRuns.map((run) => <div key={run.id} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.SCENARIO, { fips: run.geo_key, countyName: run.county_name, state: run.state, playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.2rem' }}>
-                <div style={{ fontWeight: 600 }}>{run.county_name ? `${run.county_name}, ${run.state}` : run.geo_key}</div>
-                <span className="badge badge-a">{run.scenario_name || 'Scenario'}</span>
-              </div>
-              <div style={{ fontSize: '.76rem', color: 'var(--text2)' }}>As of {run.as_of_date} • Saved {recentDate(run.created_at)}</div>
-            </div>)}
-          </div>}
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gap: '.9rem' }}>
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
             <h3 style={{ fontSize: '.95rem' }}>Saved Views</h3>
             <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR)}>Open Saved Views</button>
           </div>
@@ -192,30 +260,13 @@ export function AtlasHomePage({ nav, activePlaybook, activePlaybookKey, setActiv
               return <div key={view.id} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => openSavedView(view)}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.2rem' }}>
                   <div style={{ fontWeight: 600 }}>{view.name}</div>
-                  <div style={{ display: 'flex', gap: '.35rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                    <span className={`badge ${playbookBadgeClass(viewPlaybook.status)}`}>{viewPlaybook.shortLabel}</span>
-                    {viewThesis && <span className={`badge ${thesisBadgeClass(viewThesis.status)}`}>{viewThesis.shortLabel}</span>}
+                  <div style={{ fontSize: '.62rem', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '.12em', fontFamily: 'IBM Plex Mono, monospace' }}>
+                    {viewPlaybook.shortLabel}{viewThesis ? ` • ${viewThesis.shortLabel}` : ''}
                   </div>
                 </div>
                 <div style={{ fontSize: '.75rem', color: 'var(--text2)' }}>{view.notes || `${(view.filters || []).length} reusable filters`}</div>
               </div>;
             })}
-          </div>}
-        </div>
-
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
-            <h3 style={{ fontSize: '.95rem' }}>Portfolio Resume</h3>
-            <button className="btn btn-sm" onClick={() => nav(PG.PORTFOLIO, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Portfolio</button>
-          </div>
-          {portfolios.length === 0 ? <div className="empty"><p>No portfolios yet. Create one once you want Atlas to aggregate risk and value across holdings.</p></div> : <div style={{ display: 'grid', gap: '.5rem' }}>
-            {portfolios.map((portfolio) => <div key={portfolio.id} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.PORTFOLIO, { portfolioId: portfolio.id, playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.2rem' }}>
-                <div style={{ fontWeight: 600 }}>{portfolio.name}</div>
-                <span className="badge badge-b">{portfolio.holdings_count} holdings</span>
-              </div>
-              <div style={{ fontSize: '.75rem', color: 'var(--text2)' }}>{portfolio.total_acres?.toLocaleString('en-US') || 0} total acres • {portfolio.owner_scope === 'private' ? 'Private' : 'Legacy shared'}</div>
-            </div>)}
           </div>}
         </div>
       </div>

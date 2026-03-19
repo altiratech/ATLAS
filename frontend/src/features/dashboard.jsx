@@ -126,29 +126,6 @@ export function Dashboard({
     });
   };
 
-  const resumeCards = [
-    {
-      key: 'research',
-      label: 'Recent Research',
-      value: loadingContext ? '--' : String(research.length),
-      body: research.length
-        ? 'Reopen a county decision record and keep the current perspective/lens attached.'
-        : 'No research records yet. Save a county from Screener to start a decision record.',
-      actionLabel: 'Open Workspace',
-      action: () => nav(PG.RESEARCH, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey }),
-    },
-    {
-      key: 'saved_views',
-      label: 'Saved Views',
-      value: loadingContext ? '--' : String(savedViews.length),
-      body: savedViews.length
-        ? 'Use saved screens to reopen recurring thesis work without rebuilding the filter stack.'
-        : 'No saved views yet. Launch a starter screen, tune it, and save the result.',
-      actionLabel: 'Manage Saved Views',
-      action: () => nav(PG.SCREENS_MGR),
-    },
-  ];
-
   return <div>
     <AssumptionContextBar
       assumptionSets={assumptionSets}
@@ -162,106 +139,45 @@ export function Dashboard({
     <div className="card hero-card" style={{ marginBottom: '.9rem' }}>
       <div className="hero-k">Perspective Home</div>
       <h2 className="hero-h">{activePlaybook?.label || 'Farmland Income'}</h2>
-      <p className="hero-p">Use this page as a launcher. Review the active lens, pick a strong starter screen, or resume live work without having to read the full reference context first.</p>
-      <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '.75rem' }}>
-        <span className="badge badge-b">PERSPECTIVE {activePlaybook?.shortLabel || 'Farmland Income'}</span>
-        {activeThesis && <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>LENS {activeThesis.shortLabel}</span>}
-        <span className="badge badge-a">UNITS {activePlaybook?.unitsLabel || 'Per-acre values and rent'}</span>
-        <span className="badge badge-g">COVERAGE {summarizeCoverage(coverage)}</span>
+      <p className="hero-p">Use this page to start fresh or reopen live work quickly. The goal is to get you into a strong screen, a saved view, or a memo without having to decode the whole reference stack first.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.55rem', marginBottom: '.85rem' }}>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Active Lens</div>
+          <div style={{ fontSize: '.92rem', fontWeight: 600 }}>{activeThesis?.label || '--'}</div>
+          <div style={{ fontSize: '.72rem', color: 'var(--text2)', marginTop: '.22rem' }}>
+            {activeThesis?.question || 'Choose the investment question you want this perspective to frame.'}
+          </div>
+        </div>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Universe</div>
+          <div className="sc-v" style={{ fontSize: '.95rem' }}>{loadingSummary ? '--' : playbookStat($int(data?.county_count))}</div>
+          <div style={{ fontSize: '.72rem', color: 'var(--text2)' }}>
+            {activePlaybook?.unitsLabel || 'Per-acre values and rent'} • Coverage {summarizeCoverage(coverage)}
+          </div>
+        </div>
+        <div className="sc" style={{ margin: 0 }}>
+          <div className="sc-l">Best Next Move</div>
+          <div style={{ fontSize: '.82rem', color: 'var(--text1)', lineHeight: 1.35 }}>
+            Start from a starter screen if you are exploring. Open Workspace if you are resuming memo work.
+          </div>
+        </div>
       </div>
       <div className="hero-actions">
         <button className="btn btn-p" onClick={() => nav(PG.SCREEN, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Screener</button>
         <button className="btn" onClick={() => nav(PG.RESEARCH, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Workspace</button>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '.55rem', marginTop: '.85rem' }}>
-        <div className="sc" style={{ margin: 0 }}>
-          <div className="sc-l">Universe</div>
-          <div className="sc-v" style={{ fontSize: '.9rem' }}>{loadingSummary ? '--' : playbookStat($int(data?.county_count))}</div>
-          <div className="sc-c">Modeled counties in the live farmland-oriented universe</div>
-        </div>
-        <div className="sc" style={{ margin: 0 }}>
-          <div className="sc-l">Starter Screens</div>
-          <div className="sc-v" style={{ fontSize: '.9rem' }}>{starterCards.length}</div>
-          <div className="sc-c">Opinionated starting points for the active perspective and thesis lens</div>
-        </div>
-        <div className="sc" style={{ margin: 0 }}>
-          <div className="sc-l">Recent Research</div>
-          <div className="sc-v" style={{ fontSize: '.9rem' }}>{loadingContext ? '--' : research.length}</div>
-          <div className="sc-c">Decision records you can reopen immediately</div>
-        </div>
-        <div className="sc" style={{ margin: 0 }}>
-          <div className="sc-l">Saved Views</div>
-          <div className="sc-v" style={{ fontSize: '.9rem' }}>{loadingContext ? '--' : savedViews.length}</div>
-          <div className="sc-c">Reusable screens carrying perspective, lens, and assumption context</div>
-        </div>
+        <button className="btn" onClick={() => nav(PG.SCREENS_MGR)}>Manage Saved Views</button>
       </div>
     </div>
 
     {err && <ErrBox title="Perspective Home Error" msg={err}/>}
 
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '.9rem', marginBottom: '.9rem', alignItems: 'start' }}>
-      {activeThesis && <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '.75rem', flexWrap: 'wrap', marginBottom: '.7rem' }}>
-          <div>
-            <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Active Thesis Lens</h3>
-            <div style={{ fontSize: '.78rem', color: 'var(--text2)', maxWidth: '780px' }}>
-              The perspective defines the universe. This lens defines the investment question Atlas is using when it routes you into screening, research, and scenario work.
-            </div>
-          </div>
-          <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>{activeThesis.statusLabel}</span>
-        </div>
-        <div style={{ display: 'grid', gap: '.55rem' }}>
-          <div className="sc" style={{ margin: 0 }}>
-            <div className="sc-l">Question</div>
-            <div className="sc-v" style={{ fontSize: '.9rem' }}>{activeThesis.question}</div>
-            <div className="sc-c">{activeThesis.description}</div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '.55rem' }}>
-            <div className="sc" style={{ margin: 0 }}>
-              <div className="sc-l">Atlas Uses Now</div>
-              <div style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
-                {activeThesis.nowSignals.map((signal) => <div key={signal}>• {signal}</div>)}
-              </div>
-            </div>
-            <div className="sc" style={{ margin: 0 }}>
-              <div className="sc-l">Use Carefully</div>
-              <div style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
-                {activeThesis.gapSignals.map((signal) => <div key={signal}>• {signal}</div>)}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>}
-
-      <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '.75rem', marginBottom: '.7rem', flexWrap: 'wrap' }}>
-          <div>
-            <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Resume Work</h3>
-            <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Jump back into work already in motion instead of starting from scratch every time.</div>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gap: '.55rem' }}>
-          {resumeCards.map((card) => <div key={card.key} className="sc" style={{ margin: 0 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.6rem', marginBottom: '.18rem', alignItems: 'center' }}>
-              <div className="sc-l" style={{ marginBottom: 0 }}>{card.label}</div>
-              <div className="sc-v" style={{ fontSize: '.95rem', marginBottom: 0 }}>{card.value}</div>
-            </div>
-            <div style={{ fontSize: '.75rem', color: 'var(--text2)' }}>{card.body}</div>
-            <div style={{ marginTop: '.55rem' }}>
-              <button className="btn btn-sm" onClick={card.action}>{card.actionLabel}</button>
-            </div>
-          </div>)}
-        </div>
-      </div>
-    </div>
-
     <div className="card" style={{ marginBottom: '.9rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.75rem', gap: '.75rem', flexWrap: 'wrap' }}>
         <div>
-          <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>Starter Screens</h3>
-          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Use these as strong starting points for the active perspective and lens, then edit filters, columns, and assumptions inside Screener and save your own view.</div>
+          <h3 style={{ fontSize: '1rem', marginBottom: '.2rem' }}>Start Here</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>If you are starting fresh, launch one of these opinionated screens and then refine it inside Screener.</div>
         </div>
-        <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR)}>Open Saved Views</button>
+        <button className="btn btn-sm" onClick={() => nav(PG.SCREEN, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Screener</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.75rem' }}>
         {starterCards.map((card) => <div key={card.key} className="sc" style={{ margin: 0 }}>
@@ -276,38 +192,69 @@ export function Dashboard({
 
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '.9rem', marginBottom: '.9rem', alignItems: 'start' }}>
       <div className="card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
-          <h3 style={{ fontSize: '.95rem' }}>Recent Work in This Perspective</h3>
-          <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, { playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>Open Workspace</button>
+        <div style={{ marginBottom: '.7rem' }}>
+          <h3 style={{ fontSize: '.98rem', marginBottom: '.2rem' }}>Active Thesis Lens</h3>
+          <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>This is the question Atlas is using when it routes you into screening, research, and scenario work from this perspective.</div>
         </div>
-        {loadingContext ? <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Loading recent work...</div>
-          : research.length === 0 ? <div className="empty"><p>No recent research records yet.</p></div>
-            : <div style={{ display: 'grid', gap: '.55rem' }}>
-              {research.map((record) => <div key={record.geo_key} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.RESEARCH, { fips: record.geo_key, playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.18rem' }}>
-                  <div style={{ fontWeight: 600 }}>{record.county_name ? `${record.county_name}, ${record.state}` : record.geo_key}</div>
-                  <span className="badge badge-b">{record.status || 'exploring'}</span>
-                </div>
-                <div style={{ fontSize: '.75rem', color: 'var(--text2)' }}>{record.thesis || 'No thesis written yet.'}</div>
-              </div>)}
-            </div>}
+        {activeThesis && <div style={{ display: 'grid', gap: '.55rem' }}>
+          <div className="sc" style={{ margin: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.75rem', alignItems: 'center', marginBottom: '.3rem', flexWrap: 'wrap' }}>
+              <div className="sc-l" style={{ marginBottom: 0 }}>Question</div>
+              <span className={`badge ${thesisBadgeClass(activeThesis.status)}`}>{activeThesis.statusLabel}</span>
+            </div>
+            <div className="sc-v" style={{ fontSize: '.9rem' }}>{activeThesis.question}</div>
+            <div className="sc-c">{activeThesis.description}</div>
+          </div>
+          <div className="sc" style={{ margin: 0 }}>
+            <div className="sc-l">Atlas Uses Now</div>
+            <div style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
+              {activeThesis.nowSignals.map((signal) => <div key={signal}>• {signal}</div>)}
+            </div>
+          </div>
+          <div className="sc" style={{ margin: 0 }}>
+            <div className="sc-l">Do Not Overread</div>
+            <div style={{ fontSize: '.78rem', color: 'var(--text2)', lineHeight: 1.5 }}>
+              {activeThesis.gapSignals.map((signal) => <div key={signal}>• {signal}</div>)}
+            </div>
+          </div>
+        </div>}
       </div>
+
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.6rem' }}>
-          <h3 style={{ fontSize: '.95rem' }}>Saved Views for This Perspective</h3>
+          <h3 style={{ fontSize: '.95rem' }}>Resume / Reopen</h3>
           <button className="btn btn-sm" onClick={() => nav(PG.SCREENS_MGR)}>Manage Saved Views</button>
         </div>
-        {loadingContext ? <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Loading saved views...</div>
-          : savedViews.length === 0 ? <div className="empty"><p>No saved views yet. Launch a starter screen, tune it, and save it for reuse.</p></div>
-            : <div style={{ display: 'grid', gap: '.55rem' }}>
-              {savedViews.map((view) => <div key={view.id} className="sc" style={{ margin: 0 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.18rem' }}>
-                  <div style={{ fontWeight: 600 }}>{view.name}</div>
-                  <span className="badge badge-b">v{view.version}</span>
-                </div>
-                <div style={{ fontSize: '.75rem', color: 'var(--text2)' }}>{view.notes || `${(view.filters || []).length} reusable filters`}</div>
-              </div>)}
-            </div>}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '.75rem' }}>
+          <div>
+            <div className="sc-l" style={{ marginBottom: '.35rem' }}>Recent Research</div>
+            {loadingContext ? <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Loading recent work...</div>
+              : research.length === 0 ? <div className="empty"><p>No recent research records yet.</p></div>
+                : <div style={{ display: 'grid', gap: '.55rem' }}>
+                  {research.map((record) => <div key={record.geo_key} className="sc" style={{ margin: 0, cursor: 'pointer' }} onClick={() => nav(PG.RESEARCH, { fips: record.geo_key, playbookKey: activePlaybookKey, thesisKey: activeThesisKey })}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.18rem' }}>
+                      <div style={{ fontWeight: 600 }}>{record.county_name ? `${record.county_name}, ${record.state}` : record.geo_key}</div>
+                      <span className="badge badge-b">{record.status || 'exploring'}</span>
+                    </div>
+                    <div style={{ fontSize: '.75rem', color: 'var(--text2)' }}>{record.thesis || 'No thesis written yet.'}</div>
+                  </div>)}
+                </div>}
+          </div>
+          <div>
+            <div className="sc-l" style={{ marginBottom: '.35rem' }}>Saved Views</div>
+            {loadingContext ? <div style={{ fontSize: '.78rem', color: 'var(--text2)' }}>Loading saved views...</div>
+              : savedViews.length === 0 ? <div className="empty"><p>No saved views yet. Launch a starter screen, tune it, and save it for reuse.</p></div>
+                : <div style={{ display: 'grid', gap: '.55rem' }}>
+                  {savedViews.map((view) => <div key={view.id} className="sc" style={{ margin: 0 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', marginBottom: '.18rem' }}>
+                      <div style={{ fontWeight: 600 }}>{view.name}</div>
+                      <span className="badge badge-b">v{view.version}</span>
+                    </div>
+                    <div style={{ fontSize: '.75rem', color: 'var(--text2)' }}>{view.notes || `${(view.filters || []).length} reusable filters`}</div>
+                  </div>)}
+                </div>}
+          </div>
+        </div>
       </div>
     </div>
 
