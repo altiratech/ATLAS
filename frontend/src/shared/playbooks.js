@@ -19,15 +19,15 @@ export const PLAYBOOKS = [
     shortLabel: 'Industrial Land',
     status: 'in_build',
     statusLabel: 'In Build',
-    description: 'Power, logistics, hazard, and site-readiness perspectives for industrial land and future conversion use cases.',
+    description: 'Geography-level industrial land opportunity context using power, logistics, hazard, and conversion signals.',
   },
   {
     key: PLAYBOOK_KEYS.POWERED_SITES,
-    label: 'Powered Sites',
-    shortLabel: 'Powered Sites',
+    label: 'Powered Land',
+    shortLabel: 'Powered Land',
     status: 'planned',
     statusLabel: 'Planned',
-    description: 'Future perspective for power- and infrastructure-sensitive land such as data center and grid-adjacent sites.',
+    description: 'Future perspective for power- and infrastructure-sensitive land markets, including data-center and grid-adjacent opportunity context.',
   },
   {
     key: PLAYBOOK_KEYS.DEVELOPMENT_LAND,
@@ -35,7 +35,7 @@ export const PLAYBOOKS = [
     shortLabel: 'Development Land',
     status: 'planned',
     statusLabel: 'Planned',
-    description: 'Future perspective for development-oriented land where site, entitlement, and infrastructure readiness drive value.',
+    description: 'Future perspective for development-oriented land where geography, infrastructure context, and land-conversion constraints drive value.',
   },
 ];
 
@@ -50,5 +50,5 @@ export function playbookBadgeClass(status) {
 }
 
 export function playbookNavLabel(playbook) {
-  return playbook?.shortLabel || 'Playbook';
+  return playbook?.shortLabel || 'Perspective';
 }

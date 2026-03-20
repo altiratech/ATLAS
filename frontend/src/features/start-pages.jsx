@@ -290,7 +290,7 @@ export function AboutPage({ nav, activePlaybook, activeThesis }) {
     <div className="card hero-card" style={{ marginBottom: '.8rem' }}>
       <div className="hero-k">About</div>
       <h2 className="hero-h">{APP_NAME}</h2>
-      <p className="hero-p">Altira Atlas is a land intelligence and underwriting platform built to connect perspective-driven discovery, site and county analysis, underwriting, and decision workflow support inside one shared product.</p>
+      <p className="hero-p">Altira Atlas is a land intelligence and underwriting platform built to connect perspective-driven discovery, county and market analysis, underwriting, and decision workflow support inside one shared product.</p>
       <div className="hero-actions">
         <button className="btn btn-p" onClick={() => nav?.(PG.HOME)}>Open Atlas Home</button>
       </div>
