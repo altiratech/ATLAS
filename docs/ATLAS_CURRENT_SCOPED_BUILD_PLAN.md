@@ -14,6 +14,7 @@ Use this when the question is:
 
 For the long-term vision, use [ATLAS_NORTH_STAR.md](./ATLAS_NORTH_STAR.md).
 For desirable future capabilities outside current scope, use [ATLAS_EXPANSION_MAP.md](./ATLAS_EXPANSION_MAP.md).
+For near-term usability corrections derived from the live product walkthrough, use [ATLAS_UX_CORRECTION_PLAN.md](./ATLAS_UX_CORRECTION_PLAN.md).
 
 ## 1) Current Product Focus
 
@@ -51,6 +52,7 @@ Current guardrails:
 - research / scenario / portfolio continuity
 - clearer thesis-aware reads in discovery and memo surfaces
 - honest lineage / freshness / coverage context on active surfaces
+- first-time-user workflow legibility across Home, Perspective Home, Screener, and downstream decision pages
 
 ## 3) Explicitly Deferred
 
@@ -76,6 +78,7 @@ These are not part of the active scoped build right now.
 | `S4` | Research / Scenario / Portfolio continuity | Tighten the path from discovery to decision to exposure | `NS-3`, `NS-4`, `NS-5` |
 | `S5` | Data lineage / freshness / basis clarity | Keep outputs defensible while the product deepens | `NS-6` |
 | `S6` | First honest non-farmland expansion factors where data is real | Expand Atlas carefully by perspective without breaking the geo/opportunity lane | `NS-1`, `NS-2`, `NS-7` |
+| `S7` | First-time-user workflow correction | Make Atlas easier to understand and use by guiding one strong path instead of exposing product mechanics too early | `NS-1`, `NS-4`, `NS-8` |
 
 ## 5) Implementation Rule
 
