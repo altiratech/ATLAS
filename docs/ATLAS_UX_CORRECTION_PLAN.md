@@ -1,6 +1,6 @@
 # Atlas UX Correction Plan
 
-Last updated: 2026-03-20 (ET)  
+Last updated: 2026-03-21 (ET)
 Owner: Ryan + Codex + Claude  
 Status: Near-term correction plan derived from live first-time-user walkthrough
 
@@ -349,13 +349,29 @@ It improves:
 
 without changing Atlas into a different product.
 
-## 9) Immediate Recommendation
+## 9) Live Revalidation Outcome
+
+A second live browser pass was completed on 2026-03-21 after `UX-5`.
+
+That walkthrough confirmed:
+- Atlas is materially more understandable than before
+- County -> Research -> Scenario is now a real taught workflow
+- the next blockers are no longer broad page-purpose confusion
+
+It also surfaced two higher-priority workflow problems:
+- the recommended first Screener starter path can still return `0 counties`
+- Scenario Lab does not reliably persist scenario context back into Research
+
+Use [ATLAS_BROWSER_VALIDATION_2026_03_21.md](./ATLAS_BROWSER_VALIDATION_2026_03_21.md) for the recovered walkthrough evidence and ranked follow-up fix list.
+
+## 10) Immediate Recommendation
 
 The next implementation slice should be:
 
-1. Run the live Atlas flow again from Home -> Perspective -> Screener -> County -> Research -> Scenario
+1. fix first-run Screener starter reliability
+2. fix Scenario Lab -> Research scenario persistence
 
 Reason:
-- the major first-run dead ends and engine-room pages have now been softened
-- the next useful feedback should come from whether the core end-to-end flow actually feels more legible in practice
+- Atlas's surface hierarchy is now strong enough that the biggest remaining friction sits inside the main success path
+- the product now needs workflow closure more than another broad UX cleanup pass
 - any further UX work should be based on what still feels awkward during real use, not on another abstract cleanup pass

@@ -15,6 +15,7 @@ Use this when the question is:
 For the long-term vision, use [ATLAS_NORTH_STAR.md](./ATLAS_NORTH_STAR.md).
 For desirable future capabilities outside current scope, use [ATLAS_EXPANSION_MAP.md](./ATLAS_EXPANSION_MAP.md).
 For near-term usability corrections derived from the live product walkthrough, use [ATLAS_UX_CORRECTION_PLAN.md](./ATLAS_UX_CORRECTION_PLAN.md).
+For the recovered post-UX-5 browser validation findings, use [ATLAS_BROWSER_VALIDATION_2026_03_21.md](./ATLAS_BROWSER_VALIDATION_2026_03_21.md).
 
 ## 1) Current Product Focus
 
@@ -57,6 +58,9 @@ Current guardrails:
 - downstream empty-state guidance so Watchlist, Comparison, Workspace, Scenario Lab, Portfolio, and Backtest no longer feel like dead ends on first use
 - clearer county -> research -> scenario sequencing so discovery turns into memo work before Atlas asks the user to model downside cases
 - secondary-surface demotion so Backtest, Assumptions, and Data Sources read as support tools after the main Atlas flow rather than equal first-run destinations
+- browser-validated first-run reliability and workflow closure, especially:
+  - recommended Screener starter paths that actually return live counties
+  - Scenario Lab results that persist cleanly back into Research
 
 ## 3) Explicitly Deferred
 
