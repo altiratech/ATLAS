@@ -14,10 +14,11 @@ export const THESIS_LENSES = [
       'Valuation pressure through cap rate, rent multiple, and fair-value spread',
       'Productive base through yield productivity factor, NRCS farmland share, soil water storage, and irrigation footprint',
       'Physical fragility through drought and flood burden',
-      'Movement and infrastructure context through access score and current power proxies where available',
+      'Movement and infrastructure context through current power proxies where available',
     ],
     gapSignals: [
       'No direct labor scarcity, H-2A, wage, broadband, or robotics-adoption series are live yet',
+      'County access scoring is not reliable enough yet to drive the default starter screen',
       'Use this as a transition-thesis screen built from current land and infrastructure proxies, not as a direct labor-market model',
     ],
     defaultPreset: 'ag_transition_thesis',
@@ -27,7 +28,7 @@ export const THESIS_LENSES = [
       {
         key: 'ag_transition_thesis',
         title: 'Transition-Ready Counties',
-        body: 'Start with productive counties that also have enough access and manageable hazard load to matter if agricultural transition accelerates.',
+        body: 'Start with productive counties that still show manageable hazard load and a live power-context signal, so the first pass stays grounded in data Atlas actually has today.',
       },
       {
         key: 'decision_ready',

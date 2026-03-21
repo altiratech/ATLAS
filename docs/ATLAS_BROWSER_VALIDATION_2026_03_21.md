@@ -179,6 +179,16 @@ Likely focus:
 - thesis starter defaults
 - default filter thresholds / preset logic
 
+Status update:
+- Shipped on 2026-03-21 ET.
+- The `Ag Transition Thesis` starter no longer relies on `access_score`, which was effectively unusable in the live Screener universe.
+- The default transition starter now uses live signals Atlas actually has today:
+  - `yield_productivity_factor > 1.01`
+  - `power_index > 80`
+  - manageable drought / flood
+  - minimum NRCS farmland share
+- Live API sanity check after this change returned `156` counties for the default transition starter instead of `0`.
+
 ### BV-2: Fix Scenario Lab -> Research scenario-run persistence
 
 Why second:
@@ -232,8 +242,8 @@ Reason:
 
 The next Atlas implementation slice should be:
 
-1. `BV-1` first-run starter reliability
-2. `BV-2` scenario persistence back into Research
+1. `BV-2` scenario persistence back into Research
+2. `BV-3` return-path verification from Scenario Lab back to Research
 
 Only after those are stable should Atlas decide whether to:
 - soften the Research editor further, or

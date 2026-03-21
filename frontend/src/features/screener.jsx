@@ -322,10 +322,9 @@ export function Screener({
     }
     if (value === 'ag_transition_thesis') {
       setPresetCoreFilters([
-        { metric: 'access_score', op: '>', value: '35' },
-        { metric: 'yield_productivity_factor', op: '>', value: '1.02' },
+        { metric: 'yield_productivity_factor', op: '>', value: '1.01' },
       ]);
-      setMinPowerIndex('45');
+      setMinPowerIndex('80');
       setMaxPowerPrice('');
       setMaxDroughtRisk('75');
       setMaxFloodRisk('75');
@@ -586,6 +585,12 @@ export function Screener({
   const hasAdvancedFilters = liveOnlyFilters.length > 0;
   const hasReusableFilters = reusableFilters.length > 0;
   const canSaveView = hasReusableFilters && !savingScreen;
+  const emptyResultsMessage = React.useMemo(() => {
+    if (preset === 'ag_transition_thesis') {
+      return 'No counties matched this transition screen. Try lowering the power threshold, easing one hazard filter, or starting from Resilient Production Base first.';
+    }
+    return 'No counties matched the current filters.';
+  }, [preset]);
 
   const viewState = React.useMemo(() => ({
     preset,
@@ -931,7 +936,7 @@ export function Screener({
           { value: 'none', label: 'None' },
         ]}
         renderRecordPanel={renderRecordPanel}
-        emptyMessage="No counties matched the current filters."
+        emptyMessage={emptyResultsMessage}
       />
 
       <div className="card" style={{ marginTop: '.85rem', background: 'var(--bg1)' }}>
