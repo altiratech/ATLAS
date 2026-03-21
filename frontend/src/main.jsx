@@ -210,7 +210,7 @@ function App() {
       case PG.PORTFOLIO: return <PortfolioPage addToast={addToast} nav={nav} params={pp} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
       case PG.SCREENS_MGR: return <ScreensMgr addToast={addToast} nav={nav} params={pp} {...playbookProps} {...thesisProps}/>;
       case PG.ASSUME: return <AssumptionsMgr addToast={addToast} nav={nav} {...assumptionProps}/>;
-      case PG.SOURCES: return <SourcesPage addToast={addToast}/>;
+      case PG.SOURCES: return <SourcesPage addToast={addToast} nav={nav}/>;
       default: return <AtlasHomePage nav={nav} researchUser={researchUser} {...playbookProps} {...thesisProps}/>;
     }
   };

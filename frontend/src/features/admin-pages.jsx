@@ -140,9 +140,25 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
     />
 
     <div className="card" style={{marginBottom:'1rem'}}>
-      <h3 style={{fontSize:'1rem',marginBottom:'.65rem'}}>What These Sets Actually Drive</h3>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap'}}>
+        <div style={{maxWidth:'760px'}}>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Power-User Control Surface</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.25rem'}}>Most Atlas work should start elsewhere.</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',lineHeight:1.6}}>
+            Use Assumptions when you want to change the shared model basis behind screening, county reads, backtests, and scenarios. You should not need this page before running a screen, opening a county, or writing a first memo.
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
+          <button className="btn btn-sm btn-p" onClick={() => nav(PG.DASH)}>Open Perspective Home</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
+        </div>
+      </div>
+    </div>
+
+    <div className="card" style={{marginBottom:'1rem'}}>
+      <h3 style={{fontSize:'1rem',marginBottom:'.65rem'}}>Where Assumption Sets Matter</h3>
       <div style={{fontSize:'.8rem',color:'var(--text2)',marginBottom:'.7rem'}}>
-        These saved sets are real model inputs. They affect fair value, required return, NOI, break-even rent, DSCR, sensitivity analysis, dashboard rankings, screener outputs, compare results, and backtests.
+        These saved sets are real model inputs. They change how Atlas interprets fair value, required return, NOI, break-even rent, DSCR, sensitivity analysis, screen rankings, compare results, and backtests.
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
         <div className="sc" style={{margin:0}}>
@@ -152,7 +168,7 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
           </div>
         </div>
         <div className="sc" style={{margin:0}}>
-          <div className="sc-l">Stored, Not Yet Wired</div>
+          <div className="sc-l">Stored For Later</div>
           <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',marginTop:'.5rem'}}>
             {STORED_ONLY_ASSUMPTION_FIELDS.map((field) => <span key={field.key} className="badge badge-a">{field.label}</span>)}
           </div>
@@ -210,13 +226,11 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
                     {String(activeAssumptionSetId) === String(s.id) && <span className="badge badge-g" style={{marginLeft:'.35rem'}}>ACTIVE</span>}
                   </div>
                   <div style={{fontSize:'.76rem',color:'var(--text2)',marginBottom:'.45rem'}}>Created {s.created_at || '--'} | Wired fields drive modeled outputs across Atlas.</div>
+                  <div style={{fontSize:'.74rem',color:'var(--text2)'}}>Set one active here, then continue work from Perspective Home, Screener, County Detail, Backtest, or Scenario Lab through the main Atlas flow.</div>
                 </div>
                 <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
                   <button className="btn btn-sm" onClick={() => setActiveAssumptionSetId(String(s.id))}>Use</button>
-                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.DASH)}>Perspective Home</button>
-                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.SCREEN)}>Screener</button>
-                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.BACKTEST)}>Backtest</button>
-                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.SCENARIO)}>Scenario</button>
+                  <button className="btn btn-sm" onClick={() => applyAndNav(s.id, PG.SCENARIO)}>Open Scenario Lab</button>
                   <button className="btn btn-sm btn-p" onClick={() => openEditor(s)}>Duplicate / Edit</button>
                 </div>
               </div>
@@ -238,7 +252,7 @@ export function AssumptionsMgr({ addToast, nav, assumptionSets, activeAssumption
   </div>;
 }
 
-export function SourcesPage() {
+export function SourcesPage({ nav }) {
   const [sources, setSources] = React.useState([]);
   const [metrics, setMetrics] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -256,6 +270,21 @@ export function SourcesPage() {
   if (loading) return <Loading/>;
 
   return <div>
+    <div className="card" style={{marginBottom:'1rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap'}}>
+        <div style={{maxWidth:'760px'}}>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Trust And Provenance</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.25rem'}}>Data Sources is here to explain Atlas, not to start the workflow.</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',lineHeight:1.6}}>
+            Use this page when you need to confirm where a metric came from, how often a source updates, or whether Atlas is relying on direct observation, fallback logic, or derived interpretation. Start analysis in Screener or County Detail first.
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
+          <button className="btn btn-sm btn-p" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.DASH)}>Open Perspective Home</button>
+        </div>
+      </div>
+    </div>
     <div className="card" style={{marginBottom:'1.5rem'}}>
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Data Sources</h3>
       <STable
@@ -270,6 +299,9 @@ export function SourcesPage() {
     </div>
     <div className="card">
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Metric Catalog ({metrics.length} metrics)</h3>
+      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.75rem'}}>
+        This catalog is the reference layer behind Atlas screens and county reads. Use it when you need to decode a metric label, unit, or category after you have already found something worth explaining.
+      </div>
       <div style={{display:'grid',gap:'.5rem'}}>
         {metrics.map(m => <div key={m.key} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'.625rem',background:'var(--bg2)'}}>
           <div><div style={{fontWeight:500,fontSize:'.85rem'}}>{m.label}</div><div style={{fontSize:'.75rem',color:'var(--text2)'}}>{m.description}</div></div>

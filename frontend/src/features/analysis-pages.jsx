@@ -276,10 +276,25 @@ export function Backtest({addToast, nav, params, assumptionSets, activeAssumptio
       title="Backtest Assumptions"
       description="Backtest replay uses this saved assumption set for modeled valuation and return outputs."
     />
+    <div className="card" style={{marginBottom:'.7rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap'}}>
+        <div style={{maxWidth:'760px'}}>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Validation Tool</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.25rem'}}>Backtest comes after you have one reusable screen worth checking.</div>
+          <div style={{fontSize:'.8rem',color:'var(--text2)',lineHeight:1.6}}>
+            Build and save a durable screen in Screener first. Then use Backtest to replay that saved view&apos;s reusable core metric filters against prior years and see whether the thesis held up.
+          </div>
+        </div>
+        <div style={{display:'flex',gap:'.45rem',flexWrap:'wrap'}}>
+          <button className="btn btn-sm btn-p" onClick={() => nav(PG.SCREENS_MGR)}>Open Saved Views</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.SCREEN)}>Open Screener</button>
+        </div>
+      </div>
+    </div>
     {selScreen && <div className="card" style={{marginBottom:'.7rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
         <div>
-          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Backtest Context</div>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Selected Saved View</div>
           <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{params?.screen_name || activeScreen?.name || `Screen ${selScreen}`}</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
             {workflowSourceLabel ? `Opened from ${workflowSourceLabel}. ` : ''}Backtest replays the saved view’s reusable core metric filters against historical county data.
@@ -292,7 +307,10 @@ export function Backtest({addToast, nav, params, assumptionSets, activeAssumptio
       </div>
     </div>}
     <div className="card" style={{marginBottom:'1.5rem'}}>
-      <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Backtest Configuration</h3>
+      <h3 style={{fontSize:'1rem',marginBottom:'.2rem'}}>Backtest Configuration</h3>
+      <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.75rem'}}>
+        Choose one saved view and one evaluation window, then run the historical replay.
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.75rem'}}>
         <div className="fg"><label>Saved View</label>
           <select value={selScreen} onChange={e => setSelScreen(e.target.value)}>
@@ -307,9 +325,9 @@ export function Backtest({addToast, nav, params, assumptionSets, activeAssumptio
     </div>
 
     {!result && !selScreen && <ActionEmptyState
-      title="Backtest"
-      body="Backtest replays one saved screen against prior years so you can see how a durable filter idea would have behaved."
-      detail="Choose a saved view first. If you have not saved a reusable screen yet, build one in Screener and save it before coming back here."
+      title="Backtest Needs A Saved View"
+      body="This page is for validating a screen you already trust enough to reuse."
+      detail="Pick a saved view first. If you have not saved a reusable screen yet, start in Screener, run one strong county screen, and save it before coming back here."
       actions={[
         { label: 'Open Saved Views', primary: true, onClick: () => nav(PG.SCREENS_MGR) },
         { label: 'Open Screener', onClick: () => nav(PG.SCREEN) },

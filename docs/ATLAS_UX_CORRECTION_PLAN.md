@@ -322,6 +322,12 @@ Focus:
 Success condition:
 - Atlas still feels powerful, but the app no longer teaches its engine room before the user has worked one full example
 
+Status update:
+- Shipped on 2026-03-21 ET.
+- Backtest now frames itself explicitly as a validation tool that comes after a reusable saved view exists, with `Saved Views` as the primary upstream dependency.
+- Assumptions now reads as a power-user control surface, uses calmer language for future/stored fields, and no longer advertises every downstream route as equally primary.
+- Data Sources now explains itself as provenance and trust support rather than a place to begin the workflow.
+
 ## 8) Traceability To Current Scope
 
 This correction plan supports the current scoped build, especially:
@@ -347,9 +353,9 @@ without changing Atlas into a different product.
 
 The next implementation slice should be:
 
-1. `UX-5` Secondary-Surface Demotion
+1. Run the live Atlas flow again from Home -> Perspective -> Screener -> County -> Research -> Scenario
 
 Reason:
-- the biggest first-run dead ends have now been removed
-- the core discovery -> memo -> modeling handoff is now much clearer
-- after that, Atlas still needs to keep advanced/secondary surfaces from competing too early with the main workflow
+- the major first-run dead ends and engine-room pages have now been softened
+- the next useful feedback should come from whether the core end-to-end flow actually feels more legible in practice
+- any further UX work should be based on what still feels awkward during real use, not on another abstract cleanup pass

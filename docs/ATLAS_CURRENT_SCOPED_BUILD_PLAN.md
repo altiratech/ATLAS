@@ -1,6 +1,6 @@
 # Atlas Current Scoped Build Plan
 
-Last updated: 2026-03-20 (ET)
+Last updated: 2026-03-21 (ET)
 Owner: Ryan + Codex + Claude
 Status: Canonical active implementation scope for Atlas
 
@@ -56,6 +56,7 @@ Current guardrails:
 - Screener progressive disclosure so the first-run path reads as screen -> filter -> run -> open county instead of exposing Atlas internals too early
 - downstream empty-state guidance so Watchlist, Comparison, Workspace, Scenario Lab, Portfolio, and Backtest no longer feel like dead ends on first use
 - clearer county -> research -> scenario sequencing so discovery turns into memo work before Atlas asks the user to model downside cases
+- secondary-surface demotion so Backtest, Assumptions, and Data Sources read as support tools after the main Atlas flow rather than equal first-run destinations
 
 ## 3) Explicitly Deferred
 
