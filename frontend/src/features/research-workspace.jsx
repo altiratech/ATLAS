@@ -484,13 +484,14 @@ export function ResearchWorkspace({
         <div className="sc" style={{margin:0}}>
           <div className="sc-l">Best Next Move</div>
           <div style={{fontSize:'.82rem',color:'var(--text1)',lineHeight:1.35}}>
-            {county ? 'Tighten the thesis, save the memo, then pressure test it in Scenario Lab.' : 'Open a record from the queue first, or select a county and start writing the memo directly.'}
+            {county ? 'Write the call in plain language, save the memo, then pressure test it in Scenario Lab.' : 'Open a record from the queue first, or select one county and turn it into a memo before modeling anything.'}
           </div>
         </div>
       </div>
       <div className="hero-actions">
-        {county && <button className="btn btn-p" onClick={() => nav(PG.COUNTY, {fips: county, playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open County Detail</button>}
-        {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>}
+        {county && <button className="btn btn-p" onClick={saveWorkspace}>Save Memo</button>}
+        {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Pressure Test In Scenario Lab</button>}
+        {county && <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county, playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open County Detail</button>}
       </div>
     </div>
 
@@ -589,7 +590,7 @@ export function ResearchWorkspace({
         <div>
           <h3 style={{fontSize:'1rem',marginBottom:'.18rem'}}>Active Record</h3>
           <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'900px'}}>
-            Keep the working call, county read, and model basis visible in one place so the memo editor does not have to carry all the context by itself.
+            This is the bridge between discovery and underwriting. Capture the investment call here first, then use Scenario Lab to pressure test whether it survives.
           </div>
         </div>
         <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
@@ -645,6 +646,9 @@ export function ResearchWorkspace({
     <div className="rw-grid">
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Memo Editor</h3>
+        <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.65rem',lineHeight:1.45}}>
+          Start with the written call. Once the thesis, risks, and missing-data notes are saved, use Scenario Lab to test whether the memo still works under stress.
+        </div>
         <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} placeholder="Select county for research workspace..." selectedLabel={selectedCountyLabel}/></div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
           <div className="fg"><label>Decision Status</label>
@@ -730,7 +734,7 @@ export function ResearchWorkspace({
         <div className="fg"><label>Missing Data Notes (comma separated)</label><input type="text" value={missingDataNotesInput} onChange={e => setMissingDataNotesInput(e.target.value)} placeholder="parcel zoning unknown, substation capacity unknown"/></div>
         <div className="rw-actions">
           <button className="btn btn-p" onClick={saveWorkspace}>Save Workspace</button>
-          {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Open Scenario Lab</button>}
+          {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Pressure Test In Scenario Lab</button>}
         </div>
       </div>
 
@@ -757,7 +761,7 @@ export function ResearchWorkspace({
       {!latestScenarioRun ? <ActionEmptyState
         title="Latest Scenario Snapshot"
         body="This section shows the latest saved compare run and underwrite attached to the active research record."
-        detail={county ? 'Run one scenario from Scenario Lab after you have a county selected to bring the latest upside, downside, and acquisition read back into this memo.' : 'Choose a county first, then run one scenario from Scenario Lab to attach modeling context here.'}
+        detail={county ? 'After the memo is saved, run one scenario from Scenario Lab to bring the latest upside, downside, and acquisition read back into this decision record.' : 'Choose a county first, then save a memo before running one scenario from Scenario Lab to attach modeling context here.'}
         actions={[
           { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
         ]}
@@ -844,7 +848,7 @@ export function ResearchWorkspace({
           </div>
         </div>}
         <div className="rw-actions">
-          {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(latestScenarioRun))}>Open Scenario Lab</button>}
+          {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(latestScenarioRun))}>Reopen Scenario Lab</button>}
         </div>
       </div>}
     </div>
@@ -874,7 +878,7 @@ export function ResearchWorkspace({
       {active.scenario_packs.length === 0 ? <ActionEmptyState
         title="Saved Scenario Packs"
         body="Scenario packs let you reuse a repeatable modeling stance for this county."
-        detail={county ? 'Save one in Scenario Lab when a parameter mix becomes part of your workflow for this county.' : 'Pick a county first, then save a scenario pack from Scenario Lab once you have a reusable setup.'}
+        detail={county ? 'Save one in Scenario Lab after you have a memo worth stress-testing and a parameter mix you want to reuse for this county.' : 'Pick a county first, then save a scenario pack from Scenario Lab once you have a reusable setup.'}
         actions={[
           { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
         ]}
@@ -893,7 +897,7 @@ export function ResearchWorkspace({
       {scenarioRuns.length === 0 ? <ActionEmptyState
         title="Scenario Run History"
         body="This is the saved modeling history for the active research record."
-        detail={county ? 'Run and save one scenario from Scenario Lab to start building a compare history here.' : 'Choose a county first, then save one scenario run so this history has something to show.'}
+        detail={county ? 'Once the memo is in place, run and save one scenario from Scenario Lab to start building a compare history here.' : 'Choose a county first, then save one memo and one scenario run so this history has something to show.'}
         actions={[
           { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
         ]}

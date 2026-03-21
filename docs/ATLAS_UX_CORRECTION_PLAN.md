@@ -306,6 +306,12 @@ Focus:
 Success condition:
 - the user understands when to move from discovery into memo and modeling work
 
+Status update:
+- Shipped on 2026-03-20 ET.
+- County Detail now frames itself more explicitly as the interpretation page after Screener and pushes the user toward saving a research record before modeling.
+- Research Workspace now treats the memo as the primary job and Scenario Lab as the next pressure-test step after the call is written.
+- Scenario Lab now explains itself more clearly as downstream underwriting for a county already in work, with a stronger return path back to the memo.
+
 ### UX-5: Secondary-Surface Demotion
 
 Focus:
@@ -341,10 +347,9 @@ without changing Atlas into a different product.
 
 The next implementation slice should be:
 
-1. `UX-4` County-to-Decision Handoff
-2. `UX-5` Secondary-Surface Demotion
+1. `UX-5` Secondary-Surface Demotion
 
 Reason:
 - the biggest first-run dead ends have now been removed
-- the next biggest gain is to make downstream movement from discovery into decision work more explicit
+- the core discovery -> memo -> modeling handoff is now much clearer
 - after that, Atlas still needs to keep advanced/secondary surfaces from competing too early with the main workflow

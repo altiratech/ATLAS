@@ -55,6 +55,7 @@ Current guardrails:
 - first-time-user workflow legibility across Home, Perspective Home, Screener, and downstream decision pages
 - Screener progressive disclosure so the first-run path reads as screen -> filter -> run -> open county instead of exposing Atlas internals too early
 - downstream empty-state guidance so Watchlist, Comparison, Workspace, Scenario Lab, Portfolio, and Backtest no longer feel like dead ends on first use
+- clearer county -> research -> scenario sequencing so discovery turns into memo work before Atlas asks the user to model downside cases
 
 ## 3) Explicitly Deferred
 

@@ -292,10 +292,10 @@ export function ScenarioLab({
     {!county && <ActionEmptyState
       title="Scenario Lab"
       body="Scenario Lab is Atlas's underwriting page. It pressure-tests one selected county rather than acting like a general calculator."
-      detail="Choose a county from Screener, County Detail, or Research first. Once a county is selected, run a base case, then stress it with different presets or debt assumptions."
+      detail="Choose a county from County Detail or Research after you have a view worth testing. Once a county is selected, run a base case first, then stress it with different presets or debt assumptions."
       actions={[
-        { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
-        { label: 'Open Workspace', onClick: () => nav(PG.RESEARCH) },
+        { label: 'Open Workspace', primary: true, onClick: () => nav(PG.RESEARCH) },
+        { label: 'Open Screener', onClick: () => nav(PG.SCREEN) },
       ]}
     />}
     {county && <div className="card" style={{marginBottom:'.7rem'}}>
@@ -304,12 +304,11 @@ export function ScenarioLab({
           <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Modeling Context</div>
           <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.2rem'}}>{selectedCountyLabel}</div>
           <div style={{fontSize:'.8rem',color:'var(--text2)'}}>
-            {sourceLabel ? `Opened from ${sourceLabel}. ` : ''}Scenario inputs will run against the selected county without requiring another lookup step.
+            {sourceLabel ? `Opened from ${sourceLabel}. ` : ''}Use this page to pressure test a county already in work, not to decide whether the county matters in the first place.
           </div>
         </div>
         <div className="rw-actions" style={{margin:0}}>
-          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
-          <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, {
+          <button className="btn btn-p btn-sm" onClick={() => nav(PG.RESEARCH, {
             fips: county,
             countyName: params?.countyName,
             state: params?.state,
@@ -319,7 +318,8 @@ export function ScenarioLab({
             thesisLabel: effectiveThesis?.label,
             assetType: effectiveThesis?.assetType || 'agriculture_land',
             targetUseCase: effectiveThesis?.targetUseCase || 'farmland_investment',
-          })}>Open Research Workspace</button>
+          })}>Back To Research Memo</button>
+          <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county})}>Open County Detail</button>
         </div>
       </div>
     </div>}
@@ -327,6 +327,9 @@ export function ScenarioLab({
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Scenario Parameters</h3>
       <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} selectedLabel={selectedCountyLabel}/></div>
       <div style={{fontSize:'.7rem',color:'var(--text2)',marginBottom:'.5rem'}}>Session User: {researchUser || '--'}</div>
+      <div style={{fontSize:'.74rem',color:'var(--text2)',marginBottom:'.45rem'}}>
+        Best use: run one clean base case, read the upside/downside deltas, then carry the result back into Research so the memo reflects what the model did to the thesis.
+      </div>
       <div style={{fontSize:'.74rem',color:'var(--text2)',marginBottom:'.6rem'}}>Base set: {assumptionSetLabel(activeAssumptionSet)}. Scenario controls below override only risk premium, growth, and near-term rent shock.</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.75rem'}}>
         <div className="fg"><label>Risk Premium: {rp}%</label><input type="range" min="2" max="8" step="0.25" value={rp} onChange={e=>setRp(parseFloat(e.target.value))}/></div>

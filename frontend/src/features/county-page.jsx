@@ -203,8 +203,8 @@ export function CountyPage({
       ? { label: 'TRIAGE-ONLY', className: 'badge-b', summary: 'This county is still useful for triage, but some underwriting fields are proxy-backed or missing.' }
       : { label: 'PARTIAL', className: 'badge-a', summary: 'Some core underwriting fields remain incomplete and need extra diligence.' };
   const nextAction = data.source_quality === 'proxy'
-    ? 'Use Scenario Lab to pressure test the thesis, then confirm the county belongs in research despite proxy-driven inputs.'
-    : 'Move this county into Research Workspace, record the thesis, and run a downside scenario before presenting it.';
+    ? 'Save this county into Research first, note the proxy-driven inputs, then run one downside scenario to see if the thesis still holds.'
+    : 'Save this county into Research, record the thesis in plain language, then run one downside scenario before sharing the call.';
   const confidenceLevel = (() => {
     if (data.source_quality === 'county' && data.productivity_active && m.implied_cap_rate != null && m.noi_per_acre != null && m.access_score != null) return 'high';
     if (['county', 'proxy', 'mixed'].includes(data.source_quality) && m.implied_cap_rate != null && m.noi_per_acre != null) return 'medium';
@@ -344,10 +344,42 @@ export function CountyPage({
         <div style={{color:'var(--text2)',fontSize:'.8rem'}}>FIPS: {data.geo_key} | As of: {data.as_of}</div>
       </div>
       <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
-        <button className={`btn ${watched?'btn-p':''}`} onClick={toggleWatch}>{watched?'★ Watching':'☆ Watch'}</button>
-        <button className="btn" onClick={() => nav(PG.RESEARCH, workflowParams)}>Research</button>
-        <button className="btn" onClick={() => nav(PG.SCENARIO, workflowParams)}>Scenario</button>
-        <button className="btn" onClick={() => nav(PG.COMPARE,{fips:data.geo_key})}>Compare</button>
+        <button className="btn btn-p" onClick={() => nav(PG.RESEARCH, workflowParams)}>Save To Research</button>
+        <button className="btn" onClick={() => nav(PG.SCENARIO, workflowParams)}>Pressure Test In Scenario Lab</button>
+        <button className={`btn btn-sm ${watched?'btn-p':''}`} onClick={toggleWatch}>{watched?'★ Watching':'☆ Watch'}</button>
+        <button className="btn btn-sm" onClick={() => nav(PG.COMPARE,{fips:data.geo_key})}>Compare</button>
+      </div>
+    </div>
+
+    <div className="card" style={{marginBottom:'1rem'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',flexWrap:'wrap'}}>
+        <div style={{maxWidth:'900px'}}>
+          <div style={{fontSize:'.72rem',letterSpacing:'.12em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.2rem'}}>Recommended Handoff</div>
+          <div style={{fontSize:'1rem',fontWeight:600,marginBottom:'.25rem'}}>County Detail is the judgment page after Screener.</div>
+          <div style={{fontSize:'.82rem',color:'var(--text2)',lineHeight:1.45}}>
+            Read why the county surfaced, decide whether the thesis is worth carrying forward, then save one decision record in Research before you start modeling edge cases.
+          </div>
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:'.55rem',flex:'1 1 520px'}}>
+          <div className="workflow-card" style={{margin:0}}>
+            <div className="workflow-step">Step 1</div>
+            <div className="workflow-p">
+              Confirm the county read, lens read, and confidence level make this worth real work.
+            </div>
+          </div>
+          <div className="workflow-card" style={{margin:0}}>
+            <div className="workflow-step">Step 2</div>
+            <div className="workflow-p">
+              Save it into Research and write the thesis, bull case, bear case, and missing-data notes.
+            </div>
+          </div>
+          <div className="workflow-card" style={{margin:0}}>
+            <div className="workflow-step">Step 3</div>
+            <div className="workflow-p">
+              Only then move into Scenario Lab to pressure test the call with downside and credit stress.
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -408,7 +440,7 @@ export function CountyPage({
             <div style={{marginBottom:'.28rem'}}><strong>Model set:</strong> {assumptionSetLabel(activeAssumptionSet)}</div>
             <div style={{marginBottom:'.28rem'}}><strong>Target use:</strong> farmland investment</div>
             <div style={{marginBottom:'.28rem'}}><strong>Read:</strong> {decisionRead.overall.label}</div>
-            <div><strong>Next step:</strong> {data.source_quality === 'proxy' ? 'Research + Scenario' : 'Research + downside case'}</div>
+            <div><strong>Next step:</strong> {data.source_quality === 'proxy' ? 'Research first, then scenario stress' : 'Research first, then downside case'}</div>
           </div>
         </div>
       </div>
@@ -433,7 +465,7 @@ export function CountyPage({
         </div>
         <div className="sc" style={{margin:0}}>
           <div className="sc-l">Next Best Action</div>
-          <div className="sc-v" style={{fontSize:'.95rem'}}>{underwritingStatus.label}</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>MOVE TO RESEARCH</div>
           <div className="sc-c">{nextAction}</div>
         </div>
       </div>
