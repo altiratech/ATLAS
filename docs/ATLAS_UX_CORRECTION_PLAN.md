@@ -260,6 +260,15 @@ Focus:
 Success condition:
 - a first-time user can run one useful screen and open one county without needing to understand reusable core filters first
 
+Status update:
+- Shipped on 2026-03-20 ET.
+- Screener now leads with:
+  - `Step 1: Start With A Screen`
+  - `Step 2: Set Basic Filters`
+  - `Run Screen`
+  - optional advanced refinements only after that
+- Save / Backtest actions now sit below results, and advanced controls are hidden by default unless the user chooses to refine further.
+
 ### UX-3: Empty-State Rewrite Pass
 
 Focus:
@@ -318,10 +327,10 @@ without changing Atlas into a different product.
 
 The next implementation slice should be:
 
-1. `UX-2` Screener Progressive Disclosure
-2. `UX-3` Empty-State Rewrite Pass
+1. `UX-3` Empty-State Rewrite Pass
+2. `UX-4` County-to-Decision Handoff
 
 Reason:
-- Screener remains the biggest usability bottleneck
+- the Screener bottleneck has now been reduced through progressive disclosure
 - empty-state pages still make the product feel harder than it needs to be
-- these changes should improve the product materially without requiring new data or new ontology
+- the next biggest gain is to make downstream movement from discovery into decision work more explicit

@@ -1,6 +1,6 @@
 # Atlas Current Scoped Build Plan
 
-Last updated: 2026-03-17 (ET)
+Last updated: 2026-03-20 (ET)
 Owner: Ryan + Codex + Claude
 Status: Canonical active implementation scope for Atlas
 
@@ -53,6 +53,7 @@ Current guardrails:
 - clearer thesis-aware reads in discovery and memo surfaces
 - honest lineage / freshness / coverage context on active surfaces
 - first-time-user workflow legibility across Home, Perspective Home, Screener, and downstream decision pages
+- Screener progressive disclosure so the first-run path reads as screen -> filter -> run -> open county instead of exposing Atlas internals too early
 
 ## 3) Explicitly Deferred
 
