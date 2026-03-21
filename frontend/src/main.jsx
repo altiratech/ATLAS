@@ -204,7 +204,7 @@ function App() {
       case PG.SCREEN: return <Screener addToast={addToast} nav={nav} params={pp} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
       case PG.COUNTY: return <CountyPage addToast={addToast} params={pp} nav={nav} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
       case PG.WATCH: return <Watchlist addToast={addToast} nav={nav}/>;
-      case PG.COMPARE: return <Comparison addToast={addToast} params={pp} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
+      case PG.COMPARE: return <Comparison addToast={addToast} nav={nav} params={pp} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
       case PG.SCENARIO: return <ScenarioLab addToast={addToast} nav={nav} params={pp} researchUser={researchUser} {...assumptionProps} {...playbookProps} {...thesisProps}/>;
       case PG.BACKTEST: return <Backtest addToast={addToast} nav={nav} params={pp} {...assumptionProps}/>;
       case PG.PORTFOLIO: return <PortfolioPage addToast={addToast} nav={nav} params={pp} {...assumptionProps} {...playbookProps} {...thesisProps}/>;

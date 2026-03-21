@@ -14,7 +14,7 @@ import {
 } from '../formatting.js';
 import { api } from '../auth.js';
 import { appendAssumptionParam, AssumptionContextBar, assumptionSetLabel } from '../shared/assumptions-ui.jsx';
-import { ErrBox, Loading } from '../shared/system.jsx';
+import { ActionEmptyState, ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, STable } from '../shared/data-ui.jsx';
 
 export function Watchlist({addToast, nav}) {
@@ -45,7 +45,14 @@ export function Watchlist({addToast, nav}) {
 
   if (loading) return <Loading/>;
   if (err) return <ErrBox title="Watchlist Error" msg={err} onRetry={load}/>;
-  if (items.length === 0) return <div className="empty"><h3>Watchlist empty</h3><p>Add counties from the screener or county detail page</p></div>;
+  if (items.length === 0) return <ActionEmptyState
+    title="Watchlist"
+    body="Watchlist is where you keep counties worth monitoring before they become full research records."
+    detail="Populate it by flagging a county from Screener or County Detail when you want to keep an eye on it without opening a full memo yet."
+    actions={[
+      { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
+    ]}
+  />;
 
   return <div className="card">
     <h3 style={{fontSize:'1rem',marginBottom:'1rem'}}>Watched Counties ({items.length})</h3>
@@ -75,7 +82,7 @@ export function Watchlist({addToast, nav}) {
   </div>;
 }
 
-export function Comparison({addToast, params, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
+export function Comparison({addToast, nav, params, assumptionSets, activeAssumptionSetId, activeAssumptionSet, setActiveAssumptionSetId}) {
   const [selected, setSelected] = React.useState(params?.fips ? [params.fips] : []);
   const [data, setData] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
@@ -134,6 +141,15 @@ export function Comparison({addToast, params, assumptionSets, activeAssumptionSe
       </div>
       <button className="btn btn-p" onClick={compare} disabled={loading || selected.filter(Boolean).length < 2}>{loading ? 'Loading...' : 'Compare'}</button>
     </div>
+
+    {!data && selected.filter(Boolean).length < 2 && <ActionEmptyState
+      title="Comparison"
+      body="Comparison is for side-by-side county judgment once you already have two candidates worth weighing against each other."
+      detail="Pick two counties above, or start in Screener and send the strongest ones here after you have a shortlist."
+      actions={[
+        { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
+      ]}
+    />}
 
     {data && data.counties && data.counties.length > 0 && <div className="card">
       <h3 style={{fontSize:'1rem',marginBottom:'.75rem'}}>Side-by-Side Comparison</h3>
@@ -289,6 +305,16 @@ export function Backtest({addToast, nav, params, assumptionSets, activeAssumptio
       </div>
       <button className="btn btn-p" onClick={run} disabled={loading}>{loading ? 'Running...' : 'Run Backtest'}</button>
     </div>
+
+    {!result && !selScreen && <ActionEmptyState
+      title="Backtest"
+      body="Backtest replays one saved screen against prior years so you can see how a durable filter idea would have behaved."
+      detail="Choose a saved view first. If you have not saved a reusable screen yet, build one in Screener and save it before coming back here."
+      actions={[
+        { label: 'Open Saved Views', primary: true, onClick: () => nav(PG.SCREENS_MGR) },
+        { label: 'Open Screener', onClick: () => nav(PG.SCREEN) },
+      ]}
+    />}
 
     {result && <div>
       <div className="sg">

@@ -54,6 +54,7 @@ Current guardrails:
 - honest lineage / freshness / coverage context on active surfaces
 - first-time-user workflow legibility across Home, Perspective Home, Screener, and downstream decision pages
 - Screener progressive disclosure so the first-run path reads as screen -> filter -> run -> open county instead of exposing Atlas internals too early
+- downstream empty-state guidance so Watchlist, Comparison, Workspace, Scenario Lab, Portfolio, and Backtest no longer feel like dead ends on first use
 
 ## 3) Explicitly Deferred
 

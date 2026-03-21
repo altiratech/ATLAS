@@ -282,6 +282,20 @@ Focus:
 Success condition:
 - empty pages no longer feel like dead ends
 
+Status update:
+- Shipped on 2026-03-20 ET.
+- Empty downstream pages now explain:
+  - what the surface is for
+  - how to populate it
+  - what to click next
+- This now covers:
+  - Watchlist
+  - Comparison
+  - Research queue and scenario-history empties
+  - Scenario Lab county-selection dependency
+  - Portfolio and holdings
+  - Backtest with no saved view selected
+
 ### UX-4: County-to-Decision Handoff
 
 Focus:
@@ -327,10 +341,10 @@ without changing Atlas into a different product.
 
 The next implementation slice should be:
 
-1. `UX-3` Empty-State Rewrite Pass
-2. `UX-4` County-to-Decision Handoff
+1. `UX-4` County-to-Decision Handoff
+2. `UX-5` Secondary-Surface Demotion
 
 Reason:
-- the Screener bottleneck has now been reduced through progressive disclosure
-- empty-state pages still make the product feel harder than it needs to be
+- the biggest first-run dead ends have now been removed
 - the next biggest gain is to make downstream movement from discovery into decision work more explicit
+- after that, Atlas still needs to keep advanced/secondary surfaces from competing too early with the main workflow

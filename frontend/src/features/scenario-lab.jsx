@@ -11,6 +11,7 @@ import {
 } from '../auth.js';
 import { AssumptionContextBar, assumptionSetLabel } from '../shared/assumptions-ui.jsx';
 import { CountyPicker, MiniBar } from '../shared/data-ui.jsx';
+import { ActionEmptyState } from '../shared/system.jsx';
 import { getThesisLens } from '../shared/thesis-lenses.js';
 
 const SCENARIO_PRESETS = [
@@ -288,6 +289,15 @@ export function ScenarioLab({
       title="Scenario Base Assumptions"
       description="Scenario Lab starts from this saved assumption set, then applies the slider overrides for risk premium, growth, and rent shock."
     />
+    {!county && <ActionEmptyState
+      title="Scenario Lab"
+      body="Scenario Lab is Atlas's underwriting page. It pressure-tests one selected county rather than acting like a general calculator."
+      detail="Choose a county from Screener, County Detail, or Research first. Once a county is selected, run a base case, then stress it with different presets or debt assumptions."
+      actions={[
+        { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
+        { label: 'Open Workspace', onClick: () => nav(PG.RESEARCH) },
+      ]}
+    />}
     {county && <div className="card" style={{marginBottom:'.7rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'.6rem',flexWrap:'wrap'}}>
         <div>
@@ -430,7 +440,11 @@ export function ScenarioLab({
           <button className="btn btn-sm" onClick={savePack}>Save Pack</button>
         </div>
         {packsLoading ? <div style={{fontSize:'.75rem',color:'var(--text2)'}}>Loading saved packs...</div>
-        : packs.length === 0 ? <div style={{fontSize:'.75rem',color:'var(--text2)'}}>No saved packs for selected county.</div>
+        : packs.length === 0 ? <ActionEmptyState
+            title="Saved Scenario Packs"
+            body="Scenario packs are reusable parameter setups for the selected county."
+            detail="Save a pack once this parameter mix becomes worth reusing across future runs."
+          />
         : packs.map(pack => <div className="pack-row" key={pack.id}>
           <div>
             <div style={{fontSize:'.76rem',fontWeight:600,marginBottom:'.16rem'}}>{pack.name}</div>

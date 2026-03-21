@@ -6,9 +6,9 @@ import {
   $pct,
   toast,
 } from '../formatting.js';
-import { PORTFOLIO_GRID_VIEW_KEY } from '../config.js';
+import { PG, PORTFOLIO_GRID_VIEW_KEY } from '../config.js';
 import { api } from '../auth.js';
-import { ErrBox, Loading } from '../shared/system.jsx';
+import { ActionEmptyState, ErrBox, Loading } from '../shared/system.jsx';
 import { CountyPicker, DataGrid } from '../shared/data-ui.jsx';
 import { appendAssumptionParam, AssumptionContextBar } from '../shared/assumptions-ui.jsx';
 import { evaluateAtlasCountyRead } from '../shared/atlas-read.js';
@@ -296,7 +296,14 @@ export function PortfolioPage({
           {p.name} ({p.holdings_count || 0} holdings)
         </button>)}
       </div>
-      {portfolios.length === 0 && <div style={{fontSize:'.78rem',color:'var(--text2)',marginTop:'.75rem'}}>No portfolios yet. Create one above to start adding county holdings.</div>}
+      {portfolios.length === 0 && <ActionEmptyState
+        title="Portfolio"
+        body="Portfolio is where Atlas aggregates counties you already care about into one exposure view."
+        detail="Create a portfolio above once you have counties worth tracking together, then add holdings from Screener, County Detail, or Research."
+        actions={[
+          { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
+        ]}
+      />}
     </div>
 
     <AssumptionContextBar
@@ -476,7 +483,14 @@ export function PortfolioPage({
             </div>
           </div>
         </div>
-        <DataGrid
+        {filteredPortfolioRows.length === 0 && !hasHoldingFilters ? <ActionEmptyState
+          title="Holdings"
+          body="Holdings are the county positions Atlas uses to calculate aggregated value, hazard, and concentration."
+          detail="Add one county to this portfolio using the form above, or go back to Screener and identify the first counties you want to track together."
+          actions={[
+            { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
+          ]}
+        /> : <DataGrid
           columns={portfolioColumns}
           rows={filteredPortfolioRows}
           rowKey="geo_key"
@@ -494,7 +508,7 @@ export function PortfolioPage({
             portfolioName={detail?.name}
             riskSummary={riskSummary}
           />}
-        />
+        />}
       </div>
     </div>}
   </div>;

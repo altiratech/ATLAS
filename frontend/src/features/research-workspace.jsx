@@ -21,7 +21,7 @@ import {
 } from '../shared/research-grid.jsx';
 import { persistGridViewState, readStoredGridViewState } from '../shared/grid-view-state.js';
 import { getThesisLens, getThesisLensesForPlaybook, thesisBadgeClass } from '../shared/thesis-lenses.js';
-import { ErrBox, Loading } from '../shared/system.jsx';
+import { ActionEmptyState, ErrBox, Loading } from '../shared/system.jsx';
 
 export function ResearchWorkspace({
   addToast,
@@ -549,7 +549,16 @@ export function ResearchWorkspace({
         </div>
       </div>
       {storeLoading && records.length === 0 ? <Loading/>
-      : <DataGrid
+      : filteredResearchRows.length === 0 && !hasResearchFilters
+        ? <ActionEmptyState
+            title="Research Queue"
+            body="Research is where Atlas turns a promising county into a defendable decision record."
+            detail="Start from Screener or County Detail, open one county you want to investigate, then save it into Research Workspace so the memo and scenario history have a home."
+            actions={[
+              { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
+            ]}
+          />
+        : <DataGrid
           columns={researchColumns}
           rows={filteredResearchRows}
           rowKey="fips"
@@ -745,7 +754,14 @@ export function ResearchWorkspace({
 
     <div className="card" style={{marginBottom:'.7rem'}}>
       <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Latest Scenario Snapshot</h3>
-      {!latestScenarioRun ? <div className="empty"><p>No saved scenario compare snapshot yet.</p></div> : <div>
+      {!latestScenarioRun ? <ActionEmptyState
+        title="Latest Scenario Snapshot"
+        body="This section shows the latest saved compare run and underwrite attached to the active research record."
+        detail={county ? 'Run one scenario from Scenario Lab after you have a county selected to bring the latest upside, downside, and acquisition read back into this memo.' : 'Choose a county first, then run one scenario from Scenario Lab to attach modeling context here.'}
+        actions={[
+          { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
+        ]}
+      /> : <div>
         <div className="sc"><div className="sc-l">Snapshot</div><div className="sc-v" style={{fontSize:'.9rem'}}>{latestScenarioRun.scenario_name || 'Scenario Snapshot'}</div><div className="sc-c">{latestScenarioRun.created_at ? new Date(latestScenarioRun.created_at).toLocaleString() : '--'} • As of {latestScenarioRun.as_of_date || '--'}</div></div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem',marginTop:'.6rem'}}>
           <div className="sc" style={{margin:0}}>
@@ -839,7 +855,11 @@ export function ResearchWorkspace({
         <textarea value={noteInput} onChange={e => setNoteInput(e.target.value)} placeholder="Add diligence note, risk, catalyst, or follow-up question..." style={{minHeight:'68px',resize:'vertical'}}/>
         <button className="btn btn-p" onClick={addNote}>Add Note</button>
       </div>
-      {active.notes.length === 0 ? <div className="empty"><p>No notes yet</p></div>
+      {active.notes.length === 0 ? <ActionEmptyState
+        title="Research Notes"
+        body="Notes are the running diligence trail for this memo."
+        detail="Add one risk, catalyst, missing-data question, or follow-up note so the record starts to capture the work you are doing."
+      />
       : active.notes.map(n => <div className="rw-note" key={n.id}>
         <div style={{flex:1}}>
           <div className="rw-meta">{new Date(n.created_at).toLocaleString()}</div>
@@ -851,7 +871,14 @@ export function ResearchWorkspace({
 
     <div className="card" style={{marginBottom:'.7rem'}}>
       <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Saved Scenario Packs For Selected County</h3>
-      {active.scenario_packs.length === 0 ? <div className="empty"><p>No scenario packs saved yet. Save one in Scenario Lab.</p></div>
+      {active.scenario_packs.length === 0 ? <ActionEmptyState
+        title="Saved Scenario Packs"
+        body="Scenario packs let you reuse a repeatable modeling stance for this county."
+        detail={county ? 'Save one in Scenario Lab when a parameter mix becomes part of your workflow for this county.' : 'Pick a county first, then save a scenario pack from Scenario Lab once you have a reusable setup.'}
+        actions={[
+          { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
+        ]}
+      />
       : active.scenario_packs.map(pack => <div key={pack.id} className="pack-row">
         <div>
           <div style={{fontSize:'.8rem',fontWeight:600,marginBottom:'.18rem'}}>{pack.name}</div>
@@ -863,7 +890,14 @@ export function ResearchWorkspace({
 
     <div className="card" style={{marginBottom:'.7rem'}}>
       <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Scenario Run History</h3>
-      {scenarioRuns.length === 0 ? <div className="empty"><p>No scenario compare snapshots yet.</p></div>
+      {scenarioRuns.length === 0 ? <ActionEmptyState
+        title="Scenario Run History"
+        body="This is the saved modeling history for the active research record."
+        detail={county ? 'Run and save one scenario from Scenario Lab to start building a compare history here.' : 'Choose a county first, then save one scenario run so this history has something to show.'}
+        actions={[
+          { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
+        ]}
+      />
       : scenarioRuns.map(run => {
         const assumptionSummary = summarizeScenarioAssumptions(run.assumptions);
         const runAcquisitionInputs = readAcquisitionInputs(run);

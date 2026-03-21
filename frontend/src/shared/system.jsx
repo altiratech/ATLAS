@@ -10,6 +10,31 @@ export function ErrBox({title, msg, onRetry}) {
   </div>;
 }
 
+export function ActionEmptyState({ title, body, detail, actions = [] }) {
+  return <div className="empty" style={{ alignItems:'flex-start', textAlign:'left', border:'1px solid var(--line)', background:'var(--bg1)' }}>
+    <div style={{ width:'100%' }}>
+      <div style={{ fontSize:'.78rem', letterSpacing:'.12em', textTransform:'uppercase', color:'var(--text3)', marginBottom:'.4rem' }}>
+        {title}
+      </div>
+      <div style={{ fontSize:'.88rem', color:'var(--text1)', lineHeight:1.55, marginBottom:'.35rem' }}>
+        {body}
+      </div>
+      {detail && <div style={{ fontSize:'.78rem', color:'var(--text2)', lineHeight:1.55, marginBottom:'.8rem' }}>
+        {detail}
+      </div>}
+      {actions.length > 0 && <div style={{ display:'flex', gap:'.45rem', flexWrap:'wrap' }}>
+        {actions.map((action) => <button
+          key={action.label}
+          className={`btn btn-sm ${action.primary ? 'btn-p' : ''}`}
+          onClick={action.onClick}
+        >
+          {action.label}
+        </button>)}
+      </div>}
+    </div>
+  </div>;
+}
+
 export function AccessGate({onRetry}) {
   return <div style={{
     display:'flex', alignItems:'center', justifyContent:'center',
