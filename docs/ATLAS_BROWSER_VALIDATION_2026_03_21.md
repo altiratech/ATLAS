@@ -203,6 +203,15 @@ Likely focus:
 - workspace identifier contract
 - research scenario-run readback contract
 
+Status update:
+- Shipped on 2026-03-21 ET.
+- The production Worker was rejecting valid `as_of_date` values like `2025` because the route validator used an escaped digit regex that matched the literal string `\d` instead of numeric years.
+- The save path now accepts real year/date strings again, and live authenticated verification succeeded:
+  - `POST /api/v1/research/workspaces/20005/scenario-runs` returned a saved run with `id`, `scenario_name`, and `as_of_date: 2025`
+  - `GET /api/v1/research/workspaces/20005/scenario-runs?limit=3` returned that saved run immediately afterward
+- Atlas now also surfaces scenario-run counts back through serialized Research workspace payloads, so a workspace created only from saved scenario work no longer disappears from Research list state.
+- Live verification with a fresh anonymous session confirmed that creating a scenario run for a clean county key produced a visible `research/workspaces` row with `scenario_runs_count: 1` and a fresh `updated_at` timestamp.
+
 ### BV-3: Re-verify the return path from Scenario Lab back to Research
 
 Why third:
@@ -242,8 +251,8 @@ Reason:
 
 The next Atlas implementation slice should be:
 
-1. `BV-2` scenario persistence back into Research
-2. `BV-3` return-path verification from Scenario Lab back to Research
+1. `BV-3` return-path verification from Scenario Lab back to Research
+2. decide whether Research needs one more first-run simplification pass now that the main save/readback contract is working
 
 Only after those are stable should Atlas decide whether to:
 - soften the Research editor further, or
