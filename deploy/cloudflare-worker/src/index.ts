@@ -3903,7 +3903,7 @@ app.post('/api/v1/research/workspaces/:geoKey/scenario-runs', async (c) => {
   const assumptions = body.assumptions ?? {};
   const comparison = body.comparison ?? {};
   const asOfDate = (body.as_of_date ?? '').trim();
-  if (!asOfDate || !/^\\d{4}(-\\d{2}-\\d{2})?$/.test(asOfDate)) {
+  if (!asOfDate || !/^\d{4}(-\d{2}-\d{2})?$/.test(asOfDate)) {
     return c.json({ error: 'as_of_date is required (YYYY or YYYY-MM-DD)' }, 400);
   }
 
