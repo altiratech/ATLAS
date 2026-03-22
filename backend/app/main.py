@@ -501,6 +501,9 @@ def _serialize_workspace(db: Session, workspace: ResearchWorkspace) -> dict:
     packs = db.query(ResearchScenarioPack).filter(
         ResearchScenarioPack.workspace_id == workspace.id
     ).order_by(ResearchScenarioPack.updated_at.desc(), ResearchScenarioPack.id.desc()).all()
+    scenario_run_count = db.query(ResearchScenarioRun).filter(
+        ResearchScenarioRun.workspace_id == workspace.id
+    ).count()
 
     payload = _workspace_defaults(workspace.geo_key)
     analysis = workspace.analysis_json if isinstance(workspace.analysis_json, dict) else {}
@@ -546,6 +549,7 @@ def _serialize_workspace(db: Session, workspace: ResearchWorkspace) -> dict:
             }
             for p in packs
         ],
+        "scenario_runs_count": int(scenario_run_count or 0),
         "created_at": str(workspace.created_at) if workspace.created_at else None,
         "updated_at": str(workspace.updated_at) if workspace.updated_at else None,
     })

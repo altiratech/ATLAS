@@ -1397,6 +1397,14 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
       created_at: string | null;
       updated_at: string | null;
     }>();
+  const scenarioRunCount = await db
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM research_scenario_runs
+       WHERE workspace_id = ?`,
+    )
+    .bind(workspace.id)
+    .first<{ count: number }>();
 
   return {
     geo_key: workspace.geo_key,
@@ -1422,6 +1430,7 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
       created_at: p.created_at,
       updated_at: p.updated_at,
     })),
+    scenario_runs_count: Number(scenarioRunCount?.count || 0),
     created_at: workspace.created_at,
     updated_at: workspace.updated_at,
   };

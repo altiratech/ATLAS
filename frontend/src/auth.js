@@ -52,6 +52,7 @@ export function defaultResearchRecord() {
     notes:[],
     scenario_packs:[],
     scenario_runs:[],
+    scenario_runs_count:0,
     updated_at:null,
   };
 }
@@ -76,6 +77,7 @@ export function normalizeResearchRecord(record) {
     notes: Array.isArray(safe.notes) ? safe.notes : [],
     scenario_packs: Array.isArray(safe.scenario_packs) ? safe.scenario_packs : [],
     scenario_runs: Array.isArray(safe.scenario_runs) ? safe.scenario_runs : [],
+    scenario_runs_count: Number.isFinite(Number(safe.scenario_runs_count)) ? Math.max(0, Number(safe.scenario_runs_count)) : 0,
     conviction: Number.isFinite(conviction) ? Math.max(0, Math.min(100, conviction)) : base.conviction,
     status: safe.status || base.status,
   };

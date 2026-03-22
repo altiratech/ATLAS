@@ -437,7 +437,7 @@ export function ResearchWorkspace({
 
   const records = React.useMemo(() => Object.entries(store)
     .map(([fips, rec]) => ({ fips, ...normalizeResearchRecord(rec) }))
-    .filter(r => r.thesis || r.analysis?.bull_case || r.analysis?.bear_case || r.analysis?.target_use_case || r.analysis?.critical_dependencies?.length || r.analysis?.missing_data_notes?.length || r.tags.length || r.notes.length || r.scenario_packs.length || r.scenario_runs.length)
+    .filter(r => r.thesis || r.analysis?.bull_case || r.analysis?.bear_case || r.analysis?.target_use_case || r.analysis?.critical_dependencies?.length || r.analysis?.missing_data_notes?.length || r.tags.length || r.notes.length || r.scenario_packs.length || r.scenario_runs.length || r.scenario_runs_count)
     .sort((a,b) => (b.updated_at || '').localeCompare(a.updated_at || '')), [store]);
   const researchRows = React.useMemo(
     () => hydrateResearchRows(records, countyMap, currentPlaybookKey),

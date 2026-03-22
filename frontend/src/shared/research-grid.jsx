@@ -91,6 +91,9 @@ export function hydrateResearchRows(records, countyMap, playbookKey) {
     const thesisLens = record.analysis?.thesis_lens_key
       ? getThesisLens(record.analysis.thesis_lens_key, effectivePlaybookKey)
       : null;
+    const scenarioRunsCount = Number.isFinite(Number(record.scenario_runs_count))
+      ? Math.max(0, Number(record.scenario_runs_count))
+      : (Array.isArray(record.scenario_runs) ? record.scenario_runs.length : 0);
     return {
       ...record,
       _playbook_key: effectivePlaybookKey,
@@ -108,7 +111,7 @@ export function hydrateResearchRows(records, countyMap, playbookKey) {
       _decision_state: record.analysis?.decision_state || 'exploring',
       _approval_state: record.analysis?.approval_state || '',
       _notes_count: Array.isArray(record.notes) ? record.notes.length : 0,
-      _scenario_runs_count: Array.isArray(record.scenario_runs) ? record.scenario_runs.length : 0,
+      _scenario_runs_count: scenarioRunsCount,
       _scenario_packs_count: Array.isArray(record.scenario_packs) ? record.scenario_packs.length : 0,
       _tags_text: Array.isArray(record.tags) ? record.tags.join(', ') : '',
       _updated_label: formatUpdatedAt(record.updated_at),
