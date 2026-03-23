@@ -351,16 +351,25 @@ without changing Atlas into a different product.
 
 ## 9) Live Revalidation Outcome
 
-A second live browser pass was completed on 2026-03-21 after `UX-5`.
+A second live browser pass was completed on 2026-03-21 after `UX-5`, and a full follow-through browser pass was completed again on 2026-03-23 after `BV-1` and `BV-2` shipped.
 
 That walkthrough confirmed:
 - Atlas is materially more understandable than before
 - County -> Research -> Scenario is now a real taught workflow
 - the next blockers are no longer broad page-purpose confusion
 
-It also surfaced two higher-priority workflow problems:
-- the recommended first Screener starter path can still return `0 counties`
-- Scenario Lab does not reliably persist scenario context back into Research
+The 2026-03-21 pass surfaced two higher-priority workflow problems:
+- the recommended first Screener starter path could return `0 counties`
+- Scenario Lab did not reliably persist scenario context back into Research
+
+The 2026-03-23 pass then confirmed those issues are now resolved in the live workflow:
+- the taught starter path now returns live counties
+- the user can move `Home -> Perspective -> Screener -> County -> Research -> Scenario -> Back To Research Memo`
+- the returned Research view shows both `Runs 1` in the queue row and populated latest scenario / underwrite summaries
+
+What still feels heavy:
+- `Research Workspace` is no longer confusing, but it is still the densest first-run page in Atlas
+- that means the next UX question is no longer workflow closure; it is whether the memo-writing surface should become lighter for the very first decision record
 
 Use [ATLAS_BROWSER_VALIDATION_2026_03_21.md](./ATLAS_BROWSER_VALIDATION_2026_03_21.md) for the recovered walkthrough evidence and ranked follow-up fix list.
 
@@ -368,10 +377,10 @@ Use [ATLAS_BROWSER_VALIDATION_2026_03_21.md](./ATLAS_BROWSER_VALIDATION_2026_03_
 
 The next implementation slice should be:
 
-1. fix first-run Screener starter reliability
-2. fix Scenario Lab -> Research scenario persistence
+1. decide whether `Research Workspace` needs one more first-run simplification pass
+2. only then decide whether Atlas should return to deeper product-substance work instead of more UX correction
 
 Reason:
-- Atlas's surface hierarchy is now strong enough that the biggest remaining friction sits inside the main success path
-- the product now needs workflow closure more than another broad UX cleanup pass
-- any further UX work should be based on what still feels awkward during real use, not on another abstract cleanup pass
+- Atlas's main loop now works in a live browser instead of only in source or API validation
+- the biggest remaining friction is page weight, not broken handoff
+- any further UX work should now target the one dense remaining page instead of reopening broad hierarchy cleanup

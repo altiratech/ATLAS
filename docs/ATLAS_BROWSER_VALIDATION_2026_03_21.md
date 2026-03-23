@@ -1,6 +1,6 @@
 # Atlas Browser Validation 2026-03-21
 
-Last updated: 2026-03-21 (ET)  
+Last updated: 2026-03-23 (ET)  
 Owner: Ryan + Codex + Claude  
 Status: Recovered live-browser validation memo after session compaction
 
@@ -44,6 +44,15 @@ The screenshot artifacts from the walkthrough are still available locally:
 - `output/playwright/research-workspace-2026-03-21.png`
 - `output/playwright/scenario-lab-before-run-2026-03-21.png`
 - `output/playwright/scenario-lab-after-run-2026-03-21.png`
+- `output/playwright/bv3-home-2026-03-21.png`
+- `output/playwright/bv3-perspective-home-2026-03-21.png`
+- `output/playwright/bv3-screener-2026-03-21.png`
+- `output/playwright/bv3-county-detail-2026-03-21.png`
+- `output/playwright/bv3-research-workspace-2026-03-21.png`
+- `output/playwright/bv3-research-saved-2026-03-21.png`
+- `output/playwright/bv3-scenario-lab-2026-03-21.png`
+- `output/playwright/bv3-scenario-after-run-2026-03-21.png`
+- `output/playwright/bv3-back-to-research-2026-03-21.png`
 
 These artifacts matter because the original live-browser analysis was partially lost in chat compaction. The screenshots preserve the observable user state.
 
@@ -78,6 +87,34 @@ Once the user reaches it with a selected county, `Scenario Lab` has a clear job:
 
 This means Atlas is no longer mostly failing at page purpose. The remaining issues are more operational and workflow-specific.
 
+### 3.4 The full discovery -> memo -> scenario -> return loop now closes
+
+`BV-3` was re-run in a live browser on 2026-03-23 ET after the `BV-1` and `BV-2` fixes shipped.
+
+Confirmed live path:
+1. `Atlas Home`
+2. `Perspective Home`
+3. `Transition-Ready Counties`
+4. `Screener` with `156 counties`
+5. `County Detail` for `ATCHISON, KS`
+6. `Save To Research`
+7. write/save a minimal memo
+8. `Pressure Test In Scenario Lab`
+9. `Run Scenario`
+10. `Back To Research Memo`
+
+What worked:
+- the starter screen no longer dead-ends
+- county handoff still teaches `research first, then scenario`
+- scenario run produced real underwrite / DSCR / compare output
+- returning to Research showed:
+  - `1 total saved records`
+  - `Runs 1` in the queue row
+  - a populated `Latest scenario snapshot`
+  - a populated `Latest underwrite`
+
+The main remaining friction is not broken flow. It is that `Research Workspace` still feels heavier than a first-time user probably wants right after saving the first county.
+
 ## 4) Highest-Confidence Findings
 
 These findings are ranked by impact on first-run trust and workflow closure.
@@ -97,7 +134,7 @@ Relevant sources:
 - `frontend/src/shared/thesis-lenses.js`
 - `frontend/src/features/screener.jsx`
 
-### 4.2 Scenario results are not reliably persisting back into Research
+### 4.2 Scenario results were not reliably persisting back into Research
 
 Severity: High
 
@@ -122,7 +159,7 @@ Important implementation note:
 - the `Research Workspace` loader also reads `/research/workspaces/${county}/scenario-runs`
 - this should be treated as a likely contract/path issue until verified end to end
 
-### 4.3 `Back To Research Memo` was flaky after a live scenario run
+### 4.3 `Back To Research Memo` needed explicit re-verification
 
 Severity: Medium
 
@@ -135,6 +172,12 @@ This may be:
 
 Relevant source:
 - `frontend/src/features/scenario-lab.jsx`
+
+Status update:
+- Re-verified in a live browser on 2026-03-23 ET.
+- After a real scenario run, `Back To Research Memo` returned cleanly to the active Research workspace.
+- The returned Research view showed `Runs 1` in the queue row and surfaced both a latest scenario snapshot and latest underwrite summary in the active record.
+- Treat this as resolved for now.
 
 ### 4.4 Research is clearer, but still intimidating for a first-time user
 
@@ -221,6 +264,10 @@ Why third:
 Goal:
 - after running one scenario, the user can return to the research memo without friction and see updated scenario context
 
+Status update:
+- Shipped and browser-verified on 2026-03-23 ET.
+- The return path now closes the loop correctly in live Atlas.
+
 ### BV-4: Reduce first-run intimidation inside Research Workspace
 
 Why fourth:
@@ -251,8 +298,8 @@ Reason:
 
 The next Atlas implementation slice should be:
 
-1. `BV-3` return-path verification from Scenario Lab back to Research
-2. decide whether Research needs one more first-run simplification pass now that the main save/readback contract is working
+1. decide whether `Research Workspace` needs one more first-run simplification pass now that the main workflow loop is working
+2. only then decide whether Atlas should return to deeper product substance instead of more UX cleanup
 
 Only after those are stable should Atlas decide whether to:
 - soften the Research editor further, or

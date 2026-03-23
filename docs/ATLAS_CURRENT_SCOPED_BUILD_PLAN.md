@@ -61,6 +61,9 @@ Current guardrails:
 - browser-validated first-run reliability and workflow closure, especially:
   - recommended Screener starter paths that actually return live counties
   - Scenario Lab results that persist cleanly back into Research
+  - `Back To Research Memo` returning cleanly with saved scenario context visible in Research
+- one remaining UX question after the browser loop closed:
+  - whether `Research Workspace` still needs one more first-run simplification pass now that the main workflow is working
 
 ## 3) Explicitly Deferred
 
