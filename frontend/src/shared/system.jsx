@@ -27,6 +27,7 @@ export function ActionEmptyState({ title, body, detail, actions = [] }) {
           key={action.label}
           className={`btn btn-sm ${action.primary ? 'btn-p' : ''}`}
           onClick={action.onClick}
+          disabled={!!action.disabled}
         >
           {action.label}
         </button>)}

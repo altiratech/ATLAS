@@ -378,6 +378,14 @@ Follow-up implementation note:
   - extra structure (asset/use case/lens/approval/dependencies/missing data) now lives behind a `More memo structure` disclosure
   - the old `Current Record` sidebar was reduced to a lighter `Record Snapshot`
   - supporting sections (`Latest Scenario Snapshot`, `Research Notes`, `Saved Scenario Packs`, `Scenario Run History`) now sit behind collapsible summaries instead of reading like one long mandatory page
+- A second bounded refinement pass was then applied:
+  - `Research Workspace` now behaves more clearly as two modes:
+    - queue mode when no county is active
+    - active memo mode when a county is selected
+  - once a county is active, the queue collapses into `Switch Record / Research Queue` instead of dominating the page
+  - the old duplicate `Active Record` summary block was removed
+  - the memo editor now includes a small `Memo Readiness` guide
+  - Scenario Lab actions are now gated until the memo has been saved and the core call (`Thesis`, `Bull Case`, `Bear Case`) exists
 
 Use [ATLAS_BROWSER_VALIDATION_2026_03_21.md](./ATLAS_BROWSER_VALIDATION_2026_03_21.md) for the recovered walkthrough evidence and ranked follow-up fix list.
 
@@ -385,7 +393,7 @@ Use [ATLAS_BROWSER_VALIDATION_2026_03_21.md](./ATLAS_BROWSER_VALIDATION_2026_03_
 
 The next implementation slice should be:
 
-1. browser-verify whether the lighter `Research Workspace` now feels simple enough for a first-time user
+1. browser-verify whether the queue-mode / active-memo-mode split now makes `Research Workspace` feel simple enough for a first-time user
 2. only then decide whether Atlas should return to deeper product-substance work instead of more UX correction
 
 Reason:

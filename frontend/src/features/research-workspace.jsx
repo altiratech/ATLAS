@@ -260,6 +260,20 @@ export function ResearchWorkspace({
       ? 'County Detail'
       : '';
   const hasSavedWorkspace = county ? Object.prototype.hasOwnProperty.call(store, county) : false;
+  const memoRequirements = React.useMemo(() => ([
+    { label: 'Thesis', complete: !!thesis.trim() },
+    { label: 'Bull Case', complete: !!bullCase.trim() },
+    { label: 'Bear Case', complete: !!bearCase.trim() },
+  ]), [bearCase, bullCase, thesis]);
+  const incompleteMemoRequirements = memoRequirements.filter((item) => !item.complete);
+  const memoReadyForScenario = !!county && hasSavedWorkspace && incompleteMemoRequirements.length === 0;
+  const scenarioActionLabel = !county
+    ? 'Select County First'
+    : !hasSavedWorkspace
+      ? 'Save Memo First'
+      : incompleteMemoRequirements.length
+        ? 'Finish Core Memo First'
+        : 'Pressure Test In Scenario Lab';
   const thesisPreview = thesis.trim() || active.thesis || 'No written thesis yet. Use this workspace to turn screening output into a defendable investment view.';
   const keyRisks = parseTags(keyRisksInput);
   const catalysts = parseTags(catalystsInput);
@@ -457,44 +471,7 @@ export function ResearchWorkspace({
     [county],
   );
   const hasResearchFilters = !!(researchSearch.trim() || researchStatusFilter || researchThesisFilter);
-
-  return <div>
-    {storeErr && <ErrBox title="Research Sync Error" msg={storeErr} onRetry={loadStore}/>}
-    <div className="card hero-card" style={{marginBottom:'.8rem'}}>
-      <div className="hero-k">Research Workspace</div>
-      <h2 className="hero-h">{county ? selectedCountyLabel : 'Open A Record Or Start A Memo'}</h2>
-      <p className="hero-p">
-        {county
-          ? `${sourceLabel ? `Opened from ${sourceLabel}. ` : ''}${hasSavedWorkspace ? 'Existing research workspace loaded. ' : 'New research workspace ready. '}Use this page to turn a county read into a defendable decision record.`
-          : 'Browse the research queue, open a record from the side panel, then move the best counties into the memo editor.'}
-      </p>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'.55rem',marginBottom:'.85rem'}}>
-        <div className="sc" style={{margin:0}}>
-          <div className="sc-l">Queue</div>
-          <div className="sc-v" style={{fontSize:'.95rem'}}>{filteredResearchRows.length} in view</div>
-          <div style={{fontSize:'.72rem',color:'var(--text2)'}}>{records.length} total saved records across the current workspace.</div>
-        </div>
-        <div className="sc" style={{margin:0}}>
-          <div className="sc-l">Active Record</div>
-          <div style={{fontSize:'.92rem',fontWeight:600}}>{county ? memoVerdict : 'No county selected'}</div>
-          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.22rem'}}>
-            {county ? `${String(memoStatus || 'exploring').replace(/_/g, ' ')} • conviction ${Math.round(conviction)}/100` : 'Open a record or pick a county to start a new memo.'}
-          </div>
-        </div>
-        <div className="sc" style={{margin:0}}>
-          <div className="sc-l">Best Next Move</div>
-          <div style={{fontSize:'.82rem',color:'var(--text1)',lineHeight:1.35}}>
-            {county ? 'Write the call in plain language, save the memo, then pressure test it in Scenario Lab.' : 'Open a record from the queue first, or select one county and turn it into a memo before modeling anything.'}
-          </div>
-        </div>
-      </div>
-      <div className="hero-actions">
-        {county && <button className="btn btn-p" onClick={saveWorkspace}>Save Memo</button>}
-        {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Pressure Test In Scenario Lab</button>}
-        {county && <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county, playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open County Detail</button>}
-      </div>
-    </div>
-
+  const queueSurface = (
     <div className="card" style={{marginBottom:'.8rem'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.65rem',flexWrap:'wrap'}}>
         <div>
@@ -584,65 +561,52 @@ export function ResearchWorkspace({
           />}
         />}
     </div>
+  );
 
-    {county && <div className="card" style={{marginBottom:'.8rem'}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'.75rem',marginBottom:'.75rem',flexWrap:'wrap'}}>
-        <div>
-          <h3 style={{fontSize:'1rem',marginBottom:'.18rem'}}>Active Record</h3>
-          <div style={{fontSize:'.8rem',color:'var(--text2)',maxWidth:'900px'}}>
-            This is the bridge between discovery and underwriting. Capture the investment call here first, then use Scenario Lab to pressure test whether it survives.
+  return <div>
+    {storeErr && <ErrBox title="Research Sync Error" msg={storeErr} onRetry={loadStore}/>}
+    <div className="card hero-card" style={{marginBottom:'.8rem'}}>
+      <div className="hero-k">Research Workspace</div>
+      <h2 className="hero-h">{county ? selectedCountyLabel : 'Open A Record Or Start A Memo'}</h2>
+      <p className="hero-p">
+        {county
+          ? `${sourceLabel ? `Opened from ${sourceLabel}. ` : ''}${hasSavedWorkspace ? 'Existing research workspace loaded. ' : 'New research workspace ready. '}Use this page to turn a county read into a defendable decision record.`
+          : 'Browse the research queue, open a record from the side panel, then move the best counties into the memo editor.'}
+      </p>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:'.55rem',marginBottom:'.85rem'}}>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Queue</div>
+          <div className="sc-v" style={{fontSize:'.95rem'}}>{filteredResearchRows.length} in view</div>
+          <div style={{fontSize:'.72rem',color:'var(--text2)'}}>{records.length} total saved records across the current workspace.</div>
+        </div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Active Record</div>
+          <div style={{fontSize:'.92rem',fontWeight:600}}>{county ? memoVerdict : 'No county selected'}</div>
+          <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.22rem'}}>
+            {county ? `${String(memoStatus || 'exploring').replace(/_/g, ' ')} • conviction ${Math.round(conviction)}/100` : 'Open a record or pick a county to start a new memo.'}
           </div>
         </div>
-        <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
-          <span className="badge badge-a">{String(memoStatus || 'exploring').replace(/_/g, ' ').toUpperCase()}</span>
-          <span className={`badge ${conviction >= 75 ? 'badge-g' : conviction >= 45 ? 'badge-a' : 'badge-r'}`}>CONVICTION {Math.round(conviction)}/100</span>
-          {countyDecisionRead && <span className={`badge ${countyDecisionRead.overall.className}`}>{countyDecisionRead.overall.label}</span>}
-          {selectedThesisLens && <span className={`badge ${thesisBadgeClass(selectedThesisLens.status)}`}>{selectedThesisLens.shortLabel.toUpperCase()}</span>}
-          {countyThesisRead && <span className={`badge ${countyThesisRead.overall.className}`}>LENS {countyThesisRead.overall.label}</span>}
-        </div>
-      </div>
-      <div className="workflow-grid" style={{marginBottom:0}}>
-        <div className="workflow-card">
-          <div className="workflow-step">Memo Call</div>
-          <div className="workflow-p">
-            <div style={{marginBottom:'.32rem'}}><strong>Thesis:</strong> {thesisPreview}</div>
-            <div style={{marginBottom:'.32rem'}}><strong>Bull:</strong> {bullCase.trim() || 'Bull case not yet written.'}</div>
-            <div><strong>Bear:</strong> {bearCase.trim() || 'Bear case not yet written.'}</div>
-          </div>
-        </div>
-        <div className="workflow-card">
-          <div className="workflow-step">Scenario / Underwrite</div>
-          <div className="workflow-p">
-            <div style={{marginBottom:'.32rem'}}>{memoScenarioText}</div>
-            <div>{memoAcquisitionText}</div>
-          </div>
-        </div>
-        <div className="workflow-card">
-          <div className="workflow-step">County / Lens Read</div>
-          <div className="workflow-p">
-            {countySummaryLoading
-              ? 'Refreshing the live county read for the active assumption set.'
-              : countyDecisionRead
-                ? <>
-                    <div style={{marginBottom:'.32rem'}}>{countyDecisionRead.overall.summary}</div>
-                    <div style={{marginBottom:'.32rem'}}><strong>Benchmark / Fair:</strong> {$$(countyMetrics.benchmark_value)} / {$$(countyMetrics.fair_value)}</div>
-                    <div style={{marginBottom:'.32rem'}}><strong>Access / DSCR:</strong> {countyMetrics.access_score != null ? `${$(countyMetrics.access_score, 1)} / 100` : 'N/A'} • {countyCredit?.combined_stress_dscr != null ? `${$(countyCredit.combined_stress_dscr, 2)}x stress` : countyMetrics.dscr != null ? `${$(countyMetrics.dscr, 2)}x base` : 'DSCR N/A'}</div>
-                    <div><strong>Hazards:</strong> Drought {countyDrought?.risk_score != null ? $(countyDrought.risk_score, 0) : 'N/A'} • Flood {countyFlood?.hazard_score != null ? $(countyFlood.hazard_score, 0) : 'N/A'}</div>
-                  </>
-                : 'Live county decision context is unavailable right now; the research record still remains editable.'}
-          </div>
-        </div>
-        <div className="workflow-card">
-          <div className="workflow-step">What Still Needs Work</div>
-          <div className="workflow-p">
-            <div style={{marginBottom:'.32rem'}}><strong>Model basis:</strong> {assumptionSetLabel(activeAssumptionSet)}</div>
-            <div style={{marginBottom:'.32rem'}}><strong>Catalysts:</strong> {catalysts.length ? catalysts.join(', ') : 'No catalysts recorded yet.'}</div>
-            <div style={{marginBottom:'.32rem'}}><strong>Dependencies:</strong> {criticalDependencies.length ? criticalDependencies.join(', ') : 'No critical dependencies recorded yet.'}</div>
-            <div><strong>Missing data:</strong> {missingDataNotes.length ? missingDataNotes.join(', ') : 'No missing-data notes recorded yet.'}</div>
+        <div className="sc" style={{margin:0}}>
+          <div className="sc-l">Best Next Move</div>
+          <div style={{fontSize:'.82rem',color:'var(--text1)',lineHeight:1.35}}>
+            {!county
+              ? 'Open a record from the queue first, or select one county and turn it into a memo before modeling anything.'
+              : !hasSavedWorkspace
+                ? 'Write the core call, save the memo once, then move into Scenario Lab.'
+                : incompleteMemoRequirements.length
+                  ? `Finish ${incompleteMemoRequirements.map((item) => item.label).join(', ')} before pressure testing.`
+                  : 'Memo is ready. Pressure test it in Scenario Lab and bring the model output back into this record.'}
           </div>
         </div>
       </div>
-    </div>}
+      <div className="hero-actions">
+        {county && <button className="btn btn-p" onClick={saveWorkspace}>Save Memo</button>}
+        {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())} disabled={!memoReadyForScenario}>{scenarioActionLabel}</button>}
+        {county && <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, {fips: county, playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open County Detail</button>}
+      </div>
+    </div>
+
+    {!county ? queueSurface : null}
     <div className="rw-grid">
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Memo Editor</h3>
@@ -680,6 +644,29 @@ export function ResearchWorkspace({
           <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
             <div className="fg"><label>Key Risks (comma separated)</label><input type="text" value={keyRisksInput} onChange={e => setKeyRisksInput(e.target.value)} placeholder="drought, policy, financing"/></div>
             <div className="fg"><label>Catalysts (comma separated)</label><input type="text" value={catalystsInput} onChange={e => setCatalystsInput(e.target.value)} placeholder="rate cuts, rent reset, infra build"/></div>
+          </div>
+          <div className="card" style={{marginTop:'.75rem',padding:'.7rem .8rem'}}>
+            <div style={{fontSize:'.76rem',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.45rem'}}>Memo Readiness</div>
+            <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.55rem'}}>
+              Atlas uses this checklist to decide whether the memo is ready for Scenario Lab.
+            </div>
+            <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
+              {memoRequirements.map((item) => (
+                <span key={item.label} className={`badge ${item.complete ? 'badge-g' : 'badge-r'}`}>
+                  {item.complete ? 'DONE' : 'NEEDED'} {item.label.toUpperCase()}
+                </span>
+              ))}
+              <span className={`badge ${hasSavedWorkspace ? 'badge-g' : 'badge-a'}`}>
+                {hasSavedWorkspace ? 'DONE SAVED' : 'NEEDED SAVE'}
+              </span>
+            </div>
+            <div style={{fontSize:'.74rem',color:'var(--text2)',marginTop:'.5rem'}}>
+              {memoReadyForScenario
+                ? 'The core memo is ready. You can pressure test it in Scenario Lab now.'
+                : !hasSavedWorkspace
+                  ? 'Save the memo once after drafting the core call. Then Atlas will treat Scenario Lab as the next step.'
+                  : `Finish ${incompleteMemoRequirements.map((item) => item.label).join(', ')} before moving into Scenario Lab.`}
+            </div>
           </div>
           <details style={{marginTop:'.75rem'}}>
             <summary style={{cursor:'pointer',fontSize:'.8rem',color:'var(--text2)',fontWeight:600,letterSpacing:'.04em',textTransform:'uppercase'}}>More memo structure</summary>
@@ -747,7 +734,7 @@ export function ResearchWorkspace({
           </details>
           <div className="rw-actions">
             <button className="btn btn-p" onClick={saveWorkspace}>Save Memo</button>
-            <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Pressure Test In Scenario Lab</button>
+            <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())} disabled={!memoReadyForScenario}>{scenarioActionLabel}</button>
           </div>
         </>}
       </div>
@@ -777,15 +764,25 @@ export function ResearchWorkspace({
       </div>
     </div>
 
+    {county && <details className="card" style={{marginBottom:'.8rem'}}>
+      <summary style={{cursor:'pointer',fontSize:'.95rem',fontWeight:600}}>Switch Record / Research Queue</summary>
+      <div style={{marginTop:'.6rem'}}>
+        <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.65rem'}}>
+          Keep the memo editor focused on the active county. Open this queue only when you want to switch records or scan other saved work.
+        </div>
+        {queueSurface}
+      </div>
+    </details>}
+
     <details className="card" style={{marginBottom:'.7rem'}}>
       <summary style={{cursor:'pointer',fontSize:'.95rem',fontWeight:600}}>Latest Scenario Snapshot</summary>
       <div style={{marginTop:'.55rem'}}>
       {!latestScenarioRun ? <ActionEmptyState
         title="Latest Scenario Snapshot"
         body="This section shows the latest saved compare run and underwrite attached to the active research record."
-        detail={county ? 'After the memo is saved, run one scenario from Scenario Lab to bring the latest upside, downside, and acquisition read back into this decision record.' : 'Choose a county first, then save a memo before running one scenario from Scenario Lab to attach modeling context here.'}
+        detail={county ? 'After the memo is saved and the core call is in place, run one scenario from Scenario Lab to bring the latest upside, downside, and acquisition read back into this decision record.' : 'Choose a county first, then save a memo before running one scenario from Scenario Lab to attach modeling context here.'}
         actions={[
-          { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
+          { label: county ? scenarioActionLabel : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN), disabled: county ? !memoReadyForScenario : false },
         ]}
       /> : <div>
         <div className="sc"><div className="sc-l">Snapshot</div><div className="sc-v" style={{fontSize:'.9rem'}}>{latestScenarioRun.scenario_name || 'Scenario Snapshot'}</div><div className="sc-c">{latestScenarioRun.created_at ? new Date(latestScenarioRun.created_at).toLocaleString() : '--'} • As of {latestScenarioRun.as_of_date || '--'}</div></div>
@@ -904,9 +901,9 @@ export function ResearchWorkspace({
       {active.scenario_packs.length === 0 ? <ActionEmptyState
         title="Saved Scenario Packs"
         body="Scenario packs let you reuse a repeatable modeling stance for this county."
-        detail={county ? 'Save one in Scenario Lab after you have a memo worth stress-testing and a parameter mix you want to reuse for this county.' : 'Pick a county first, then save a scenario pack from Scenario Lab once you have a reusable setup.'}
+        detail={county ? 'Save one in Scenario Lab after you have a saved memo and a parameter mix you want to reuse for this county.' : 'Pick a county first, then save a scenario pack from Scenario Lab once you have a reusable setup.'}
         actions={[
-          { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
+          { label: county ? scenarioActionLabel : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN), disabled: county ? !memoReadyForScenario : false },
         ]}
       />
       : active.scenario_packs.map(pack => <div key={pack.id} className="pack-row">
@@ -925,9 +922,9 @@ export function ResearchWorkspace({
       {scenarioRuns.length === 0 ? <ActionEmptyState
         title="Scenario Run History"
         body="This is the saved modeling history for the active research record."
-        detail={county ? 'Once the memo is in place, run and save one scenario from Scenario Lab to start building a compare history here.' : 'Choose a county first, then save one memo and one scenario run so this history has something to show.'}
+        detail={county ? 'Once the memo is saved and the core call is written, run and save one scenario from Scenario Lab to start building a compare history here.' : 'Choose a county first, then save one memo and one scenario run so this history has something to show.'}
         actions={[
-          { label: county ? 'Open Scenario Lab' : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN) },
+          { label: county ? scenarioActionLabel : 'Open Screener', primary: true, onClick: () => county ? nav(PG.SCENARIO, buildScenarioNavParams()) : nav(PG.SCREEN), disabled: county ? !memoReadyForScenario : false },
         ]}
       />
       : scenarioRuns.map(run => {

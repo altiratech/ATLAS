@@ -290,7 +290,12 @@ Status update:
   - moves extra record structure behind `More memo structure`
   - reduces the sidebar to a lighter `Record Snapshot`
   - puts supporting sections behind collapsible summaries instead of exposing them as one long mandatory page
-- The next useful check is no longer another speculative simplification pass. It is a live browser re-verification to see whether this lighter page now feels simple enough for a first-time user.
+- A second bounded refinement pass then made the page behave more clearly as queue mode vs active memo mode:
+  - when no county is active, the queue remains the dominant surface
+  - when a county is selected, the memo editor becomes primary and the queue collapses into `Switch Record / Research Queue`
+  - the duplicate `Active Record` summary layer is removed
+  - Scenario Lab actions now stay disabled until the memo is saved and the core call exists
+- The next useful check is now a live browser re-verification to see whether this mode split makes `Research Workspace` feel simple enough for a first-time user.
 
 ## 7) What Should Not Be Next
 
@@ -308,7 +313,7 @@ Reason:
 
 The next Atlas implementation slice should be:
 
-1. browser-verify whether the lighter `Research Workspace` now feels simple enough for a first-time user
+1. browser-verify whether the queue-mode / active-memo-mode split now makes `Research Workspace` feel simple enough for a first-time user
 2. only then decide whether Atlas should return to deeper product substance instead of more UX cleanup
 
 Only after those are stable should Atlas decide whether to:
