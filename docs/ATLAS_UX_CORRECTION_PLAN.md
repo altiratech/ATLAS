@@ -371,16 +371,24 @@ What still feels heavy:
 - `Research Workspace` is no longer confusing, but it is still the densest first-run page in Atlas
 - that means the next UX question is no longer workflow closure; it is whether the memo-writing surface should become lighter for the very first decision record
 
+Follow-up implementation note:
+- A focused simplification pass was then applied to `Research Workspace`:
+  - the memo editor now shows a county-first empty state instead of exposing the full form before a county is selected
+  - the first-write path now emphasizes only the essential memo fields first
+  - extra structure (asset/use case/lens/approval/dependencies/missing data) now lives behind a `More memo structure` disclosure
+  - the old `Current Record` sidebar was reduced to a lighter `Record Snapshot`
+  - supporting sections (`Latest Scenario Snapshot`, `Research Notes`, `Saved Scenario Packs`, `Scenario Run History`) now sit behind collapsible summaries instead of reading like one long mandatory page
+
 Use [ATLAS_BROWSER_VALIDATION_2026_03_21.md](./ATLAS_BROWSER_VALIDATION_2026_03_21.md) for the recovered walkthrough evidence and ranked follow-up fix list.
 
 ## 10) Immediate Recommendation
 
 The next implementation slice should be:
 
-1. decide whether `Research Workspace` needs one more first-run simplification pass
+1. browser-verify whether the lighter `Research Workspace` now feels simple enough for a first-time user
 2. only then decide whether Atlas should return to deeper product-substance work instead of more UX correction
 
 Reason:
 - Atlas's main loop now works in a live browser instead of only in source or API validation
-- the biggest remaining friction is page weight, not broken handoff
-- any further UX work should now target the one dense remaining page instead of reopening broad hierarchy cleanup
+- the biggest remaining friction was page weight, not broken handoff
+- this simplification pass directly targets that remaining friction, so the next useful signal should come from live use rather than another speculative cleanup pass

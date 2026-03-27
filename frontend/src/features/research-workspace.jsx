@@ -647,117 +647,139 @@ export function ResearchWorkspace({
       <div className="card">
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Memo Editor</h3>
         <div style={{fontSize:'.78rem',color:'var(--text2)',marginBottom:'.65rem',lineHeight:1.45}}>
-          Start with the written call. Once the thesis, risks, and missing-data notes are saved, use Scenario Lab to test whether the memo still works under stress.
+          Keep the first pass simple: choose one county, write the call in plain language, save it, then pressure test it in Scenario Lab.
         </div>
         <div className="fg"><label>County</label><CountyPicker value={county} onChange={setCounty} placeholder="Select county for research workspace..." selectedLabel={selectedCountyLabel}/></div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
-          <div className="fg"><label>Decision Status</label>
-            <select value={status} onChange={e => setStatus(e.target.value)}>
-              {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
+        {!county ? <ActionEmptyState
+          title="Memo Editor"
+          body="Pick one county first. Then Atlas will keep the memo fields visible and use Scenario Lab only after the written call exists."
+          detail="You can open a record from the queue above, or select a county directly here to start a new memo."
+          actions={[
+            { label: 'Open Screener', primary: true, onClick: () => nav(PG.SCREEN) },
+          ]}
+        /> : <>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
+            <div className="fg"><label>Decision Status</label>
+              <select value={status} onChange={e => setStatus(e.target.value)}>
+                {statuses.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+            </div>
+            <div className="fg"><label>Conviction Score: {Math.round(conviction)}/100</label>
+              <input type="range" min="0" max="100" step="1" value={conviction} onChange={e => setConviction(Number(e.target.value))}/>
+            </div>
           </div>
-          <div className="fg"><label>Conviction Score: {Math.round(conviction)}/100</label>
-            <input type="range" min="0" max="100" step="1" value={conviction} onChange={e => setConviction(Number(e.target.value))}/>
+          <div className="fg"><label>Thesis</label>
+            <textarea value={thesis} onChange={e => setThesis(e.target.value)} placeholder="Why this county matters, what must be true, and what could break..." style={{minHeight:'92px'}}/>
           </div>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
-          <div className="fg"><label>Asset Type</label>
-            <select value={assetType} onChange={e => setAssetType(e.target.value)}>
-              <option value="">Select asset type</option>
-              <option value="agriculture_land">Agriculture Land</option>
-              <option value="industrial_land">Industrial Land</option>
-              <option value="alternative_land">Alternative Land</option>
-            </select>
+          <div className="fg"><label>Bull Case</label>
+            <textarea value={bullCase} onChange={e => setBullCase(e.target.value)} placeholder="What drives upside?" style={{minHeight:'70px'}}/>
           </div>
-          <div className="fg"><label>Target Use Case</label>
-            <select value={targetUseCase} onChange={e => setTargetUseCase(e.target.value)}>
-              <option value="">Select use case</option>
-              <option value="farmland_investment">Farmland Investment</option>
-              <option value="ag_lending">Ag Lending</option>
-              <option value="data_center">Data Center</option>
-              <option value="logistics">Logistics</option>
-              <option value="light_industrial">Light Industrial</option>
-              <option value="energy_adjacent">Energy Adjacent</option>
-            </select>
+          <div className="fg"><label>Bear Case</label>
+            <textarea value={bearCase} onChange={e => setBearCase(e.target.value)} placeholder="What breaks the thesis?" style={{minHeight:'70px'}}/>
           </div>
-        </div>
-        <div className="fg"><label>Thesis Lens</label>
-          <select value={thesisLensKey} onChange={e => setThesisLensKey(e.target.value)}>
-            <option value="">None</option>
-            {thesisLenses.map((lens) => <option key={lens.key} value={lens.key}>{lens.label}</option>)}
-          </select>
-          {selectedThesisLens && <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.3rem'}}>
-            <strong style={{color:'var(--text1)'}}>Question:</strong> {selectedThesisLens.question}
-            <br/>
-            <strong style={{color:'var(--text1)'}}>Uses now:</strong> {selectedThesisLens.nowSignals.join(', ')}
-            <br/>
-            <strong style={{color:'var(--text1)'}}>Still missing:</strong> {selectedThesisLens.gapSignals.join(', ')}
-          </div>}
-        </div>
-        <div className="fg"><label>Tags (comma separated)</label><input type="text" value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="water, cap-rate, soils, logistics"/></div>
-        <div className="fg"><label>Thesis</label>
-          <textarea value={thesis} onChange={e => setThesis(e.target.value)} placeholder="Why this county matters, what must be true, and what could break..." style={{minHeight:'92px'}}/>
-        </div>
-        <div className="fg"><label>Bull Case</label>
-          <textarea value={bullCase} onChange={e => setBullCase(e.target.value)} placeholder="What drives upside?" style={{minHeight:'70px'}}/>
-        </div>
-        <div className="fg"><label>Bear Case</label>
-          <textarea value={bearCase} onChange={e => setBearCase(e.target.value)} placeholder="What breaks the thesis?" style={{minHeight:'70px'}}/>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
-          <div className="fg"><label>Key Risks (comma separated)</label><input type="text" value={keyRisksInput} onChange={e => setKeyRisksInput(e.target.value)} placeholder="drought, policy, financing"/></div>
-          <div className="fg"><label>Catalysts (comma separated)</label><input type="text" value={catalystsInput} onChange={e => setCatalystsInput(e.target.value)} placeholder="rate cuts, rent reset, infra build"/></div>
-        </div>
-        <div className="fg"><label>Decision State</label>
-          <select value={decisionState} onChange={e => setDecisionState(e.target.value)}>
-            <option value="exploring">Exploring</option>
-            <option value="monitoring">Monitoring</option>
-            <option value="underwriting">Underwriting</option>
-            <option value="investment_committee">Investment Committee</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-        </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
-          <div className="fg"><label>Approval State</label>
-            <select value={approvalState} onChange={e => setApprovalState(e.target.value)}>
-              <option value="">Not set</option>
-              <option value="watch">Watch</option>
-              <option value="pursue">Pursue</option>
-              <option value="hold">Hold</option>
-              <option value="pass">Pass</option>
-              <option value="approved">Approved</option>
-            </select>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
+            <div className="fg"><label>Key Risks (comma separated)</label><input type="text" value={keyRisksInput} onChange={e => setKeyRisksInput(e.target.value)} placeholder="drought, policy, financing"/></div>
+            <div className="fg"><label>Catalysts (comma separated)</label><input type="text" value={catalystsInput} onChange={e => setCatalystsInput(e.target.value)} placeholder="rate cuts, rent reset, infra build"/></div>
           </div>
-          <div className="fg"><label>Critical Dependencies (comma separated)</label><input type="text" value={criticalDependenciesInput} onChange={e => setCriticalDependenciesInput(e.target.value)} placeholder="utility upgrade, water agreement, zoning"/></div>
-        </div>
-        <div className="fg"><label>Missing Data Notes (comma separated)</label><input type="text" value={missingDataNotesInput} onChange={e => setMissingDataNotesInput(e.target.value)} placeholder="parcel zoning unknown, substation capacity unknown"/></div>
-        <div className="rw-actions">
-          <button className="btn btn-p" onClick={saveWorkspace}>Save Workspace</button>
-          {county && <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Pressure Test In Scenario Lab</button>}
-        </div>
+          <details style={{marginTop:'.75rem'}}>
+            <summary style={{cursor:'pointer',fontSize:'.8rem',color:'var(--text2)',fontWeight:600,letterSpacing:'.04em',textTransform:'uppercase'}}>More memo structure</summary>
+            <div style={{marginTop:'.75rem'}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
+                <div className="fg"><label>Asset Type</label>
+                  <select value={assetType} onChange={e => setAssetType(e.target.value)}>
+                    <option value="">Select asset type</option>
+                    <option value="agriculture_land">Agriculture Land</option>
+                    <option value="industrial_land">Industrial Land</option>
+                    <option value="alternative_land">Alternative Land</option>
+                  </select>
+                </div>
+                <div className="fg"><label>Target Use Case</label>
+                  <select value={targetUseCase} onChange={e => setTargetUseCase(e.target.value)}>
+                    <option value="">Select use case</option>
+                    <option value="farmland_investment">Farmland Investment</option>
+                    <option value="ag_lending">Ag Lending</option>
+                    <option value="data_center">Data Center</option>
+                    <option value="logistics">Logistics</option>
+                    <option value="light_industrial">Light Industrial</option>
+                    <option value="energy_adjacent">Energy Adjacent</option>
+                  </select>
+                </div>
+              </div>
+              <div className="fg"><label>Thesis Lens</label>
+                <select value={thesisLensKey} onChange={e => setThesisLensKey(e.target.value)}>
+                  <option value="">None</option>
+                  {thesisLenses.map((lens) => <option key={lens.key} value={lens.key}>{lens.label}</option>)}
+                </select>
+                {selectedThesisLens && <div style={{fontSize:'.72rem',color:'var(--text2)',marginTop:'.3rem'}}>
+                  <strong style={{color:'var(--text1)'}}>Question:</strong> {selectedThesisLens.question}
+                  <br/>
+                  <strong style={{color:'var(--text1)'}}>Uses now:</strong> {selectedThesisLens.nowSignals.join(', ')}
+                  <br/>
+                  <strong style={{color:'var(--text1)'}}>Still missing:</strong> {selectedThesisLens.gapSignals.join(', ')}
+                </div>}
+              </div>
+              <div className="fg"><label>Tags (comma separated)</label><input type="text" value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="water, cap-rate, soils, logistics"/></div>
+              <div className="fg"><label>Decision State</label>
+                <select value={decisionState} onChange={e => setDecisionState(e.target.value)}>
+                  <option value="exploring">Exploring</option>
+                  <option value="monitoring">Monitoring</option>
+                  <option value="underwriting">Underwriting</option>
+                  <option value="investment_committee">Investment Committee</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'.55rem'}}>
+                <div className="fg"><label>Approval State</label>
+                  <select value={approvalState} onChange={e => setApprovalState(e.target.value)}>
+                    <option value="">Not set</option>
+                    <option value="watch">Watch</option>
+                    <option value="pursue">Pursue</option>
+                    <option value="hold">Hold</option>
+                    <option value="pass">Pass</option>
+                    <option value="approved">Approved</option>
+                  </select>
+                </div>
+                <div className="fg"><label>Critical Dependencies (comma separated)</label><input type="text" value={criticalDependenciesInput} onChange={e => setCriticalDependenciesInput(e.target.value)} placeholder="utility upgrade, water agreement, zoning"/></div>
+              </div>
+              <div className="fg"><label>Missing Data Notes (comma separated)</label><input type="text" value={missingDataNotesInput} onChange={e => setMissingDataNotesInput(e.target.value)} placeholder="parcel zoning unknown, substation capacity unknown"/></div>
+            </div>
+          </details>
+          <div className="rw-actions">
+            <button className="btn btn-p" onClick={saveWorkspace}>Save Memo</button>
+            <button className="btn" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams())}>Pressure Test In Scenario Lab</button>
+          </div>
+        </>}
       </div>
 
       <div className="card">
-        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Current Record</h3>
-        <div className="sc"><div className="sc-l">Session User</div><div className="sc-v" style={{fontSize:'.82rem'}}>{researchUser || '--'}</div></div>
+        <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Record Snapshot</h3>
         <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{selectedCountyLabel}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Active Assumption Set</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Asset Type</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assetType || active.analysis?.asset_type || '--'}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Target Use Case</div><div className="sc-v" style={{fontSize:'.82rem'}}>{targetUseCase || active.analysis?.target_use_case || '--'}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Thesis Lens</div><div className="sc-v" style={{fontSize:'.82rem'}}>{selectedThesisLens?.label || active.analysis?.thesis_lens_label || '--'}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Scenario Runs</div><div className="sc-v">{scenarioRuns.length}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Research Notes</div><div className="sc-v">{active.notes.length}</div></div>
-        <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Last Update</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.updated_at ? new Date(active.updated_at).toLocaleString() : '--'}</div></div>
-        <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.55rem',lineHeight:1.45}}>
-          Workspace notes do not recalculate on their own. Keep the active assumption set visible when moving between the memo, county read, and saved scenario runs.
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.48rem',marginTop:'.48rem'}}>
+          <div className="sc" style={{margin:0}}><div className="sc-l">Notes</div><div className="sc-v">{active.notes.length}</div></div>
+          <div className="sc" style={{margin:0}}><div className="sc-l">Scenario Runs</div><div className="sc-v">{scenarioRuns.length}</div></div>
+          <div className="sc" style={{margin:0}}><div className="sc-l">Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
         </div>
+        <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.55rem',lineHeight:1.45}}>
+          Keep the memo and the active assumption set aligned. Atlas does not automatically rewrite your memo when the model basis changes.
+        </div>
+        <details style={{marginTop:'.75rem'}}>
+          <summary style={{cursor:'pointer',fontSize:'.8rem',color:'var(--text2)',fontWeight:600,letterSpacing:'.04em',textTransform:'uppercase'}}>More record context</summary>
+          <div style={{marginTop:'.7rem'}}>
+            <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Session User</div><div className="sc-v" style={{fontSize:'.82rem'}}>{researchUser || '--'}</div></div>
+            <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Asset Type</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assetType || active.analysis?.asset_type || '--'}</div></div>
+            <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Target Use Case</div><div className="sc-v" style={{fontSize:'.82rem'}}>{targetUseCase || active.analysis?.target_use_case || '--'}</div></div>
+            <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Thesis Lens</div><div className="sc-v" style={{fontSize:'.82rem'}}>{selectedThesisLens?.label || active.analysis?.thesis_lens_label || '--'}</div></div>
+            <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Last Update</div><div className="sc-v" style={{fontSize:'.82rem'}}>{active.updated_at ? new Date(active.updated_at).toLocaleString() : '--'}</div></div>
+          </div>
+        </details>
       </div>
     </div>
 
-    <div className="card" style={{marginBottom:'.7rem'}}>
-      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Latest Scenario Snapshot</h3>
+    <details className="card" style={{marginBottom:'.7rem'}}>
+      <summary style={{cursor:'pointer',fontSize:'.95rem',fontWeight:600}}>Latest Scenario Snapshot</summary>
+      <div style={{marginTop:'.55rem'}}>
       {!latestScenarioRun ? <ActionEmptyState
         title="Latest Scenario Snapshot"
         body="This section shows the latest saved compare run and underwrite attached to the active research record."
@@ -851,10 +873,12 @@ export function ResearchWorkspace({
           {county && <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(latestScenarioRun))}>Reopen Scenario Lab</button>}
         </div>
       </div>}
-    </div>
+      </div>
+    </details>
 
-    <div className="card" style={{marginBottom:'.7rem'}}>
-      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Research Notes</h3>
+    <details className="card" style={{marginBottom:'.7rem'}}>
+      <summary style={{cursor:'pointer',fontSize:'.95rem',fontWeight:600}}>Research Notes</summary>
+      <div style={{marginTop:'.55rem'}}>
       <div style={{display:'flex',gap:'.45rem',marginBottom:'.6rem'}}>
         <textarea value={noteInput} onChange={e => setNoteInput(e.target.value)} placeholder="Add diligence note, risk, catalyst, or follow-up question..." style={{minHeight:'68px',resize:'vertical'}}/>
         <button className="btn btn-p" onClick={addNote}>Add Note</button>
@@ -871,10 +895,12 @@ export function ResearchWorkspace({
         </div>
         <button className="btn btn-sm btn-d" onClick={() => deleteNote(n.id)}>Del</button>
       </div>)}
-    </div>
+      </div>
+    </details>
 
-    <div className="card" style={{marginBottom:'.7rem'}}>
-      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Saved Scenario Packs For Selected County</h3>
+    <details className="card" style={{marginBottom:'.7rem'}}>
+      <summary style={{cursor:'pointer',fontSize:'.95rem',fontWeight:600}}>Saved Scenario Packs For Selected County</summary>
+      <div style={{marginTop:'.55rem'}}>
       {active.scenario_packs.length === 0 ? <ActionEmptyState
         title="Saved Scenario Packs"
         body="Scenario packs let you reuse a repeatable modeling stance for this county."
@@ -890,10 +916,12 @@ export function ResearchWorkspace({
         </div>
         <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO,{fips:county,pack_id:pack.id, countyName: countyMap[county] ? countyMap[county].split(', ')[0] : params?.countyName, state: countyMap[county] ? countyMap[county].split(', ')[1] : params?.state, sourcePage: 'research', playbookKey: currentPlaybookKey, thesisKey: thesisLensKey})}>Open</button>
       </div>)}
-    </div>
+      </div>
+    </details>
 
-    <div className="card" style={{marginBottom:'.7rem'}}>
-      <h3 style={{fontSize:'.95rem',marginBottom:'.55rem'}}>Scenario Run History</h3>
+    <details className="card" style={{marginBottom:'.7rem'}}>
+      <summary style={{cursor:'pointer',fontSize:'.95rem',fontWeight:600}}>Scenario Run History</summary>
+      <div style={{marginTop:'.55rem'}}>
       {scenarioRuns.length === 0 ? <ActionEmptyState
         title="Scenario Run History"
         body="This is the saved modeling history for the active research record."
@@ -923,7 +951,8 @@ export function ResearchWorkspace({
           <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, buildScenarioNavParams(run))}>Open</button>
         </div>;
       })}
-    </div>
+      </div>
+    </details>
 
   </div>;
 }

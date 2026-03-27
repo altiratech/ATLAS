@@ -63,7 +63,7 @@ Current guardrails:
   - Scenario Lab results that persist cleanly back into Research
   - `Back To Research Memo` returning cleanly with saved scenario context visible in Research
 - one remaining UX question after the browser loop closed:
-  - whether `Research Workspace` still needs one more first-run simplification pass now that the main workflow is working
+  - whether the lighter `Research Workspace` is now simple enough for first-time use, or still needs one more browser-verified pass
 
 ## 3) Explicitly Deferred
 

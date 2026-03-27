@@ -1,6 +1,6 @@
 # Atlas Browser Validation 2026-03-21
 
-Last updated: 2026-03-23 (ET)
+Last updated: 2026-03-26 (ET)
 Owner: Ryan + Codex + Claude  
 Status: Recovered live-browser validation memo after session compaction
 
@@ -282,6 +282,16 @@ Likely focus:
 - clearer progressive disclosure for memo sections
 - stronger first memo CTA before showing the full editing burden
 
+Status update:
+- A focused simplification pass has now been applied locally.
+- `Research Workspace` now:
+  - shows a county-first empty state before the memo editor appears
+  - leads with the essential memo-writing fields first
+  - moves extra record structure behind `More memo structure`
+  - reduces the sidebar to a lighter `Record Snapshot`
+  - puts supporting sections behind collapsible summaries instead of exposing them as one long mandatory page
+- The next useful check is no longer another speculative simplification pass. It is a live browser re-verification to see whether this lighter page now feels simple enough for a first-time user.
+
 ## 7) What Should Not Be Next
 
 The browser validation suggests Atlas should not prioritize these next:
@@ -298,9 +308,9 @@ Reason:
 
 The next Atlas implementation slice should be:
 
-1. decide whether `Research Workspace` needs one more first-run simplification pass now that the main workflow loop is working
+1. browser-verify whether the lighter `Research Workspace` now feels simple enough for a first-time user
 2. only then decide whether Atlas should return to deeper product substance instead of more UX cleanup
 
 Only after those are stable should Atlas decide whether to:
-- soften the Research editor further, or
+- soften the Research editor further if the live page still feels too heavy, or
 - return to deeper product-substance expansion
