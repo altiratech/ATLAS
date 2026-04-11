@@ -26,6 +26,7 @@ These are strong candidates once the current scoped build is working well.
 | Metric registry v1 | Creates a cleaner foundation for presets and cross-domain extension | `NS-1`, `NS-6`, `NS-7` |
 | Composable presets | Makes Atlas faster for recurring use cases without hard-coding rigid silos | `NS-1`, `NS-7` |
 | Better linked-object drill-through | Tightens movement between screener, county, research, scenario, and portfolio | `NS-4`, `NS-5`, `NS-8` |
+| Bounded research source monitoring | Improves research continuity and memo support without widening Atlas into generic AI research | `NS-4`, `NS-6`, `NS-8` |
 
 ## 2) Later
 
