@@ -3,6 +3,7 @@
 Last updated: 2026-04-10 (ET)
 Owner: Ryan + Codex
 Status: Proposed prototype memo
+Execution detail lives in [ATLAS_RESEARCH_SOURCE_MONITOR_IMPLEMENTATION_PLAN.md](./ATLAS_RESEARCH_SOURCE_MONITOR_IMPLEMENTATION_PLAN.md).
 
 ## 1) Purpose
 

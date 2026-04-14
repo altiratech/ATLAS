@@ -66,6 +66,7 @@ Current guardrails:
   - whether the refined `Research Workspace` mode split is now simple enough for first-time use, or still needs one more browser-verified pass
 - one bounded substance prototype under evaluation after workflow closure:
   - Research Source Monitor using Browser Rendering `/crawl` plus Workers AI as evidence-bound memo support attached to `research_workspaces`
+  - implementation detail lives in `ATLAS_RESEARCH_SOURCE_MONITOR_IMPLEMENTATION_PLAN.md`
 
 ## 3) Explicitly Deferred
 
