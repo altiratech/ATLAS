@@ -1,7 +1,11 @@
-# Agent Rules
+# Atlas Agent Rules
 
-This repo uses the workspace multi-LLM protocol.
+Read first:
+- `CURRENT_STATUS.md`
+- `README.md`
+- `docs/`
 
-Mandatory:
-- Follow `/Users/ryanjameson/Desktop/Lifehub/SYSTEM/SESSION_PROTOCOL.md`
-- Read/update shared context docs every session.
+Rules:
+- Treat Atlas as a product repo, separate from the public Altira site.
+- Use repo docs for current product truth before broader planning memos.
+- Keep detailed conventions in repo docs, not in this file.

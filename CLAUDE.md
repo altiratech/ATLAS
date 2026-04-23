@@ -1,7 +1,9 @@
-# Claude Rules
+# Atlas Claude Review Rules
 
-This repo uses the workspace multi-LLM protocol.
+Read `CURRENT_STATUS.md`, `README.md`, and only the repo docs or files needed for the review.
 
-Mandatory:
-- Follow `/Users/ryanjameson/Desktop/Lifehub/SYSTEM/SESSION_PROTOCOL.md`
-- Read/update shared context docs every session.
+Do not load workspace history by default.
+
+Review focus:
+- Atlas is separate from the public Altira site.
+- Prefer feedback on product clarity, risk, regressions, or implementation quality over new process design.

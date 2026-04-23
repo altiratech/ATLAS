@@ -345,7 +345,7 @@ export function CountyPage({
       </div>
       <div style={{display:'flex',gap:'.5rem',flexWrap:'wrap',justifyContent:'flex-end'}}>
         <button className="btn btn-p" onClick={() => nav(PG.RESEARCH, workflowParams)}>Save To Research</button>
-        <button className="btn" onClick={() => nav(PG.SCENARIO, workflowParams)}>Pressure Test In Scenario Lab</button>
+        <button className="btn" onClick={() => nav(PG.RESEARCH, workflowParams)}>Open Research Workspace</button>
         <button className={`btn btn-sm ${watched?'btn-p':''}`} onClick={toggleWatch}>{watched?'★ Watching':'☆ Watch'}</button>
         <button className="btn btn-sm" onClick={() => nav(PG.COMPARE,{fips:data.geo_key})}>Compare</button>
       </div>
@@ -588,7 +588,7 @@ export function CountyPage({
             Atlas is running unlevered and levered underwriting snapshots using the current Atlas benchmark value as the default entry price, a {acquisition.hold_years}-year hold, and the active assumption-set leverage terms unless you override them in Scenario Lab. Refinance stays optional.
           </div>
         </div>
-        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, workflowParams)}>Open in Scenario Lab</button>
+        <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, workflowParams)}>Open in Research First</button>
       </div>
       <div className="sg">
         <div className="sc"><div className="sc-l">Entry $/ac</div><div className="sc-v">{$$(acquisition.entry_price_per_acre)}</div><div className="sc-c">{acquisition.entry_discount_to_fair_value_pct != null ? `${acquisition.entry_discount_to_fair_value_pct >= 0 ? '+' : ''}${$(acquisition.entry_discount_to_fair_value_pct,2)}% vs fair value` : 'Fair value comparison unavailable'}</div></div>
@@ -657,7 +657,7 @@ export function CountyPage({
             Atlas is stress-testing a benchmark-based debt basis using the active assumption-set leverage terms, a {$(credit.rent_stress_pct,1)}% NOI shock, and a +{$(credit.rate_shock_bps,0)} bps loan-rate shock. Treat this as county screening context, not deal-specific credit underwriting.
           </div>
         </div>
-        <button className="btn btn-sm" onClick={() => nav(PG.SCENARIO, workflowParams)}>Open in Scenario Lab</button>
+        <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, workflowParams)}>Open in Research First</button>
       </div>
       <div className="sg">
         <div className="sc"><div className="sc-l">Base DSCR</div><div className="sc-v">{credit.base_dscr != null ? `${$(credit.base_dscr,2)}x` : 'N/A'}</div><div className="sc-c">Current NOI / annual debt service</div></div>

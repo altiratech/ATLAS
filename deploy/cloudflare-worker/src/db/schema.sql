@@ -258,6 +258,53 @@ CREATE TABLE IF NOT EXISTS research_scenario_runs (
 );
 CREATE INDEX IF NOT EXISTS ix_research_scenario_runs_workspace ON research_scenario_runs(workspace_id, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS research_sources (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+  geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+  url TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  title TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  crawl_policy_json TEXT,
+  last_crawled_at TEXT,
+  next_crawl_at TEXT,
+  linked_scenario_run_id INTEGER REFERENCES research_scenario_runs(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  UNIQUE(workspace_id, url)
+);
+CREATE INDEX IF NOT EXISTS ix_research_sources_workspace ON research_sources(workspace_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS ix_research_sources_geo ON research_sources(geo_key);
+
+CREATE TABLE IF NOT EXISTS research_source_crawls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  source_id INTEGER NOT NULL REFERENCES research_sources(id) ON DELETE CASCADE,
+  crawl_job_id TEXT,
+  status TEXT NOT NULL,
+  output_format TEXT,
+  http_status INTEGER,
+  content_hash TEXT,
+  change_summary TEXT,
+  markdown_r2_key TEXT,
+  json_r2_key TEXT,
+  error_text TEXT,
+  fetched_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_research_source_crawls_source ON research_source_crawls(source_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS research_artifacts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+  source_crawl_id INTEGER REFERENCES research_source_crawls(id) ON DELETE SET NULL,
+  artifact_type TEXT NOT NULL,
+  content_json TEXT NOT NULL,
+  model_name TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_research_artifacts_workspace ON research_artifacts(workspace_id, created_at DESC);
+
 -- ── Auth Sessions ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS auth_sessions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

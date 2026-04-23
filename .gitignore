@@ -14,3 +14,6 @@ backend/app/farmland.db-journal
 # Node/Cloudflare deploy profile artifacts
 deploy/cloudflare-worker/node_modules/
 deploy/cloudflare-worker/.wrangler/
+
+# Local browser review captures
+output/playwright/

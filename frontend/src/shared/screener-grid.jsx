@@ -177,7 +177,7 @@ export function ScreenerRecordPanel({ row, nav, workflowParams }) {
     <div style={{ display: 'flex', gap: '.45rem', flexWrap: 'wrap' }}>
       <button className="btn btn-sm" onClick={() => nav(PG.COUNTY, { fips: row.fips })}>Open County</button>
       <button className="btn btn-sm" onClick={() => nav(PG.RESEARCH, workflowParams(row))}>Open Research</button>
-      <button className="btn btn-sm btn-p" onClick={() => nav(PG.SCENARIO, workflowParams(row))}>Run Scenario</button>
+      <button className="btn btn-sm btn-p" onClick={() => nav(PG.RESEARCH, workflowParams(row))}>Research Before Scenario</button>
     </div>
   </div>;
 }
@@ -366,7 +366,7 @@ export function getScreenerColumns({ nav, workflowParams }) {
       renderCell: (_, r) => <div style={{ display: 'flex', gap: '.3rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); nav(PG.COUNTY, { fips: r.fips }); }}>View</button>
         <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research</button>
-        <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); nav(PG.SCENARIO, workflowParams(r)); }}>Scenario</button>
+        <button className="btn btn-sm" onClick={(e) => { e.stopPropagation(); nav(PG.RESEARCH, workflowParams(r)); }}>Research First</button>
       </div>,
     },
   ];

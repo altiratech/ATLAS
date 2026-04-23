@@ -64,6 +64,14 @@ export function ResearchWorkspace({
   const [scenarioRuns, setScenarioRuns] = React.useState([]);
   const [countySummary, setCountySummary] = React.useState(null);
   const [countySummaryLoading, setCountySummaryLoading] = React.useState(false);
+  const [trackedSources, setTrackedSources] = React.useState([]);
+  const [trackedSourcesLoading, setTrackedSourcesLoading] = React.useState(false);
+  const [trackedSourcesErr, setTrackedSourcesErr] = React.useState(null);
+  const [sourceUrlInput, setSourceUrlInput] = React.useState('');
+  const [sourceTitleInput, setSourceTitleInput] = React.useState('');
+  const [sourceTypeInput, setSourceTypeInput] = React.useState('operator_or_news');
+  const [sourceSaving, setSourceSaving] = React.useState(false);
+  const [refreshingSourceId, setRefreshingSourceId] = React.useState(null);
   const workspaceRecord = county ? normalizeResearchRecord(store[county]) : null;
   const currentPlaybookKey = workspaceRecord?.playbook_key || params?.playbookKey || activePlaybookKey;
   const thesisLenses = React.useMemo(
@@ -79,6 +87,14 @@ export function ResearchWorkspace({
     { value:'pass', label:'Pass' },
     { value:'active', label:'Active Position' },
   ];
+  const sourceTypeOptions = [
+    { value:'operator_or_news', label:'Operator / News' },
+    { value:'county_economic_development', label:'County EDC' },
+    { value:'planning_or_zoning', label:'Planning / Zoning' },
+    { value:'state_agriculture_or_water', label:'State Ag / Water' },
+    { value:'utility_or_power', label:'Utility / Power' },
+    { value:'other', label:'Other' },
+  ];
 
   const loadStore = React.useCallback(() => {
     setStoreLoading(true);
@@ -91,6 +107,29 @@ export function ResearchWorkspace({
       })
       .finally(() => setStoreLoading(false));
   }, []);
+
+  const loadTrackedSources = React.useCallback((geoKey = county) => {
+    if (!geoKey) {
+      setTrackedSources([]);
+      setTrackedSourcesErr(null);
+      setTrackedSourcesLoading(false);
+      return Promise.resolve([]);
+    }
+    setTrackedSourcesLoading(true);
+    setTrackedSourcesErr(null);
+    return api(`/research/workspaces/${geoKey}/sources`)
+      .then((rows) => {
+        const nextRows = Array.isArray(rows) ? rows : [];
+        setTrackedSources(nextRows);
+        return nextRows;
+      })
+      .catch((e) => {
+        setTrackedSources([]);
+        setTrackedSourcesErr(e.message || 'Failed to load tracked sources');
+        return [];
+      })
+      .finally(() => setTrackedSourcesLoading(false));
+  }, [county]);
 
   React.useEffect(() => {
     api('/counties').then(setCounties).catch(() => setCounties([]));
@@ -184,6 +223,24 @@ export function ResearchWorkspace({
       .then(setScenarioRuns)
       .catch(() => setScenarioRuns([]));
   }, [county, store[county]?.updated_at]);
+
+  React.useEffect(() => {
+    if (!county) {
+      setTrackedSources([]);
+      setTrackedSourcesErr(null);
+      setTrackedSourcesLoading(false);
+      return;
+    }
+    loadTrackedSources(county);
+  }, [county, loadTrackedSources]);
+
+  React.useEffect(() => {
+    setSourceUrlInput('');
+    setSourceTitleInput('');
+    setSourceTypeInput('operator_or_news');
+    setRefreshingSourceId(null);
+  }, [county]);
+
   React.useEffect(() => {
     if (!county) {
       setCountySummary(null);
@@ -334,6 +391,11 @@ export function ResearchWorkspace({
     : null;
   const countyDroughtBadge = droughtRiskBand(countyDrought);
   const countyFloodBadge = floodRiskBand(countyFlood);
+  const trackedSourcesCount = trackedSources.length;
+  const lastTrackedSourceRefresh = trackedSources
+    .map((source) => source.last_crawled_at || source.latest_crawl?.fetched_at || null)
+    .filter(Boolean)
+    .sort((a, b) => String(b).localeCompare(String(a)))[0] || null;
   const buildScenarioNavParamsForFips = React.useCallback((fips, options = {}) => {
     const scenarioRun = options.scenarioRun || null;
     const countyContext = getCountyContext(fips);
@@ -365,6 +427,64 @@ export function ResearchWorkspace({
     thesisLensKey,
   ]);
   const buildScenarioNavParams = (scenarioRun = null) => buildScenarioNavParamsForFips(county, { scenarioRun });
+
+  const addTrackedSource = async () => {
+    if (!county) {
+      addToast(toast('Select a county first', 'err'));
+      return;
+    }
+    if (!sourceUrlInput.trim()) {
+      addToast(toast('Source URL is required', 'err'));
+      return;
+    }
+    try {
+      setSourceSaving(true);
+      const created = await api(`/research/workspaces/${county}/sources`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          url: sourceUrlInput.trim(),
+          title: sourceTitleInput.trim(),
+          source_type: sourceTypeInput,
+        }),
+      });
+      await Promise.all([loadTrackedSources(county), loadStore()]);
+      setSourceUrlInput('');
+      setSourceTitleInput('');
+      setSourceTypeInput('operator_or_news');
+      addToast(toast(created?.duplicate ? 'Source already tracked' : 'Tracked source added', created?.duplicate ? 'info' : 'ok'));
+    } catch (e) {
+      addToast(toast('Add source failed', 'err'));
+    } finally {
+      setSourceSaving(false);
+    }
+  };
+
+  const refreshTrackedSources = async (sourceId = null) => {
+    if (!county) {
+      addToast(toast('Select a county first', 'err'));
+      return;
+    }
+    try {
+      setRefreshingSourceId(sourceId ?? 'all');
+      const response = await api(`/research/workspaces/${county}/source-crawls`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(sourceId ? { source_id: sourceId } : {}),
+      });
+      await Promise.all([loadTrackedSources(county), loadStore()]);
+      addToast(toast(
+        response?.mode === 'not_configured'
+          ? 'Refresh recorded, but crawl executor is not configured yet'
+          : (sourceId ? 'Tracked source refreshed' : 'Tracked sources refreshed'),
+        response?.mode === 'not_configured' ? 'info' : 'ok',
+      ));
+    } catch (e) {
+      addToast(toast('Source refresh failed', 'err'));
+    } finally {
+      setRefreshingSourceId(null);
+    }
+  };
 
   const saveWorkspace = async () => {
     if (!county) { addToast(toast('Select a county first', 'err')); return; }
@@ -451,7 +571,7 @@ export function ResearchWorkspace({
 
   const records = React.useMemo(() => Object.entries(store)
     .map(([fips, rec]) => ({ fips, ...normalizeResearchRecord(rec) }))
-    .filter(r => r.thesis || r.analysis?.bull_case || r.analysis?.bear_case || r.analysis?.target_use_case || r.analysis?.critical_dependencies?.length || r.analysis?.missing_data_notes?.length || r.tags.length || r.notes.length || r.scenario_packs.length || r.scenario_runs.length || r.scenario_runs_count)
+    .filter(r => r.thesis || r.analysis?.bull_case || r.analysis?.bear_case || r.analysis?.target_use_case || r.analysis?.critical_dependencies?.length || r.analysis?.missing_data_notes?.length || r.tags.length || r.notes.length || r.scenario_packs.length || r.scenario_runs.length || r.scenario_runs_count || r.sources_count)
     .sort((a,b) => (b.updated_at || '').localeCompare(a.updated_at || '')), [store]);
   const researchRows = React.useMemo(
     () => hydrateResearchRows(records, countyMap, currentPlaybookKey),
@@ -668,6 +788,110 @@ export function ResearchWorkspace({
                   : `Finish ${incompleteMemoRequirements.map((item) => item.label).join(', ')} before moving into Scenario Lab.`}
             </div>
           </div>
+          <div className="card" style={{marginTop:'.75rem',padding:'.7rem .8rem'}}>
+            <div style={{display:'flex',justifyContent:'space-between',gap:'.55rem',alignItems:'flex-start',flexWrap:'wrap'}}>
+              <div>
+                <div style={{fontSize:'.76rem',fontWeight:700,letterSpacing:'.06em',textTransform:'uppercase',color:'var(--text2)',marginBottom:'.45rem'}}>Tracked Sources</div>
+                <div style={{fontSize:'.78rem',color:'var(--text2)',maxWidth:'760px',lineHeight:1.45}}>
+                  Attach the few outside pages this memo depends on. Keep it tight: county EDC, zoning/planning, utility/power, state ag or water, or one operator/news source worth revisiting.
+                </div>
+              </div>
+              <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap'}}>
+                <span className="badge badge-b">{trackedSourcesCount} SOURCES</span>
+                <span className={`badge ${lastTrackedSourceRefresh ? 'badge-g' : 'badge-a'}`}>
+                  {lastTrackedSourceRefresh ? `LAST REFRESH ${new Date(lastTrackedSourceRefresh).toLocaleDateString()}` : 'NO REFRESH YET'}
+                </span>
+              </div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'minmax(280px,1.8fr) minmax(170px,1fr) minmax(180px,1fr) auto',gap:'.55rem',alignItems:'end',marginTop:'.7rem'}}>
+              <div className="fg" style={{margin:0}}>
+                <label>Source URL</label>
+                <input
+                  type="url"
+                  value={sourceUrlInput}
+                  onChange={(e) => setSourceUrlInput(e.target.value)}
+                  placeholder="https://example.gov/project-update"
+                />
+              </div>
+              <div className="fg" style={{margin:0}}>
+                <label>Source Type</label>
+                <select value={sourceTypeInput} onChange={(e) => setSourceTypeInput(e.target.value)}>
+                  {sourceTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select>
+              </div>
+              <div className="fg" style={{margin:0}}>
+                <label>Optional Label</label>
+                <input
+                  type="text"
+                  value={sourceTitleInput}
+                  onChange={(e) => setSourceTitleInput(e.target.value)}
+                  placeholder="County utility update"
+                />
+              </div>
+              <div style={{display:'flex',justifyContent:'flex-end'}}>
+                <button className="btn btn-sm btn-p" onClick={addTrackedSource} disabled={sourceSaving}>
+                  {sourceSaving ? 'ADDING...' : 'ADD SOURCE'}
+                </button>
+              </div>
+            </div>
+            <div className="rw-actions" style={{marginTop:'.65rem'}}>
+              <button
+                className="btn btn-sm"
+                onClick={() => refreshTrackedSources()}
+                disabled={!trackedSourcesCount || refreshingSourceId != null}
+              >
+                {refreshingSourceId === 'all' ? 'REFRESHING...' : 'REFRESH ALL SOURCES'}
+              </button>
+            </div>
+            {trackedSourcesErr && <div style={{fontSize:'.74rem',color:'var(--danger)',marginTop:'.5rem'}}>{trackedSourcesErr}</div>}
+            <div style={{marginTop:'.65rem'}}>
+              {trackedSourcesLoading ? <Loading/>
+              : trackedSources.length === 0 ? <ActionEmptyState
+                  title="Tracked Sources"
+                  body="No external source pages are attached to this memo yet."
+                  detail="Add only the pages you expect to revisit while this county is in diligence. Slice A stores the source register and manual refresh history first."
+                />
+              : trackedSources.map((source) => {
+                  const latestCrawl = source.latest_crawl || null;
+                  const isRefreshing = refreshingSourceId === source.id;
+                  const crawlStatusClass = latestCrawl?.status === 'completed'
+                    ? 'badge-g'
+                    : latestCrawl?.status === 'errored'
+                      ? 'badge-r'
+                      : latestCrawl?.status === 'not_configured'
+                        ? 'badge-a'
+                        : 'badge-b';
+                  return (
+                    <div key={source.id} className="rw-note" style={{alignItems:'flex-start'}}>
+                      <div style={{flex:1}}>
+                        <div style={{display:'flex',gap:'.35rem',flexWrap:'wrap',alignItems:'center',marginBottom:'.25rem'}}>
+                          <a href={source.url} target="_blank" rel="noreferrer" style={{fontSize:'.82rem',fontWeight:600}}>
+                            {source.title || formatTrackedSourceHost(source.url)}
+                          </a>
+                          <span className="badge badge-b">{formatTrackedSourceType(source.source_type)}</span>
+                          <span className={`badge ${crawlStatusClass}`}>{String(latestCrawl?.status || 'active').replace(/_/g, ' ').toUpperCase()}</span>
+                        </div>
+                        <div style={{fontSize:'.74rem',color:'var(--text2)',lineHeight:1.45}}>
+                          {source.url}
+                        </div>
+                        <div style={{fontSize:'.73rem',color:'var(--text2)',marginTop:'.22rem',lineHeight:1.45}}>
+                          {latestCrawl?.fetched_at
+                            ? `Last refreshed ${new Date(latestCrawl.fetched_at).toLocaleString()}`
+                            : source.last_crawled_at
+                              ? `Last refreshed ${new Date(source.last_crawled_at).toLocaleString()}`
+                              : 'No completed refresh yet.'}
+                          {latestCrawl?.http_status ? ` • HTTP ${latestCrawl.http_status}` : ''}
+                          {latestCrawl?.error_text ? ` • ${latestCrawl.error_text}` : ''}
+                        </div>
+                      </div>
+                      <button className="btn btn-sm" onClick={() => refreshTrackedSources(source.id)} disabled={refreshingSourceId != null}>
+                        {isRefreshing ? 'REFRESHING...' : 'REFRESH'}
+                      </button>
+                    </div>
+                  );
+                })}
+            </div>
+          </div>
           <details style={{marginTop:'.75rem'}}>
             <summary style={{cursor:'pointer',fontSize:'.8rem',color:'var(--text2)',fontWeight:600,letterSpacing:'.04em',textTransform:'uppercase'}}>More memo structure</summary>
             <div style={{marginTop:'.75rem'}}>
@@ -743,10 +967,11 @@ export function ResearchWorkspace({
         <h3 style={{fontSize:'.98rem',marginBottom:'.65rem'}}>Record Snapshot</h3>
         <div className="sc"><div className="sc-l">Selected County</div><div className="sc-v" style={{fontSize:'.95rem'}}>{selectedCountyLabel}</div></div>
         <div className="sc" style={{marginTop:'.48rem'}}><div className="sc-l">Active Assumption Set</div><div className="sc-v" style={{fontSize:'.82rem'}}>{assumptionSetLabel(activeAssumptionSet)}</div></div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'.48rem',marginTop:'.48rem'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(110px,1fr))',gap:'.48rem',marginTop:'.48rem'}}>
           <div className="sc" style={{margin:0}}><div className="sc-l">Notes</div><div className="sc-v">{active.notes.length}</div></div>
           <div className="sc" style={{margin:0}}><div className="sc-l">Scenario Runs</div><div className="sc-v">{scenarioRuns.length}</div></div>
           <div className="sc" style={{margin:0}}><div className="sc-l">Packs</div><div className="sc-v">{active.scenario_packs.length}</div></div>
+          <div className="sc" style={{margin:0}}><div className="sc-l">Tracked Sources</div><div className="sc-v">{trackedSourcesCount || active.sources_count || 0}</div></div>
         </div>
         <div style={{fontSize:'.76rem',color:'var(--text2)',marginTop:'.55rem',lineHeight:1.45}}>
           Keep the memo and the active assumption set aligned. Atlas does not automatically rewrite your memo when the model basis changes.
@@ -992,4 +1217,29 @@ function formatAcquisitionBasis(basis, kind) {
   if (basis === 'implied_cap_rate') return 'Using current cap rate';
   if (basis === 'required_return') return 'Using required return';
   return 'Exit cap unavailable';
+}
+
+function formatTrackedSourceHost(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+function formatTrackedSourceType(value) {
+  switch (value) {
+    case 'county_economic_development':
+      return 'COUNTY EDC';
+    case 'planning_or_zoning':
+      return 'PLANNING / ZONING';
+    case 'state_agriculture_or_water':
+      return 'STATE AG / WATER';
+    case 'utility_or_power':
+      return 'UTILITY / POWER';
+    case 'operator_or_news':
+      return 'OPERATOR / NEWS';
+    default:
+      return 'OTHER';
+  }
 }

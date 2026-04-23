@@ -5,7 +5,7 @@
 import { Hono } from 'hono';
 import type { Context } from 'hono';
 import { cors } from 'hono/cors';
-import type { D1Database } from '@cloudflare/workers-types';
+import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import {
   computeAll,
   createContext,
@@ -66,8 +66,11 @@ type Bindings = {
   DB: D1Database;
   FRED_API_KEY: SecretStoreSecret;
   NASS_API_KEY: SecretStoreSecret;
+  BROWSER_RENDERING_API_TOKEN?: SecretStoreSecret;
   INGEST_ADMIN_TOKEN?: string;
   ASSETS: AssetFetcher;
+  RESEARCH_SOURCE_ARTIFACTS?: R2Bucket;
+  BROWSER_RENDERING_ACCOUNT_ID?: string;
   ENVIRONMENT?: string;
   CANONICAL_HOST?: string;
   LEGACY_HOST?: string;
@@ -920,8 +923,48 @@ interface ResearchWorkspaceRow {
   updated_at: string | null;
 }
 
+interface ResearchSourceRow {
+  id: number;
+  workspace_id: number;
+  geo_key: string;
+  url: string;
+  source_type: string;
+  title: string | null;
+  status: string;
+  crawl_policy_json: string | null;
+  last_crawled_at: string | null;
+  next_crawl_at: string | null;
+  linked_scenario_run_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+interface ResearchSourceListRow extends ResearchSourceRow {
+  latest_crawl_id: number | null;
+  latest_crawl_job_id: string | null;
+  latest_crawl_status: string | null;
+  latest_output_format: string | null;
+  latest_http_status: number | null;
+  latest_content_hash: string | null;
+  latest_change_summary: string | null;
+  latest_markdown_r2_key: string | null;
+  latest_json_r2_key: string | null;
+  latest_error_text: string | null;
+  latest_fetched_at: string | null;
+  latest_created_at: string | null;
+}
+
 const RESEARCH_LEGACY_USER = 'owner_default';
 const SESSION_TTL_DAYS = 30;
+const MAX_RESEARCH_SOURCES_PER_WORKSPACE = 8;
+const RESEARCH_SOURCE_TYPES = new Set([
+  'county_economic_development',
+  'planning_or_zoning',
+  'state_agriculture_or_water',
+  'utility_or_power',
+  'operator_or_news',
+  'other',
+]);
 
 function sanitizeResearchUser(raw: string): string {
   const lowered = raw.trim().toLowerCase();
@@ -1332,6 +1375,7 @@ function emptyResearchWorkspace(geoKey: string) {
     conviction: 50,
     notes: [],
     scenario_packs: [],
+    sources_count: 0,
     created_at: null,
     updated_at: null,
   };
@@ -1405,6 +1449,14 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
     )
     .bind(workspace.id)
     .first<{ count: number }>();
+  const sourceCount = await db
+    .prepare(
+      `SELECT COUNT(*) AS count
+       FROM research_sources
+       WHERE workspace_id = ?`,
+    )
+    .bind(workspace.id)
+    .first<{ count: number }>();
 
   return {
     geo_key: workspace.geo_key,
@@ -1431,8 +1483,425 @@ async function serializeResearchWorkspace(db: D1Database, workspace: ResearchWor
       updated_at: p.updated_at,
     })),
     scenario_runs_count: Number(scenarioRunCount?.count || 0),
+    sources_count: Number(sourceCount?.count || 0),
     created_at: workspace.created_at,
     updated_at: workspace.updated_at,
+  };
+}
+
+function defaultResearchSourceCrawlPolicy() {
+  return {
+    provider: 'cloudflare_browser_rendering',
+    trigger: 'manual',
+    limit: 1,
+    depth: 1,
+    formats: ['markdown', 'json'],
+    crawl_purposes: ['ai-input'],
+  };
+}
+
+function parseResearchSourceCrawlPolicy(raw: string | null) {
+  if (!raw) return defaultResearchSourceCrawlPolicy();
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object'
+      ? { ...defaultResearchSourceCrawlPolicy(), ...parsed }
+      : defaultResearchSourceCrawlPolicy();
+  } catch {
+    return defaultResearchSourceCrawlPolicy();
+  }
+}
+
+function normalizeResearchSourceType(value: unknown): string {
+  if (typeof value !== 'string') return 'other';
+  const trimmed = value.trim().toLowerCase();
+  return RESEARCH_SOURCE_TYPES.has(trimmed) ? trimmed : 'other';
+}
+
+function normalizeResearchSourceUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
+
+function parseCfErrorMessage(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') return fallback;
+  const errors: Array<{ message?: unknown }> = Array.isArray((payload as { errors?: unknown[] }).errors)
+    ? ((payload as { errors?: Array<{ message?: unknown }> }).errors ?? [])
+    : [];
+  const message = errors
+    .map((entry) => (typeof entry?.message === 'string' ? entry.message : ''))
+    .filter(Boolean)
+    .join('; ');
+  return message || fallback;
+}
+
+function buildResearchSourceR2Key(source: ResearchSourceRow, suffix: string) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  return `research-sources/${source.geo_key}/${source.id}/${stamp}.${suffix}`;
+}
+
+function latestCrawlFromRow(row: ResearchSourceListRow) {
+  if (!row.latest_crawl_id) return null;
+  return {
+    id: row.latest_crawl_id,
+    crawl_job_id: row.latest_crawl_job_id,
+    status: row.latest_crawl_status,
+    output_format: row.latest_output_format,
+    http_status: row.latest_http_status,
+    content_hash: row.latest_content_hash,
+    change_summary: row.latest_change_summary,
+    markdown_r2_key: row.latest_markdown_r2_key,
+    json_r2_key: row.latest_json_r2_key,
+    error_text: row.latest_error_text,
+    fetched_at: row.latest_fetched_at,
+    created_at: row.latest_created_at,
+  };
+}
+
+function serializeResearchSource(row: ResearchSourceListRow) {
+  return {
+    id: row.id,
+    workspace_id: row.workspace_id,
+    geo_key: row.geo_key,
+    url: row.url,
+    source_type: row.source_type,
+    title: row.title ?? '',
+    status: row.status,
+    crawl_policy: parseResearchSourceCrawlPolicy(row.crawl_policy_json),
+    last_crawled_at: row.last_crawled_at,
+    next_crawl_at: row.next_crawl_at,
+    linked_scenario_run_id: row.linked_scenario_run_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+    latest_crawl: latestCrawlFromRow(row),
+  };
+}
+
+async function listResearchSources(db: D1Database, workspaceId: number) {
+  const rows = await db
+    .prepare(
+      `SELECT
+         source.id,
+         source.workspace_id,
+         source.geo_key,
+         source.url,
+         source.source_type,
+         source.title,
+         source.status,
+         source.crawl_policy_json,
+         source.last_crawled_at,
+         source.next_crawl_at,
+         source.linked_scenario_run_id,
+         source.created_at,
+         source.updated_at,
+         crawl.id AS latest_crawl_id,
+         crawl.crawl_job_id AS latest_crawl_job_id,
+         crawl.status AS latest_crawl_status,
+         crawl.output_format AS latest_output_format,
+         crawl.http_status AS latest_http_status,
+         crawl.content_hash AS latest_content_hash,
+         crawl.change_summary AS latest_change_summary,
+         crawl.markdown_r2_key AS latest_markdown_r2_key,
+         crawl.json_r2_key AS latest_json_r2_key,
+         crawl.error_text AS latest_error_text,
+         crawl.fetched_at AS latest_fetched_at,
+         crawl.created_at AS latest_created_at
+       FROM research_sources source
+       LEFT JOIN research_source_crawls crawl
+         ON crawl.id = (
+           SELECT id
+           FROM research_source_crawls
+           WHERE source_id = source.id
+           ORDER BY created_at DESC, id DESC
+           LIMIT 1
+         )
+       WHERE source.workspace_id = ?
+       ORDER BY source.updated_at DESC, source.id DESC`,
+    )
+    .bind(workspaceId)
+    .all<ResearchSourceListRow>();
+  return (rows.results ?? []).map(serializeResearchSource);
+}
+
+async function getResearchSourceForWorkspace(
+  db: D1Database,
+  workspaceId: number,
+  sourceId: number,
+) {
+  const row = await db
+    .prepare(
+      `SELECT
+         source.id,
+         source.workspace_id,
+         source.geo_key,
+         source.url,
+         source.source_type,
+         source.title,
+         source.status,
+         source.crawl_policy_json,
+         source.last_crawled_at,
+         source.next_crawl_at,
+         source.linked_scenario_run_id,
+         source.created_at,
+         source.updated_at,
+         crawl.id AS latest_crawl_id,
+         crawl.crawl_job_id AS latest_crawl_job_id,
+         crawl.status AS latest_crawl_status,
+         crawl.output_format AS latest_output_format,
+         crawl.http_status AS latest_http_status,
+         crawl.content_hash AS latest_content_hash,
+         crawl.change_summary AS latest_change_summary,
+         crawl.markdown_r2_key AS latest_markdown_r2_key,
+         crawl.json_r2_key AS latest_json_r2_key,
+         crawl.error_text AS latest_error_text,
+         crawl.fetched_at AS latest_fetched_at,
+         crawl.created_at AS latest_created_at
+       FROM research_sources source
+       LEFT JOIN research_source_crawls crawl
+         ON crawl.id = (
+           SELECT id
+           FROM research_source_crawls
+           WHERE source_id = source.id
+           ORDER BY created_at DESC, id DESC
+           LIMIT 1
+         )
+       WHERE source.workspace_id = ? AND source.id = ?`,
+    )
+    .bind(workspaceId, sourceId)
+    .first<ResearchSourceListRow>();
+  return row ? serializeResearchSource(row) : null;
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function executeResearchSourceCrawl(
+  c: Context<{ Bindings: Bindings }>,
+  db: D1Database,
+  source: ResearchSourceRow,
+) {
+  const accountId = (c.env.BROWSER_RENDERING_ACCOUNT_ID ?? '').trim();
+  const tokenSecret = c.env.BROWSER_RENDERING_API_TOKEN;
+  const artifactBucket = c.env.RESEARCH_SOURCE_ARTIFACTS;
+
+  if (!accountId || !tokenSecret || !artifactBucket) {
+    const inserted = await db
+      .prepare(
+        `INSERT INTO research_source_crawls (
+           source_id, crawl_job_id, status, output_format, error_text, fetched_at, created_at
+         ) VALUES (?, NULL, 'not_configured', 'none', ?, NULL, datetime('now'))
+         RETURNING id, status, error_text, created_at`,
+      )
+      .bind(source.id, 'Browser Rendering crawl executor is not configured yet for this worker.')
+      .first<{ id: number; status: string; error_text: string | null; created_at: string | null }>();
+    await db
+      .prepare("UPDATE research_sources SET updated_at = datetime('now') WHERE id = ?")
+      .bind(source.id)
+      .run();
+    return {
+      mode: 'not_configured',
+      source_id: source.id,
+      crawl_id: inserted?.id ?? null,
+      status: inserted?.status ?? 'not_configured',
+      error_text: inserted?.error_text ?? 'Browser Rendering crawl executor is not configured yet for this worker.',
+      created_at: inserted?.created_at ?? null,
+    };
+  }
+
+  const apiToken = await tokenSecret.get();
+  const crawlBody = {
+    url: source.url,
+    limit: 1,
+    depth: 1,
+    maxAge: 0,
+    formats: ['markdown', 'json'],
+    crawlPurposes: ['ai-input'],
+    gotoOptions: {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+    },
+    options: {
+      includeExternalLinks: false,
+      includeSubdomains: false,
+    },
+  };
+
+  const startResp = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/crawl?cacheTTL=0`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(crawlBody),
+    },
+  );
+  const startPayload = await startResp.json().catch(() => null) as {
+    success?: boolean;
+    result?: string;
+    errors?: Array<{ message?: string }>;
+  } | null;
+
+  if (!startResp.ok || !startPayload?.result) {
+    const errorText = parseCfErrorMessage(startPayload, `Failed to start crawl (${startResp.status})`);
+    const inserted = await db
+      .prepare(
+        `INSERT INTO research_source_crawls (
+           source_id, crawl_job_id, status, output_format, error_text, fetched_at, created_at
+         ) VALUES (?, NULL, 'errored', 'none', ?, datetime('now'), datetime('now'))
+         RETURNING id, status, error_text, created_at`,
+      )
+      .bind(source.id, errorText)
+      .first<{ id: number; status: string; error_text: string | null; created_at: string | null }>();
+    await db
+      .prepare("UPDATE research_sources SET last_crawled_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
+      .bind(source.id)
+      .run();
+    return {
+      mode: 'configured',
+      source_id: source.id,
+      crawl_id: inserted?.id ?? null,
+      crawl_job_id: null,
+      status: inserted?.status ?? 'errored',
+      error_text: inserted?.error_text ?? errorText,
+      created_at: inserted?.created_at ?? null,
+    };
+  }
+
+  const jobId = startPayload.result;
+  type CrawlStatusPayload = {
+    result?: {
+      id?: string;
+      status?: string;
+      records?: Array<{
+        url?: string;
+        status?: string;
+        markdown?: string;
+        json?: Record<string, unknown>;
+        metadata?: {
+          url?: string;
+          status?: number;
+          title?: string;
+        };
+      }>;
+    };
+    errors?: Array<{ message?: string }>;
+  };
+  let finalPayload: CrawlStatusPayload | null = null;
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const statusResp = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/browser-rendering/crawl/${jobId}?cacheTTL=0&limit=1`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+        },
+      },
+    );
+    finalPayload = await statusResp.json().catch(() => null) as CrawlStatusPayload | null;
+    const crawlStatus = finalPayload?.result?.status ?? '';
+    if (crawlStatus && crawlStatus !== 'queued' && crawlStatus !== 'running') {
+      break;
+    }
+    if (attempt < 5) {
+      await sleep(1200);
+    }
+  }
+
+  const crawlStatus = finalPayload?.result?.status ?? 'running';
+  const firstRecord = Array.isArray(finalPayload?.result?.records) ? finalPayload?.result?.records?.[0] ?? null : null;
+  const markdown = typeof firstRecord?.markdown === 'string' ? firstRecord.markdown : '';
+  const jsonPayload = firstRecord?.json && typeof firstRecord.json === 'object'
+    ? JSON.stringify(firstRecord.json)
+    : '';
+  const hasTerminalRecord = !!firstRecord && (firstRecord.status === 'completed' || firstRecord.status === 'errored' || firstRecord.status === 'disallowed' || firstRecord.status === 'skipped' || firstRecord.status === 'cancelled');
+
+  let markdownKey: string | null = null;
+  let jsonKey: string | null = null;
+  let contentHash: string | null = null;
+  if ((markdown || jsonPayload) && (crawlStatus === 'completed' || firstRecord?.status === 'completed')) {
+    if (markdown) {
+      markdownKey = buildResearchSourceR2Key(source, 'md');
+      await artifactBucket.put(markdownKey, markdown, {
+        httpMetadata: { contentType: 'text/markdown; charset=utf-8' },
+      });
+    }
+    if (jsonPayload) {
+      jsonKey = buildResearchSourceR2Key(source, 'json');
+      await artifactBucket.put(jsonKey, jsonPayload, {
+        httpMetadata: { contentType: 'application/json; charset=utf-8' },
+      });
+    }
+    contentHash = await sha256Hex(markdown || jsonPayload);
+  }
+
+  const resolvedStatus = firstRecord?.status || crawlStatus || 'queued';
+  const resolvedError = resolvedStatus === 'completed'
+    ? null
+    : parseCfErrorMessage(finalPayload, `Crawl ended with status: ${resolvedStatus}`);
+  const fetchedAtSql = hasTerminalRecord ? "datetime('now')" : 'NULL';
+  const inserted = await db
+    .prepare(
+      `INSERT INTO research_source_crawls (
+         source_id,
+         crawl_job_id,
+         status,
+         output_format,
+         http_status,
+         content_hash,
+         change_summary,
+         markdown_r2_key,
+         json_r2_key,
+         error_text,
+         fetched_at,
+         created_at
+       ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ${fetchedAtSql}, datetime('now'))
+       RETURNING id, status, error_text, fetched_at, created_at`,
+    )
+    .bind(
+      source.id,
+      jobId,
+      resolvedStatus,
+      markdown && jsonPayload ? 'markdown,json' : markdown ? 'markdown' : jsonPayload ? 'json' : 'none',
+      firstRecord?.metadata?.status ?? null,
+      contentHash,
+      markdownKey,
+      jsonKey,
+      resolvedError,
+    )
+    .first<{ id: number; status: string; error_text: string | null; fetched_at: string | null; created_at: string | null }>();
+
+  await db
+    .prepare(
+      `UPDATE research_sources
+       SET title = COALESCE(NULLIF(title, ''), ?),
+           last_crawled_at = CASE WHEN ? = 'completed' THEN datetime('now') ELSE last_crawled_at END,
+           updated_at = datetime('now')
+       WHERE id = ?`,
+    )
+    .bind(firstRecord?.metadata?.title ?? null, resolvedStatus, source.id)
+    .run();
+
+  return {
+    mode: 'configured',
+    source_id: source.id,
+    crawl_id: inserted?.id ?? null,
+    crawl_job_id: jobId,
+    status: inserted?.status ?? resolvedStatus,
+    error_text: inserted?.error_text ?? resolvedError,
+    fetched_at: inserted?.fetched_at ?? null,
+    created_at: inserted?.created_at ?? null,
   };
 }
 
@@ -1637,6 +2106,71 @@ async function ensureResearchSchema(db: D1Database) {
         .run();
       await db
         .prepare('CREATE INDEX IF NOT EXISTS ix_research_scenario_runs_workspace ON research_scenario_runs(workspace_id, created_at DESC)')
+        .run();
+
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS research_sources (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+             geo_key TEXT NOT NULL REFERENCES geo_county(fips),
+             url TEXT NOT NULL,
+             source_type TEXT NOT NULL,
+             title TEXT,
+             status TEXT NOT NULL DEFAULT 'active',
+             crawl_policy_json TEXT,
+             last_crawled_at TEXT,
+             next_crawl_at TEXT,
+             linked_scenario_run_id INTEGER REFERENCES research_scenario_runs(id) ON DELETE SET NULL,
+             created_at TEXT DEFAULT (datetime('now')),
+             updated_at TEXT DEFAULT (datetime('now')),
+             UNIQUE(workspace_id, url)
+           )`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS research_source_crawls (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             source_id INTEGER NOT NULL REFERENCES research_sources(id) ON DELETE CASCADE,
+             crawl_job_id TEXT,
+             status TEXT NOT NULL,
+             output_format TEXT,
+             http_status INTEGER,
+             content_hash TEXT,
+             change_summary TEXT,
+             markdown_r2_key TEXT,
+             json_r2_key TEXT,
+             error_text TEXT,
+             fetched_at TEXT,
+             created_at TEXT DEFAULT (datetime('now'))
+           )`,
+        )
+        .run();
+      await db
+        .prepare(
+          `CREATE TABLE IF NOT EXISTS research_artifacts (
+             id INTEGER PRIMARY KEY AUTOINCREMENT,
+             workspace_id INTEGER NOT NULL REFERENCES research_workspaces(id) ON DELETE CASCADE,
+             source_crawl_id INTEGER REFERENCES research_source_crawls(id) ON DELETE SET NULL,
+             artifact_type TEXT NOT NULL,
+             content_json TEXT NOT NULL,
+             model_name TEXT,
+             created_at TEXT DEFAULT (datetime('now'))
+           )`,
+        )
+        .run();
+      await db
+        .prepare('CREATE INDEX IF NOT EXISTS ix_research_sources_workspace ON research_sources(workspace_id, updated_at DESC)')
+        .run();
+      await db
+        .prepare('CREATE INDEX IF NOT EXISTS ix_research_sources_geo ON research_sources(geo_key)')
+        .run();
+      await db
+        .prepare('CREATE INDEX IF NOT EXISTS ix_research_source_crawls_source ON research_source_crawls(source_id, created_at DESC)')
+        .run();
+      await db
+        .prepare('CREATE INDEX IF NOT EXISTS ix_research_artifacts_workspace ON research_artifacts(workspace_id, created_at DESC)')
         .run();
 
       await db
@@ -3952,6 +4486,209 @@ app.post('/api/v1/research/workspaces/:geoKey/scenario-runs', async (c) => {
     assumptions: JSON.parse(inserted.assumptions_json || '{}'),
     comparison: JSON.parse(inserted.comparison_json || '{}'),
     created_at: inserted.created_at,
+  });
+});
+
+app.get('/api/v1/research/workspaces/:geoKey/sources', async (c) => {
+  const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
+  const geoKey = c.req.param('geoKey');
+  const workspace = await findResearchWorkspaceForUser(db, auth.userKey, geoKey);
+  if (!workspace) return c.json([]);
+  return c.json(await listResearchSources(db, workspace.id));
+});
+
+app.post('/api/v1/research/workspaces/:geoKey/sources', async (c) => {
+  const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
+  const geoKey = c.req.param('geoKey');
+  const body = await c.req.json<{
+    url?: string;
+    source_type?: string;
+    title?: string;
+    linked_scenario_run_id?: number | null;
+  }>();
+
+  const normalizedUrl = normalizeResearchSourceUrl(body.url);
+  if (!normalizedUrl) {
+    return c.json({ error: 'A valid source URL is required' }, 400);
+  }
+
+  const workspace = await ensureResearchWorkspace(db, auth.userKey, geoKey);
+  const existing = await db
+    .prepare('SELECT id FROM research_sources WHERE workspace_id = ? AND url = ?')
+    .bind(workspace.id, normalizedUrl)
+    .first<{ id: number }>();
+  if (existing) {
+    const source = await getResearchSourceForWorkspace(db, workspace.id, existing.id);
+    return c.json({ ...(source ?? {}), duplicate: true });
+  }
+
+  const countRow = await db
+    .prepare('SELECT COUNT(*) AS count FROM research_sources WHERE workspace_id = ?')
+    .bind(workspace.id)
+    .first<{ count: number }>();
+  if (Number(countRow?.count || 0) >= MAX_RESEARCH_SOURCES_PER_WORKSPACE) {
+    return c.json({ error: `Limit ${MAX_RESEARCH_SOURCES_PER_WORKSPACE} tracked sources per research record` }, 400);
+  }
+
+  const linkedScenarioRunId = body.linked_scenario_run_id != null ? Number(body.linked_scenario_run_id) : null;
+  if (linkedScenarioRunId != null) {
+    const scenario = await db
+      .prepare('SELECT id FROM research_scenario_runs WHERE id = ? AND workspace_id = ?')
+      .bind(linkedScenarioRunId, workspace.id)
+      .first<{ id: number }>();
+    if (!scenario) {
+      return c.json({ error: 'linked_scenario_run_id does not belong to this workspace' }, 400);
+    }
+  }
+
+  const inserted = await db
+    .prepare(
+      `INSERT INTO research_sources (
+         workspace_id,
+         geo_key,
+         url,
+         source_type,
+         title,
+         status,
+         crawl_policy_json,
+         last_crawled_at,
+         next_crawl_at,
+         linked_scenario_run_id,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, ?, 'active', ?, NULL, NULL, ?, datetime('now'), datetime('now'))
+       RETURNING id`,
+    )
+    .bind(
+      workspace.id,
+      geoKey,
+      normalizedUrl,
+      normalizeResearchSourceType(body.source_type),
+      (body.title ?? '').trim() || null,
+      JSON.stringify(defaultResearchSourceCrawlPolicy()),
+      linkedScenarioRunId,
+    )
+    .first<{ id: number }>();
+
+  await db
+    .prepare("UPDATE research_workspaces SET updated_at = datetime('now') WHERE id = ?")
+    .bind(workspace.id)
+    .run();
+
+  if (!inserted) return c.json({ error: 'Failed to add source' }, 500);
+  const source = await getResearchSourceForWorkspace(db, workspace.id, inserted.id);
+  if (!source) return c.json({ error: 'Failed to load added source' }, 500);
+  return c.json(source);
+});
+
+app.post('/api/v1/research/workspaces/:geoKey/source-crawls', async (c) => {
+  const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
+  const geoKey = c.req.param('geoKey');
+  const body: { source_id?: number | null } = await c.req.json<{ source_id?: number | null }>().catch(() => ({}));
+
+  const workspace = await findResearchWorkspaceForUser(db, auth.userKey, geoKey);
+  if (!workspace) {
+    return c.json({ error: 'Research workspace not found' }, 404);
+  }
+
+  let sourceRows: ResearchSourceRow[] = [];
+  if (body.source_id != null) {
+    const source = await db
+      .prepare(
+        `SELECT id, workspace_id, geo_key, url, source_type, title, status, crawl_policy_json, last_crawled_at, next_crawl_at, linked_scenario_run_id, created_at, updated_at
+         FROM research_sources
+         WHERE workspace_id = ? AND id = ?`,
+      )
+      .bind(workspace.id, Number(body.source_id))
+      .first<ResearchSourceRow>();
+    if (!source) return c.json({ error: 'Tracked source not found' }, 404);
+    sourceRows = [source];
+  } else {
+    const sources = await db
+      .prepare(
+        `SELECT id, workspace_id, geo_key, url, source_type, title, status, crawl_policy_json, last_crawled_at, next_crawl_at, linked_scenario_run_id, created_at, updated_at
+         FROM research_sources
+         WHERE workspace_id = ? AND status = 'active'
+         ORDER BY updated_at DESC, id DESC`,
+      )
+      .bind(workspace.id)
+      .all<ResearchSourceRow>();
+    sourceRows = sources.results ?? [];
+  }
+
+  if (!sourceRows.length) {
+    return c.json({ error: 'No active tracked sources to refresh' }, 400);
+  }
+
+  const results = [];
+  for (const source of sourceRows) {
+    results.push(await executeResearchSourceCrawl(c, db, source));
+  }
+
+  await db
+    .prepare("UPDATE research_workspaces SET updated_at = datetime('now') WHERE id = ?")
+    .bind(workspace.id)
+    .run();
+
+  const mode = results.every((entry) => entry.mode === 'not_configured') ? 'not_configured' : 'configured';
+  return c.json({
+    geo_key: geoKey,
+    requested_count: sourceRows.length,
+    mode,
+    message: mode === 'not_configured'
+      ? 'Tracked-source refresh was recorded, but Browser Rendering /crawl is not configured on this worker yet.'
+      : 'Tracked-source refresh finished for the requested sources.',
+    results,
+  });
+});
+
+app.get('/api/v1/research/workspaces/:geoKey/diligence', async (c) => {
+  const db = c.env.DB;
+  const auth = await requireAuthOrError(c, db, 'Missing research user identity');
+  if (auth instanceof Response) return auth;
+  const geoKey = c.req.param('geoKey');
+  const workspace = await findResearchWorkspaceForUser(db, auth.userKey, geoKey);
+  if (!workspace) {
+    return c.json({
+      geo_key: geoKey,
+      sources: [],
+      artifacts: [],
+      summary: {
+        tracked_sources_count: 0,
+        active_sources_count: 0,
+        latest_crawl_at: null,
+      },
+    });
+  }
+
+  const sources = await listResearchSources(db, workspace.id);
+  const summaryRow = await db
+    .prepare(
+      `SELECT
+         COUNT(*) AS tracked_sources_count,
+         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_sources_count,
+         MAX(last_crawled_at) AS latest_crawl_at
+       FROM research_sources
+       WHERE workspace_id = ?`,
+    )
+    .bind(workspace.id)
+    .first<{ tracked_sources_count: number; active_sources_count: number | null; latest_crawl_at: string | null }>();
+
+  return c.json({
+    geo_key: geoKey,
+    sources,
+    artifacts: [],
+    summary: {
+      tracked_sources_count: Number(summaryRow?.tracked_sources_count || 0),
+      active_sources_count: Number(summaryRow?.active_sources_count || 0),
+      latest_crawl_at: summaryRow?.latest_crawl_at ?? null,
+    },
   });
 });
 

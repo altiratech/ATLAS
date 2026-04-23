@@ -180,7 +180,10 @@ export function AppShell({
 
   return <div className="app">
     <div className="side">
-      <div className="side-logo">{APP_NAME}</div>
+      <div className="side-logo">
+        <img className="side-logo-mark" src="/brand/altira-wordmark-dark.png" alt="Altira" />
+        <span className="side-logo-product">{APP_NAME}</span>
+      </div>
       {navItems.map((sec) => <div key={sec.section} className="nav-sec">
         <div className="nav-lbl">{sec.section}</div>
         {sec.items.map((it) => <div key={it.id} className={`nav-i ${currentPage === it.id ? 'act' : ''}`} onClick={() => nav(it.id)}>
