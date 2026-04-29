@@ -22,8 +22,8 @@ Canonical hosted app:
 ## Quick Start
 
 ```bash
-git clone https://github.com/altiratech/ATLAS.git
-cd ATLAS
+git clone https://github.com/altiratech/altira-atlas.git
+cd altira-atlas
 
 # Native desktop window when pywebview is available
 ./run.sh
