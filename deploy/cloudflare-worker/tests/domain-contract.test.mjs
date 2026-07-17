@@ -64,4 +64,6 @@ test('operational defaults and visible canonical references use the personal hos
   const migrationCheck = files[0];
   assert.match(migrationCheck, /atlas\.altiratech\.com/);
   assert.match(migrationCheck, /farmland\.altiratech\.com/);
+  assert.match(migrationCheck, /curl -sS -D - -o \/dev\/null/);
+  assert.doesNotMatch(migrationCheck, /curl -sI/);
 });
