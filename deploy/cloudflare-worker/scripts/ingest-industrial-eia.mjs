@@ -93,7 +93,7 @@ async function fetchEiaIndustrialPowerPrices({ apiKey, states, startYear, endYea
 function buildSql({ byYear }) {
   const lines = [];
   lines.push(`INSERT OR IGNORE INTO data_sources (name, url, cadence, notes) VALUES (${sqlString(SOURCE_NAME)}, ${sqlString(SOURCE_URL)}, ${sqlString(SOURCE_CADENCE)}, ${sqlString('Industrial power-price context for Atlas industrial screening.')});`);
-  lines.push(`INSERT OR IGNORE INTO data_sources (name, url, cadence, notes) VALUES (${sqlString('Atlas Derived')}, ${sqlString('https://atlas.altiratech.com')}, ${sqlString('derived')}, ${sqlString('Derived industrial screening scores computed from public-source inputs.')});`);
+  lines.push(`INSERT OR IGNORE INTO data_sources (name, url, cadence, notes) VALUES (${sqlString('Atlas Derived')}, ${sqlString('https://atlas.ryanjameson.me')}, ${sqlString('derived')}, ${sqlString('Derived industrial screening scores computed from public-source inputs.')});`);
   for (const geoLevel of ['state', 'national']) {
     lines.push(
       `INSERT OR IGNORE INTO data_series (series_key, geo_level, frequency, unit, source_id)

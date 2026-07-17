@@ -52,7 +52,7 @@ Run: `npm run test:domain && npm run typecheck && npm run build:frontend && npx 
 
 Expected: domain contract passes, TypeScript exits 0, frontend builds, and Wrangler validates all bindings/routes without deployment.
 
-- [ ] **Step 5: Commit, publish, merge, and verify compatibility deployment**
+- [x] **Step 5: Commit, publish, merge, and verify compatibility deployment**
 
 Commit only the plan, contract, package, and Wrangler changes. Push the branch, open a PR, verify the diff, merge it, and wait for the main deployment workflow. Then run:
 
@@ -76,6 +76,7 @@ Expected: `200 0`, health JSON with `status: ok`, and every smoke check passes w
 - Modify: `deploy/cloudflare-worker/scripts/backfill-nass-bulk.mjs`
 - Modify: `deploy/cloudflare-worker/scripts/backfill-orchestrator.mjs`
 - Modify: `deploy/cloudflare-worker/scripts/ingest-industrial-eia.mjs`
+- Modify: `deploy/cloudflare-worker/src/services/ingest.ts`
 - Modify: `deploy/cloudflare-worker/README.md`
 - Modify: `README.md`
 - Modify: `frontend/src/app/shell.jsx`
@@ -85,25 +86,25 @@ Expected: `200 0`, health JSON with `status: ok`, and every smoke check passes w
 - Consumes: the live, already-proven personal custom domain from Task 1.
 - Produces: `CANONICAL_HOST = "atlas.ryanjameson.me"` and comma-separated `LEGACY_HOSTS = "atlas.altiratech.com,farmland.altiratech.com"`; non-API legacy requests redirect, API requests remain served in place.
 
-- [ ] **Step 1: Rewrite the domain contract for final behavior**
+- [x] **Step 1: Rewrite the domain contract for final behavior**
 
 Assert the personal hostname is canonical, both legacy hosts are configured, deprecated single-host configuration is absent, all operational script defaults use the personal hostname, the migration checker validates both legacy hosts, and visible canonical references use `atlas.ryanjameson.me`.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `npm run test:domain`
 
 Expected: FAIL on the old canonical host and single legacy-host variable.
 
-- [ ] **Step 3: Implement minimal multi-legacy routing**
+- [x] **Step 3: Implement minimal multi-legacy routing**
 
 Add `LEGACY_HOSTS?: string` to Worker bindings. Parse comma-separated legacy hosts into a set, retain optional `LEGACY_HOST` compatibility in code only, and redirect any non-API request whose `Host` is in that set to the canonical host with status 308 and the existing `legacy_redirect=1` marker. Preserve request path/query and leave `/api/*` untouched.
 
-- [ ] **Step 4: Update canonical operational and visible references**
+- [x] **Step 4: Update canonical operational and visible references**
 
 Make the personal hostname the first smoke target and default base URL. Make the migration checker loop over both legacy bases. Update the ingestion user agent/data-source reference, README deployment notes, migration banner, and system display. Do not alter historical review documents.
 
-- [ ] **Step 5: Verify GREEN, local behavior, and complete suites**
+- [x] **Step 5: Verify GREEN, local behavior, and complete suites**
 
 Run:
 

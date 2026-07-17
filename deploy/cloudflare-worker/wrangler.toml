@@ -2,7 +2,7 @@ name = "farmland-terminal"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
-# Custom domains — staged personal hostname + canonical + legacy
+# Custom domains — canonical personal hostname + legacy compatibility
 routes = [
   { pattern = "atlas.ryanjameson.me", custom_domain = true },
   { pattern = "atlas.altiratech.com", custom_domain = true },
@@ -17,8 +17,8 @@ run_worker_first = true
 
 [vars]
 ENVIRONMENT = "production"
-CANONICAL_HOST = "atlas.altiratech.com"
-LEGACY_HOST = "farmland.altiratech.com"
+CANONICAL_HOST = "atlas.ryanjameson.me"
+LEGACY_HOSTS = "atlas.altiratech.com,farmland.altiratech.com"
 ALLOW_ANON_SESSIONS = "1"
 
 [[d1_databases]]

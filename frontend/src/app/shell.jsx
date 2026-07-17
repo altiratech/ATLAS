@@ -213,7 +213,7 @@ export function AppShell({
         </div>
       </div>
       {legacyRedirectNote && <div className="legacy-b">
-        <span>Legacy domain migrated. Canonical URL is atlas.altiratech.com.</span>
+        <span>Legacy domain migrated. Canonical URL is atlas.ryanjameson.me.</span>
         <button className="btn btn-sm" onClick={dismissLegacy}>Dismiss</button>
       </div>}
       <div className="content">{content}</div>

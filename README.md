@@ -17,7 +17,10 @@ Current local and deployed surfaces support:
 - a Cloudflare deployment profile for the hosted web app
 
 Canonical hosted app:
-- `https://atlas.altiratech.com`
+- `https://atlas.ryanjameson.me`
+
+Compatibility hostnames:
+- `https://atlas.altiratech.com` and `https://farmland.altiratech.com` keep `/api/*` active while web routes redirect to the canonical app.
 
 ## Quick Start
 

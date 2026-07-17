@@ -551,7 +551,7 @@ async function fetchYahooDailyClose(symbol: string, range = '3y'): Promise<Array
   const response = await fetchWithTimeout(url, YAHOO_TIMEOUT_MS, {
     headers: {
       accept: 'application/json',
-      'user-agent': 'AltiraAtlas/1.0 (+https://atlas.altiratech.com)',
+      'user-agent': 'AltiraAtlas/1.0 (+https://atlas.ryanjameson.me)',
     },
   });
   if (!response.ok) {
@@ -577,7 +577,7 @@ async function fetchStooqDailyClose(symbol: (typeof AG_INDEX_TICKERS)[number]): 
   const response = await fetchWithTimeout(url, YAHOO_TIMEOUT_MS, {
     headers: {
       accept: 'text/csv,*/*',
-      'user-agent': 'AltiraAtlas/1.0 (+https://atlas.altiratech.com)',
+      'user-agent': 'AltiraAtlas/1.0 (+https://atlas.ryanjameson.me)',
     },
   });
   if (!response.ok) {

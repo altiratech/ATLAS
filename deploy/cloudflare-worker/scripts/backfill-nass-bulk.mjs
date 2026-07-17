@@ -5,7 +5,7 @@ import { createGunzip } from 'node:zlib';
 import readline from 'node:readline';
 import { appendFile, stat, writeFile } from 'node:fs/promises';
 
-const DEFAULT_BASE_URL = 'https://atlas.altiratech.com';
+const DEFAULT_BASE_URL = 'https://atlas.ryanjameson.me';
 const DEFAULT_STATES = [
   'IA', 'IL', 'IN', 'NE', 'KS', 'MN', 'OH', 'WI', 'MO', 'SD',
   'ND', 'TX', 'CA', 'WA', 'OR', 'ID', 'MT', 'CO', 'MI', 'PA',
