@@ -73,6 +73,7 @@ type Bindings = {
   BROWSER_RENDERING_ACCOUNT_ID?: string;
   ENVIRONMENT?: string;
   CANONICAL_HOST?: string;
+  LEGACY_HOSTS?: string;
   LEGACY_HOST?: string;
   ALLOW_ANON_SESSIONS?: string;
 };
@@ -156,14 +157,22 @@ function summarizeIndustrialSignals(results: Array<{ industrial?: IndustrialScre
 app.use('*', cors());
 app.use('*', async (c, next) => {
   const canonicalHost = (c.env.CANONICAL_HOST ?? '').toLowerCase();
-  const legacyHost = (c.env.LEGACY_HOST ?? '').toLowerCase();
-  const reqHost = (c.req.header('host') ?? '').toLowerCase();
+  const legacyHosts = new Set(
+    [
+      ...(c.env.LEGACY_HOSTS ?? '').split(','),
+      c.env.LEGACY_HOST ?? '',
+    ]
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean),
+  );
+  const reqHost = (c.req.header('host') ?? '')
+    .toLowerCase()
+    .replace(/:\d+$/, '');
 
-  // Controlled migration: keep legacy API host working while redirecting web traffic.
+  // Controlled migration: keep legacy API hosts working while redirecting web traffic.
   if (
     canonicalHost &&
-    legacyHost &&
-    reqHost === legacyHost &&
+    legacyHosts.has(reqHost) &&
     !c.req.path.startsWith('/api/')
   ) {
     const url = new URL(c.req.url);

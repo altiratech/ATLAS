@@ -89,7 +89,7 @@ export function AccessGate({onRetry}) {
         fontSize:'.68rem', color:'var(--text3)',
         letterSpacing:'.04em',
       }}>
-        atlas.altiratech.com
+        atlas.ryanjameson.me
       </div>
     </div>
   </div>;

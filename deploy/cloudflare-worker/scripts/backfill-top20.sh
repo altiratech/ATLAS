@@ -12,7 +12,7 @@ set -euo pipefail
 #   ATLAS_INGEST_MAX_TIME="900" (seconds per ingest HTTP call; default 900)
 #   ATLAS_BACKFILL_FALLBACK_BY_SERIES="1" (if a state/year NASS call fails, retry one series at a time; default 1)
 
-BASE_URL="${ATLAS_BASE_URL:-https://atlas.altiratech.com}"
+BASE_URL="${ATLAS_BASE_URL:-https://atlas.ryanjameson.me}"
 START_YEAR="${1:-2005}"
 END_YEAR="${2:-$(date +%Y)}"
 CHUNK_SIZE="${3:-1}"

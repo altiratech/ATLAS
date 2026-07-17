@@ -3,6 +3,7 @@ set -euo pipefail
 
 BASE_URL="${ATLAS_BASE_URL:-}"
 DEFAULT_URLS=(
+  "https://atlas.ryanjameson.me"
   "https://atlas.altiratech.com"
   "https://farmland.altiratech.com"
 )
