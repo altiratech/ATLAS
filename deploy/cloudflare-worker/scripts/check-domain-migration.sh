@@ -23,7 +23,9 @@ echo "  canonical: ${CANONICAL_BASE}"
 for legacy_base in "${LEGACY_BASES[@]}"; do
   echo "  legacy:    ${legacy_base}"
 
-  legacy_headers="$(curl -sI "${legacy_base}/")"
+  # Use a browser-equivalent GET. Cloudflare Workers Assets can answer HEAD
+  # requests directly even when run_worker_first is enabled.
+  legacy_headers="$(curl -sS -D - -o /dev/null "${legacy_base}/")"
   legacy_status="$(printf '%s' "${legacy_headers}" | awk 'NR==1{print $2}')"
   legacy_location="$(printf '%s' "${legacy_headers}" | awk 'BEGIN{IGNORECASE=1}/^location:/{print $2}' | tr -d '\r')"
 

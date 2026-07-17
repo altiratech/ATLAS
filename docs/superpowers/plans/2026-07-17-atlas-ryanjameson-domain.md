@@ -118,7 +118,7 @@ cd ../../backend && python3 -m pytest tests -q
 
 Expected: domain contract passes, build/dry-run exit 0, and backend reports 91 passed.
 
-- [ ] **Step 6: Commit, publish, merge, and verify canonical deployment**
+- [x] **Step 6: Commit, publish, merge, and verify canonical deployment**
 
 Push a new branch from updated `origin/main`, open and merge the canonicalization PR, and wait for the main deployment workflow. Verify:
 
@@ -144,31 +144,31 @@ Expected: canonical root/API pass; both old roots redirect 308 with path/query p
 - Consumes: a verified canonical Atlas hostname.
 - Produces: the public portfolio action points only to `https://atlas.ryanjameson.me`; the inventory records the new canonical and both rollback/compatibility paths.
 
-- [ ] **Step 1: Create an isolated portfolio worktree**
+- [x] **Step 1: Create an isolated portfolio worktree**
 
 From the clean portfolio `main`, create `/private/tmp/ryanjameson-me-atlas-domain-2026-07-17` on branch `codex/portfolio-atlas-domain-2026-07-17`, install dependencies, and confirm the focused contract is green before editing.
 
-- [ ] **Step 2: Change the approved-action test first**
+- [x] **Step 2: Change the approved-action test first**
 
 Replace `https://atlas.altiratech.com` with `https://atlas.ryanjameson.me` in the approved action set.
 
-- [ ] **Step 3: Verify RED**
+- [x] **Step 3: Verify RED**
 
 Run: `npm run test -- tests/unit/projects-index-contract.test.ts`
 
 Expected: FAIL because the Atlas project still exposes the old action.
 
-- [ ] **Step 4: Update the project action and internal records**
+- [x] **Step 4: Update the project action and internal records**
 
 Change only the Atlas action URL in public project data. Mark the Atlas migration complete in the inventory and update the settled portfolio status without promoting Atlas to the homepage.
 
-- [ ] **Step 5: Verify GREEN and full portfolio gates**
+- [x] **Step 5: Verify GREEN and full portfolio gates**
 
 Run: `ASTRO_TELEMETRY_DISABLED=1 npm run quality` and the complete Playwright command defined by the repository.
 
 Expected: all unit/content/build gates pass and the browser suite retains only intentional skips.
 
-- [ ] **Step 6: Land local main, deploy Pages, and verify click-through**
+- [x] **Step 6: Land local main, deploy Pages, and verify click-through**
 
 Fast-forward the verified branch into local `main`, deploy `dist` to the existing `ryanjameson-me` Pages project, and verify the live Projects page contains the personal Atlas URL and no old Atlas action. In Chrome, click the Atlas action at desktop and mobile widths and confirm the application loads with no broken images, overflow, console errors, or failed API calls.
 
@@ -184,15 +184,15 @@ Fast-forward the verified branch into local `main`, deploy `dist` to the existin
 - Consumes: merged commits, deployment IDs/runs, DNS/TLS probes, smoke outputs, and browser evidence.
 - Produces: concise settled-state records and no stale active-workstream row.
 
-- [ ] **Step 1: Record exact deployment and rollback evidence**
+- [x] **Step 1: Record exact deployment and rollback evidence**
 
 Document custom domains, Worker version/deployment, GitHub workflow runs, redirect/API compatibility matrix, portfolio deployment, Chrome widths, and the retained rollback path.
 
-- [ ] **Step 2: Update present-tense status under 30 lines**
+- [x] **Step 2: Update present-tense status under 30 lines**
 
 State the personal canonical hostname, the two compatibility API hosts and web redirects, unchanged bindings/cron, and the next observation-window action.
 
-- [ ] **Step 3: Run the final verification matrix fresh**
+- [x] **Step 3: Run the final verification matrix fresh**
 
 Re-run Atlas contract/typecheck/build/backend, canonical smoke, legacy redirect/API checks, portfolio quality, public HTTPS/TLS, and live link inspection. Read every exit code before claiming completion.
 
