@@ -2,8 +2,9 @@ name = "farmland-terminal"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
-# Custom domains — canonical + legacy
+# Custom domains — staged personal hostname + canonical + legacy
 routes = [
+  { pattern = "atlas.ryanjameson.me", custom_domain = true },
   { pattern = "atlas.altiratech.com", custom_domain = true },
   { pattern = "farmland.altiratech.com", custom_domain = true }
 ]

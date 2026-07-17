@@ -7,6 +7,7 @@
     "build:frontend": "node scripts/build-frontend.mjs",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "test:domain": "node --test tests/domain-contract.test.mjs",
     "typecheck": "tsc --noEmit",
     "tail": "wrangler tail"
   },
